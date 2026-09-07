@@ -1,0 +1,52 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build-and-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install server dependencies
+        run: npm ci
+        working-directory: server
+
+      - name: Build the frontend from tools/
+        run: python tools/build.py
+
+      - name: Syntax-check the server
+        run: |
+          for f in server/*.js; do node --check "$f"; done
+
+      - name: Syntax-check the built frontend's inline script
+        run: |
+          node -e "
+            const fs = require('fs');
+            const html = fs.readFileSync('web/index.html', 'utf8');
+            const m = html.match(/<script>([\s\S]*?)<\/script>/);
+            fs.writeFileSync('_inline.js', m[1]);
+          "
+          node --check _inline.js
+
+      - name: Boot the server and hit /api/health
+        env:
+          JWT_SECRET: ci-only-not-a-real-secret
+          DB_PATH: ./data/ci.db
+        run: |
+          node server/index.js &
+          for i in $(seq 1 20); do
+            curl -sf http://localhost:8787/api/health && exit 0
+            sleep 0.5
+          done
+          echo "server did not become healthy in time" >&2
+          exit 1
