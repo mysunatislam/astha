@@ -1,6 +1,10 @@
-// Astha is served as one app: the same origin serves this page and the /api/* endpoints, so
-// every fetch in the app uses a plain relative path and this file needs no changes for the
-// normal deployment. It exists as the one place to override that, if you ever split the
-// frontend and backend across two different hosts (e.g. a static CDN plus a separate API
-// server) -- set window.ASTHA_API_BASE to the API's origin, such as "https://api.example.com".
-window.ASTHA_API_BASE = '';
+// This file is the one place a separately-hosted frontend points at its backend. It is only
+// needed when this page is NOT served by the Astha server itself -- e.g. this GitHub Pages
+// deployment, which is static-only and cannot run the server, database, or hold the Gemini key.
+//
+// Right now this points at a temporary tunnel to a locally-running server, so it only works
+// while that machine and tunnel are up. Once you deploy the server somewhere permanent (Render,
+// Fly, a VPS -- see README.md), replace the URL below with that server's address, e.g.
+// "https://astha-xxxx.onrender.com", and the server's CORS_ORIGIN must be set to
+// "https://mysunatislam.github.io" for requests from this page to be allowed.
+window.ASTHA_API_BASE = 'https://handled-carpet-worked-attempts.trycloudflare.com';

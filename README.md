@@ -57,6 +57,17 @@ volume at `/data` and `JWT_SECRET` / `GEMINI_API_KEY` set as environment variabl
 Once deployed, install it on a phone as a normal PWA -- Chrome's "Add to Home screen" -- and it
 opens full-screen with no browser chrome, with an icon like any other app.
 
+### GitHub Pages (frontend only)
+
+`.github/workflows/pages.yml` publishes `web/` to `https://<you>.github.io/astha/` on every push.
+GitHub Pages is static hosting -- it cannot run the server, hold the Gemini key, check
+passcodes, or write to the database, so this alone is not a working deployment. It becomes one
+once `web/config.js` points `window.ASTHA_API_BASE` at a real, separately-hosted backend (Render,
+Fly, a tunnel), and that backend's `CORS_ORIGIN` is set to the Pages origin (e.g.
+`https://<you>.github.io`, no trailing path) so the cross-site cookie is accepted. Setting
+`CORS_ORIGIN` also switches the session cookie to `SameSite=None; Secure`, which is required for
+a fetch from one origin to carry a cookie from another.
+
 ## Editing the frontend
 
 Never edit `web/index.html` by hand -- it is regenerated from `tools/*` on every `npm run

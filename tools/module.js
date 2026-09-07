@@ -7,6 +7,12 @@
       never goes silent. All existing pause/resume/stop call sites are
       redefined below to drive whichever engine is actually speaking.
    ===================================================================== */
+// Prefixes every /api/... call with window.ASTHA_API_BASE (config.js), so the frontend
+// can be hosted separately from the backend -- e.g. a GitHub Pages shell talking to a
+// server on Render. Same-origin deployments leave ASTHA_API_BASE empty and this is a
+// no-op.
+function apiUrl(path) { return (window.ASTHA_API_BASE || '') + path; }
+
 const VoiceEngine = {
   mode: null,       // 'audio' | 'synth' | null
   audioEl: null,
@@ -35,7 +41,7 @@ const VoiceEngine = {
     if (!state.audio || !text) return false;
     const voiceKey = lang === 'bn' ? 'bn-female' : 'en-female';
     try {
-      const res = await fetch('/api/speak?text=' + encodeURIComponent(text) + '&voice=' + voiceKey, { credentials: 'include' });
+      const res = await fetch(apiUrl('/api/speak?text=' + encodeURIComponent(text) + '&voice=' + voiceKey), { credentials: 'include' });
       if (res.ok) {
         const blob = await res.blob();
         const audio = new Audio(URL.createObjectURL(blob));
@@ -921,12 +927,12 @@ function companionBoot() {
        encrypted blob to this account's row on Astha's own server.
    ===================================================================== */
 async function apiGet(path) {
-  const r = await fetch(path, { credentials: 'include' });
+  const r = await fetch(apiUrl(path), { credentials: 'include' });
   if (!r.ok) { const e = new Error('http_' + r.status); e.status = r.status; throw e; }
   return r.json();
 }
 async function apiSend(method, path, body) {
-  const r = await fetch(path, { method, credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+  const r = await fetch(apiUrl(path), { method, credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
   if (!r.ok) { const e = new Error('http_' + r.status); e.status = r.status; throw e; }
   return r.json();
 }
@@ -1025,6 +1031,6 @@ async function togglePrivateMode() {
   } finally { privacyTransition = false; $('private-btn').disabled = false; }
 }
 async function signOut() {
-  try { await apiSend('POST', '/api/auth/logout'); } catch (e) {}
+  try { await apiSend('POST', '/api/auth/logout', {}); } catch (e) {}
   location.reload();
 }

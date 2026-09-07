@@ -1,0 +1,39 @@
+name: Deploy frontend to GitHub Pages
+
+# GitHub Pages only serves static files -- it cannot run the Express server, hold the Gemini
+# key, check passcodes, or write to the database. This publishes web/ (the built PWA shell) to
+# a permanent mysunatislam.github.io/astha/ URL, and it talks to whatever API is configured in
+# web/config.js. Point that at a real always-on backend (Render, Fly, a VPS) for a fully
+# independent deployment; until then it can point at a temporary tunnel.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'web/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -26,7 +26,7 @@
     submitBtn.disabled = true;
     status.textContent = mode === 'signup' ? 'Creating your account…' : 'Signing in…';
     try {
-      const res = await fetch('/api/auth/' + mode, {
+      const res = await fetch(apiUrl('/api/auth/' + mode), {
         method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(mode === 'signup' ? { name, phone, passcode } : { phone, passcode }),
       });
@@ -48,7 +48,7 @@
 
   async function enterApp() {
     let me = null;
-    try { const r = await fetch('/api/auth/me', { credentials: 'include' }); if (r.ok) me = await r.json(); } catch (e) {}
+    try { const r = await fetch(apiUrl('/api/auth/me'), { credentials: 'include' }); if (r.ok) me = await r.json(); } catch (e) {}
     document.getElementById('auth-gate').hidden = true;
     if (typeof window.__asthaBoot === 'function') window.__asthaBoot();
     const row = document.getElementById('account-row');
@@ -57,7 +57,7 @@
 
   async function boot() {
     try {
-      const r = await fetch('/api/auth/me', { credentials: 'include' });
+      const r = await fetch(apiUrl('/api/auth/me'), { credentials: 'include' });
       if (r.ok) { await enterApp(); return; }
     } catch (e) { /* offline on first load: show the sign-in gate, which also works once online */ }
     document.getElementById('auth-name').focus();
@@ -68,6 +68,6 @@
 
   // Service worker: app-shell caching so Astha still opens with a weak connection.
   if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => { navigator.serviceWorker.register('/sw.js').catch(() => {}); });
+    window.addEventListener('load', () => { navigator.serviceWorker.register('./sw.js').catch(() => {}); });
   }
 })();

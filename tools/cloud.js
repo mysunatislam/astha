@@ -32,7 +32,7 @@ function updateCloudBadge() {
 // cloudReady() are accurate before the first camera action ever calls /api/vision.
 async function refreshCloudStatus() {
   try {
-    const r = await fetch('/api/health', { credentials: 'include' });
+    const r = await fetch(apiUrl('/api/health'), { credentials: 'include' });
     if (r.ok) { const d = await r.json(); serverCloud.available = !!d.cloud; }
   } catch (e) { /* offline; personal key (if any) still works */ }
   serverCloud.checked = true;
@@ -62,7 +62,7 @@ async function gemini(task, frame, opts = {}) {
   const image = frame ? frameToJpeg(frame, opts.maxW || 896) : undefined;
   if (serverCloud.checked ? serverCloud.available : true) {
     try {
-      const res = await fetch('/api/vision', {
+      const res = await fetch(apiUrl('/api/vision'), {
         method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ task: 'custom', prompt: task, image, maxTokens: opts.maxTokens || 900 }),
       });

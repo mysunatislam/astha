@@ -13,6 +13,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const WEB_DIR = path.join(__dirname, '..', 'web');
 const PORT = process.env.PORT || 8787;
 const IS_PROD = process.env.NODE_ENV === 'production';
+// Set when the frontend is hosted on a different origin than this API (e.g. a GitHub Pages
+// shell talking to this server) -- cross-site fetch() only carries cookies when they are
+// SameSite=None, which in turn requires Secure, so both flip on together below.
+const CROSS_ORIGIN = !!(process.env.CORS_ORIGIN && process.env.CORS_ORIGIN !== '*');
+const COOKIE_OPTS = { httpOnly: true, sameSite: CROSS_ORIGIN ? 'none' : 'lax', secure: CROSS_ORIGIN || IS_PROD, maxAge: 180 * 24 * 3600 * 1000 };
 
 const app = express();
 app.disable('x-powered-by');
@@ -33,7 +38,7 @@ app.post('/api/auth/signup', (req, res) => {
   if (findByPhone(phone)) return res.status(409).json({ error: 'phone_taken' });
   const id = createUser({ name: String(name).slice(0, 80), phone, passcode });
   const token = signToken(id);
-  res.cookie('astha_session', token, { httpOnly: true, sameSite: 'lax', secure: IS_PROD, maxAge: 180 * 24 * 3600 * 1000 });
+  res.cookie('astha_session', token, COOKIE_OPTS);
   res.json({ token, userId: id });
 });
 app.post('/api/auth/login', (req, res) => {
@@ -41,10 +46,10 @@ app.post('/api/auth/login', (req, res) => {
   const user = phone && findByPhone(phone);
   if (!user || !verifyPasscode(passcode, user.passcode_hash, user.passcode_salt)) return res.status(401).json({ error: 'invalid_credentials' });
   const token = signToken(user.id);
-  res.cookie('astha_session', token, { httpOnly: true, sameSite: 'lax', secure: IS_PROD, maxAge: 180 * 24 * 3600 * 1000 });
+  res.cookie('astha_session', token, COOKIE_OPTS);
   res.json({ token, userId: user.id });
 });
-app.post('/api/auth/logout', (req, res) => { res.clearCookie('astha_session'); res.json({ ok: true }); });
+app.post('/api/auth/logout', (req, res) => { res.clearCookie('astha_session', COOKIE_OPTS); res.json({ ok: true }); });
 app.get('/api/auth/me', authMiddleware, (req, res) => {
   const { id, name, phone, voice_lang, mode, face_descriptor } = req.user;
   res.json({ id, name, phone, voice_lang, mode, face_descriptor: face_descriptor ? JSON.parse(face_descriptor) : null });
