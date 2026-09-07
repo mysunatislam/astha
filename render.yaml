@@ -1,0 +1,21 @@
+# Deploy to Render (render.com): "New +" -> "Blueprint" -> point at this repo.
+# Free tier works; the disk keeps the SQLite database across restarts.
+services:
+  - type: web
+    name: astha
+    env: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    envVars:
+      - key: JWT_SECRET
+        generateValue: true
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: NODE_ENV
+        value: production
+      - key: DB_PATH
+        value: /data/astha.db
+    disk:
+      name: astha-data
+      mountPath: /data
+      sizeGB: 1

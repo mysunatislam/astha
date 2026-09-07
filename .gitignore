@@ -1,0 +1,10 @@
+node_modules/
+server/data/
+server/.env
+.env
+.env.*
+!.env.example
+*.log
+bin/
+.DS_Store
+Thumbs.db

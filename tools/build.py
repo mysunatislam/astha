@@ -1,0 +1,492 @@
+"""Build web/index.html from tools/base.html plus the companion modules (vocab, module, eye, cloud, styles).
+Run: python tools/build.py
+Every replacement asserts that its anchor occurs exactly once, so a silent mis-patch is impossible."""
+import pathlib, re, sys
+
+HERE = pathlib.Path(__file__).parent
+SRC = HERE / "base.html"
+DST = HERE.parent / "web" / "index.html"
+
+html = SRC.read_text(encoding="utf-8")
+vocab = (HERE / "vocab.js").read_text(encoding="utf-8")
+css = (HERE / "styles.css").read_text(encoding="utf-8")
+module = (HERE / "module.js").read_text(encoding="utf-8")
+
+def rep(old, new, count=1):
+    global html
+    n = html.count(old)
+    assert n == count, f"anchor found {n}x (expected {count}): {old[:90]!r}"
+    html = html.replace(old, new)
+
+def rep_between(start, end, new):
+    """Replace the text from `start` (inclusive) up to `end` (exclusive)."""
+    global html
+    assert html.count(start) == 1, f"start anchor {html.count(start)}x: {start[:80]!r}"
+    i = html.index(start)
+    j = html.index(end, i)
+    html = html[:i] + new + html[j:]
+
+# ---- theme: calm navy by default (no yellow), selector kept ----
+rep('<html lang="en" data-theme="clinical-yellow"', '<html lang="en" data-theme="navy-cyan"')
+rep("localStorage.getItem('astha.clinical_theme') || 'clinical-yellow'", "localStorage.getItem('astha.clinical_theme') || 'navy-cyan'")
+rep("""        <option value="clinical-yellow">🟡 Yellow on black</option>
+        <option value="monochrome">⚪ Monochrome (Inverted White/Black)</option>
+        <option value="navy-cyan">🌊 Navy and cyan</option>""",
+    """        <option value="navy-cyan">🌊 Navy and cyan</option>
+        <option value="monochrome">⚪ Monochrome (white on black)</option>
+        <option value="clinical-yellow">🟡 Yellow on black (photophobia)</option>""")
+
+# ---- CSS ----
+rep("</style>\n</head>", css + "</style>\n</head>")
+
+# ---- HTML: heart cursor, hands-free chip, read button ids ----
+rep('<div class="hazard" id="hazard" hidden><span id="hazard-text" data-i18n="hazard_banner">Warning! Obstacle ahead</span></div>\n',
+    '<div class="hazard" id="hazard" hidden><span id="hazard-text" data-i18n="hazard_banner">Warning! Obstacle ahead</span></div>\n'
+    '        <div class="heart idle" id="heart" hidden aria-hidden="true">\n'
+    '          <svg viewBox="0 0 24 24"><path d="M12 21s-7.5-4.6-9.6-9.1C.9 8.5 2.6 5 6.1 5c2 0 3.3 1.1 3.9 2.1C10.6 6.1 11.9 5 13.9 5c3.5 0 5.2 3.5 3.7 6.9C19.5 16.4 12 21 12 21z"/></svg>\n'
+    '          <span class="heart-label" id="heart-label" hidden></span>\n'
+    '        </div>\n')
+rep('        <span class="mic-hint" data-i18n="mic_hint">Ask in Bangla or English: “What is in front of me?”, “Read this”, “Where is my charger?”</span>\n      </div>',
+    '        <span class="mic-hint" data-i18n="mic_hint">Ask in Bangla or English: “What is in front of me?”, “Read this”, “Where is my charger?”</span>\n'
+    '        <button class="chip-btn" id="hf-btn" onclick="toggleHandsFree()" aria-pressed="false" title="Keep listening for “Astha, …”">🎧 <span id="hf-label">Hands-free: off</span></button>\n      </div>')
+rep('<button class="action" onclick="readText()">', '<button class="action" id="read-btn" onclick="readText()" aria-pressed="false">')
+rep('<div class="title" data-i18n="act_read">Read text</div>', '<div class="title" id="read-title" data-i18n="act_read">Read to me</div>')
+
+# ---- I18N strings ----
+rep("act_read: 'Read text', act_read_desc: 'Labels, medicine, notes, signs',",
+    "act_read: 'Read to me', act_read_desc: 'Hold up a page; I guide your hands, then read it aloud',")
+rep("act_read: 'লেখা পড়ুন', act_read_desc: 'লেবেল, ওষুধ, নোট, সাইনবোর্ড',",
+    "act_read: 'আমাকে পড়ে শোনাও', act_read_desc: 'পৃষ্ঠা ধরুন; আমি ধরতে সাহায্য করব, তারপর পড়ে শোনাব',")
+rep("mic_hint: 'Tap, then ask in your selected voice language. You can also type in Bangla or English.',",
+    "mic_hint: 'Tap once to ask, or turn on Hands-free and just say “Astha, read this”. You can also type below.',")
+rep('<p class="help">Tap the microphone before saying “Hey Astha”. Browser speech recognition may use an online service. There is no background wake-word listener.</p>',
+    '<p class="help">Hands-free mode keeps the microphone open in this tab and waits for “Astha, …”. Browser speech recognition may use an online service.</p>')
+
+# ---- vocabulary: restore the full list ----
+rep_between("// COCO classes + everyday objects with Bangla mapping and hazard labels\n",
+            "\nconst VOCAB_BY_ID", vocab.rstrip("\n"))
+
+# ---- proximity back on; earcon tick; overlay colours ----
+rep("function proxFromArea(r) { return null; }",
+    "function proxFromArea(r) { return r > 0.35 ? 'very_close' : r > 0.12 ? 'near' : 'far'; }")
+rep("  if (type === 'click') {\n    // Gentle tap feedback: 550Hz short tick",
+    "  if (type === 'tick') {\n    // Alignment click for the heart cursor: very short, quiet\n    osc.type = 'square';\n    osc.frequency.setValueAtTime(1400, now);\n    gain.gain.setValueAtTime(0.05, now);\n    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.03);\n    osc.start(now); osc.stop(now + 0.03);\n  } else if (type === 'click') {\n    // Gentle tap feedback: 550Hz short tick")
+rep("const col = hz ? '#ff3b30' : '#ffd700'; // Clinical yellow / danger red", "const col = hz ? '#ff3b30' : themeAccent();")
+rep("const txt = `${label(o.id)} ${Math.round(o.score * 100)}%`;", "const txt = `${objLabel(o)} ${Math.round(o.score * 100)}%`;")
+rep("esc(label(o.id))", "esc(objLabel(o))", count=2)
+
+# ---- ingest: relabel, mirror special-case, suppression ----
+rep("    if (o.src === 'clip' && (VOCAB_BY_ID[o.id].quiet)) return;\n    const prev = state.world.get(o.id);",
+    "    if (o.src === 'coco') applyRelabel(o, now);\n"
+    "    if (o.src === 'clip') {\n"
+    "      const vb0 = VOCAB_BY_ID[o.id];\n"
+    "      if (vb0.special === 'mirror') { state.mirrorSeenAt = now; return; }\n"
+    "      if (vb0.quiet || suppressedBy(o, objs)) return;\n"
+    "    }\n"
+    "    const prev = state.world.get(o.id);")
+
+# ---- live loop: keep centre ranking, refine and mirror ----
+rep("        const { hits } = await runClipZones(frame);\n        if (!loop.active || state.liveLoop !== loop) return;\n        const at = Date.now();\n        state.lastClipHits = hits.map(h => Object.assign(h, { at }));\n        ingest(hits);\n        afterLiveUpdate();",
+    "        const { hits, center } = await runClipZones(frame);\n        if (!loop.active || state.liveLoop !== loop) return;\n        const at = Date.now();\n        state.lastClipHits = hits.map(h => Object.assign(h, { at }));\n        state.lastCenter = center;\n        ingest(hits);\n        afterLiveUpdate();\n        await liveRefineAndMirror(frame);")
+rep("    setCaption(t('new_title'), msgEn, 'vision', null, msgBn);\n    speak(msgEn, msgBn);\n  }\n}\nfunction showHazard",
+    "    setCaption(t('new_title'), msgEn, 'vision', null, msgBn);\n    speak(msgEn, msgBn);\n    heartPointAt(fresh[0]);\n  }\n}\nfunction showHazard")
+rep("finally { state.busy=false; $('companion-main').setAttribute('aria-busy','false'); if(state.source==='camera')startLiveLoop(); }",
+    "finally { state.busy=false; $('companion-main').setAttribute('aria-busy','false'); if(state.source==='camera' && !reading.active)startLiveLoop(); }")
+
+# ---- describe: refinement, mirror, brand-aware labels, heart ----
+rep("    const objs = worldSorted();\n    const now = Date.now(); objs.forEach(o => state.announced.set(o.id, now));\n    if (!objs.length) { setCaption(t('describe_title'), t('nothing_seen'), 'vision', null, tBn('nothing_seen'));",
+    "    const rframe = captureFrame(640);\n    if (rframe) { await refineWorld(rframe, state.lastCocoPreds, ''); if (await mirrorCheck(rframe, true)) return; }\n"
+    "    const objs = worldSorted();\n    const now = Date.now(); objs.forEach(o => state.announced.set(o.id, now));\n    if (!objs.length) { setCaption(t('describe_title'), t('nothing_seen'), 'vision', null, tBn('nothing_seen'));")
+rep("const namesEn = g.map(o => labelWithArticle(o.id));", "const namesEn = g.map(o => objLabelWithArticle(o));")
+rep("const namesBn = g.map(o => labelBn(o.id));", "const namesBn = g.map(o => objLabelBn(o));")
+rep("`${label(closest.id)} ${t('prox_' + closest.prox)}`", "`${objLabel(closest)} ${t('prox_' + closest.prox)}`")
+rep("`${labelBn(closest.id)} ${tBn('prox_' + closest.prox)}`", "`${objLabelBn(closest)} ${tBn('prox_' + closest.prox)}`")
+rep("    setCaption(t('describe_title'), msgEn, 'vision', null, msgBn);\n    playEarcon('confirm');",
+    "    setCaption(t('describe_title'), msgEn, 'vision', null, msgBn);\n    heartPointAt(objs[0]);\n    playEarcon('confirm');")
+
+# ---- clothes: full rewrite ----
+NEW_CLOTHES = r"""function inspectClothesAndColor(skipCloud) {
+  if (withCamera(inspectClothesAndColor)) return;
+  if (cloudReady() && !skipCloud) return cloudClothes();
+  return withBusy(t('clothes_title'), async () => {
+    await ensureVisionModels();
+    const frame = captureFrame(640); if (!frame) return;
+    const cocoObjs = await runCoco(frame);
+    const person = cocoObjs.filter(o => o.id === 'person').sort((a, b) => (b.bbox[2] * b.bbox[3]) - (a.bbox[2] * a.bbox[3]))[0];
+    const big = !!person && (person.bbox[2] * person.bbox[3]) / (frame.width * frame.height) > 0.2;
+    const rect = big ? bodyRect(frame, person.bbox) : centerRect(frame, 0.6);
+    const info = await analyzeClothing(frame, rect);
+    const mirror = Date.now() - (state.mirrorSeenAt || 0) < 5000;
+    const s = clothingSentence(info, big ? (mirror ? 'wearing' : 'person') : 'holding');
+    drawOverlay(frame, cocoObjs, []);
+    announce(s.en, s.bn, 'vision'); playEarcon('confirm'); haptic('CONFIRM');
+    heartFlash({ x: (rect.x + rect.s / 2) / frame.width, y: (rect.y + rect.s / 2) / frame.height, mode: 'lock', label: s.isGarment ? s.garment.en : colorName(info.colors.top) });
+    logEvent(t('log_clothes', { c: colorName(info.colors.top), g: s.isGarment ? s.garment.en : 'not clothing' }));
+  });
+}
+"""
+rep_between("function inspectClothesAndColor() {", "\n/* =====================================================================\n   11. Multimodal OCR-First", NEW_CLOTHES)
+
+# ---- identify: full rewrite ----
+NEW_IDENTIFY = r"""function identifyObject(skipCloud) {
+  if (withCamera(identifyObject)) return;
+  if (cloudReady() && !skipCloud) return cloudIdentify();
+  withBusy(t('identify_title'), async () => {
+    if (!(await ensureVisionModels())) return;
+    const frame = captureFrame(640); if (!frame) return;
+    heartSet({ x: 0.5, y: 0.5, mode: 'seek', label: 'Looking…' });
+
+    // 1. Quick OCR on the centre: brands, ID cards and labels carry text.
+    let ocrText = '';
+    try {
+      const worker = await ensureOcr();
+      const res = await worker.recognize(cropToCanvas(frame, centerRect(frame, 0.7)));
+      // Keep only confident lines that look like words; drop the noise OCR produces on textures.
+      ocrText = (res.data.lines || []).filter(l => l.confidence >= 60).map(l => l.text.replace(/\s+/g, ' ').trim())
+        .filter(l => { const letters = l.replace(/[^\p{L}\p{N}]/gu, '').length; return letters >= 3 && letters / l.length >= 0.6; })
+        .join(' ').trim();
+      if (ocrText.replace(/[^\p{L}\p{N}]/gu, '').length < 4) ocrText = '';
+    } catch (e) { console.warn('identify OCR', e); }
+
+    // 2. Boxes, then refine the central one (toy vs real, ID card vs person, phone brand).
+    const cocoObjs = await runCoco(frame);
+    state.lastCocoPreds = cocoObjs;
+    const cx = frame.width / 2, cy = frame.height / 2;
+    const central = cocoObjs.filter(o => o.bbox[0] < cx && o.bbox[0] + o.bbox[2] > cx && o.bbox[1] < cy && o.bbox[1] + o.bbox[3] > cy).sort((a, b) => b.score - a.score)[0];
+    let refined = null;
+    if (central && central.score >= 0.5) { try { refined = await refineDetection(frame, central, ocrText); } catch (e) { console.warn('refine', e); } }
+    if (central && refined && refined.newId) { state.relabel[central.id] = { newId: refined.newId, kind: refined.kind, until: Date.now() + 8000 }; central.origId = central.id; central.id = refined.newId; central.note = refined.kind; }
+    if (central && refined && refined.brand) { central.brand = refined.brand; state.relabel[central.id] = { newId: central.id, kind: 'brand', brand: refined.brand, until: Date.now() + 15000 }; }
+    drawOverlay(frame, cocoObjs, []);
+
+    // 3. Open-vocabulary ranking of the centre crop.
+    let ranked = [];
+    if (engine.clip.status === 'ready') {
+      const [emb] = await clipEmbedCrops(frame, [centerRect(frame, 0.55)]);
+      ranked = scoreEmbedding(emb).filter(r => r.id !== '_bg' && !VOCAB_BY_ID[r.id].quiet && !VOCAB_BY_ID[r.id].special);
+    }
+    const finish = (en, bn, labelText) => {
+      announce(en, bn, 'vision'); playEarcon('confirm'); haptic('CONFIRM');
+      heartFlash({ x: 0.5, y: 0.5, mode: 'lock', label: labelText });
+      logEvent(t('log_identify', { a: labelText }));
+    };
+    const ocrTail = ocrText.length >= 3 ? [` The text on it says: “${ocrText.slice(0, 80)}”.`, ` এর গায়ে লেখা: “${ocrText.slice(0, 80)}”।`] : ['', ''];
+
+    // 4. Special cases first.
+    if (refined && refined.kind === 'mirror') { await mirrorCheck(frame, false); return; }
+    if (refined && refined.kind === 'brand') {
+      const b = brandMeta(refined.brand);
+      const byText = BRAND_WORDS[refined.brand].test(ocrText);
+      return finish(`This is ${article(b.en)} ${b.en} phone.` + (byText ? ' I read the brand name on it.' : ' I am judging by its look, so the brand may be wrong.') + ocrTail[0],
+        `এটি একটি ${b.bn} ফোন।` + (byText ? ' ব্র্যান্ডের নামটি এর গায়ে লেখা আছে।' : ' দেখে অনুমান করছি, ব্র্যান্ড ভুল হতে পারে।') + ocrTail[1], b.en + ' phone');
+    }
+    if (central && central.id === 'cell phone') {
+      return finish('This is a smartphone. I cannot tell the brand from here; show me the back where the logo is, or the name on the screen.' + ocrTail[0],
+        'এটি একটি স্মার্টফোন। ব্র্যান্ড বুঝতে পারছি না; লোগোসহ পেছনের দিকটা দেখান বা স্ক্রিনের নাম দেখান।' + ocrTail[1], 'phone');
+    }
+    if (refined && refined.kind === 'toy') {
+      const base = central.origId || 'car';
+      return finish(`This is a toy ${label(base)}, not a real one. It is small enough to hold in your hand.` + ocrTail[0],
+        `এটি খেলনা ${labelBn(base)}, আসল নয়। এটি হাতে ধরার মতো ছোট।` + ocrTail[1], 'toy ' + label(base));
+    }
+    if (refined && refined.kind === 'idcard') {
+      return finish('This is an ID card with a photo on it, not a person.' + (ocrText ? ` It says: “${ocrText.slice(0, 100)}”.` : ' Hold it flat and closer if you want me to read it.'),
+        'এটি ছবিসহ একটি আইডি কার্ড, কোনো মানুষ নয়।' + (ocrText ? ` এতে লেখা: “${ocrText.slice(0, 100)}”।` : ' পড়াতে চাইলে সমতল করে কাছে ধরুন।'), 'ID card');
+    }
+    if (refined && refined.kind === 'picture') {
+      const base = central.origId || 'person';
+      return finish(`This is a picture of ${withArticle(label(base), !!VOCAB_BY_ID[base].pl)}, not the real thing.` + ocrTail[0], `এটি ${labelBn(base)}-এর ছবি, আসল নয়।` + ocrTail[1], 'picture');
+    }
+    if (refined && refined.kind === 'doll') return finish('This is a doll or figure, not a real person.', 'এটি একটি পুতুল, আসল মানুষ নয়।', 'doll');
+
+    // 5. Clothing gets its own describer (garment, colour, pattern).
+    const top = ranked[0];
+    if (top && VOCAB_BY_ID[top.id].garment && top.p >= 0.25) {
+      const info = await analyzeClothing(frame);
+      const s = clothingSentence(info, 'holding');
+      return finish(s.en + ocrTail[0], s.bn + ocrTail[1], s.isGarment ? s.garment.en : label(top.id));
+    }
+
+    // 6. Everything else: best guess with colour, honest about confidence.
+    if (central && central.score >= 0.6) { ranked = ranked.filter(r => r.id !== central.id); ranked.unshift({ id: central.id, p: central.score }); }
+    if (!ranked.length) { heartHide(); return announce(t('nothing_seen'), tBn('nothing_seen'), 'vision'); }
+    const [a, b] = ranked;
+    const va = VOCAB_BY_ID[a.id];
+    const colors = extractDominantColor(cropToCanvas(frame, centerRect(frame, 0.6)));
+    const useColor = colors.top.pct >= 45 && !/Grey|White|Black/.test(colors.top.name) && !['person', 'photo', 'id card'].includes(a.id);
+    const nounEn = (useColor ? colorName(colors.top) + ' ' : '') + label(a.id);
+    const nounBn = (useColor ? colorNameBn(colors.top) + ' ' : '') + labelBn(a.id);
+    let en = a.p >= CLIP_SURE ? `This looks like ${withArticle(nounEn, !!va.pl)}.` : `I am not sure. It might be ${withArticle(nounEn, !!va.pl)}.`;
+    let bn = a.p >= CLIP_SURE ? `এটি সম্ভবত ${nounBn}।` : `আমি নিশ্চিত নই। এটি ${nounBn} হতে পারে।`;
+    if (b && a.p < 0.6) { en += ` It could also be ${labelWithArticle(b.id)}.`; bn += ` এটি ${labelBn(b.id)}-ও হতে পারে।`; }
+    finish(en + ocrTail[0], bn + ocrTail[1], label(a.id));
+  });
+}
+"""
+rep_between("function identifyObject() {", "\n/* =====================================================================\n   12. Guided Home Layout Calibration Wizard & Spatial Memory", NEW_IDENTIFY)
+
+# ---- readText → one-shot for still images; guided mode lives in the module ----
+rep("function readText() {\n  if (!state.source) { setCaption(t('ready_title'), t('need_source'), 'ocr', null, tBn('need_source')); speak(t('need_source'), tBn('need_source')); return; }\n  withBusy(t('reading_title'), async () => {",
+    "function readStillOnce() {\n  withBusy(t('reading_title'), async () => {")
+
+# ---- reader finish hook ----
+rep("    reader.active = false; $('reader-progress').textContent = 'Finished'; return;",
+    "    reader.active = false; $('reader-progress').textContent = 'Finished';\n    const done = reader.onFinish; reader.onFinish = null; if (done) done();\n    return;")
+
+# ---- camera stop ends reading mode ----
+rep("function stopCamera() {\n  cameraRequest++; state.cameraPending=false; stopLiveLoop();",
+    "function stopCamera() {\n  cameraRequest++; state.cameraPending=false; stopLiveLoop();\n  if (typeof reading !== 'undefined' && reading.active) stopReading(true);")
+
+# ---- voice commands ----
+rep("  if (/privacy|গোপনীয়তা/.test(q)) return togglePrivateMode();\n",
+    "  if (/privacy|গোপনীয়তা/.test(q)) return togglePrivateMode();\n"
+    "  if (/hands.?free|always listen|keep listening|হ্যান্ডস ?ফ্রি|সবসময় শোনো/.test(q)) return toggleHandsFree();\n"
+    "  if (/stop reading|reading stop|পড়া বন্ধ|পড়া থামাও/.test(q)) return reading.active ? stopReading() : stopAllSpeech();\n"
+    "  if (/how do i look|how am i looking|mirror|looking good|looking beautiful|আমাকে কেমন লাগছে|কেমন লাগছে|আয়না/.test(q)) return howDoILook();\n"
+    "  if (/what am i wearing|what colou?r|which colou?r|wearing|আমি কী পরেছি|কী রঙ|কোন রঙ|রঙ কী/.test(q)) return inspectClothesAndColor();\n"
+    "  if (/which phone|what phone|phone model|which brand|what brand|কোন ফোন|কোন ব্র্যান্ড|মডেল/.test(q)) return identifyObject();\n"
+    "  if (/is (this|it) (a )?(toy|real)|toy or real|খেলনা|আসল/.test(q)) return identifyObject();\n")
+rep("  if (/read all|read book|read document|বই পড়|পুরো.*পড়/.test(q)) return startReader();",
+    "  if (/read all|read book|read document|read (the|this|my) (book|page|paper|letter)|বই পড়|পুরো.*পড়|বইটা পড়/.test(q)) return state.source === 'camera' ? readText() : startReader();")
+
+# ---- accuracy: keep garments/toys/pictures out of the live zone scan, track person motion ----
+rep("    const ranked = scoreEmbedding(emb).filter(r => r.id !== '_bg' && !VOCAB_BY_ID[r.id].quiet);\n    if (rects[i].pos === 'center')",
+    "    const ranked = scoreEmbedding(emb).filter(r => r.id !== '_bg' && !VOCAB_BY_ID[r.id].quiet && !VOCAB_BY_ID[r.id].zoneQuiet);\n    if (rects[i].pos === 'center')")
+rep("      state.lastCocoPreds = objs;\n      ingest(objs.concat(", "      state.lastCocoPreds = objs;\n      trackPersonMotion(objs, frame);\n      ingest(objs.concat(")
+rep("if (rframe) { await refineWorld(rframe, state.lastCocoPreds, ''); if (await mirrorCheck(rframe, true)) return; }",
+    "if (rframe) { await refineWorld(rframe, state.lastCocoPreds, ''); if (state.lastCocoPreds.some(o => o.id === 'person') && await mirrorCheck(rframe, true)) return; }")
+
+# ---- instant narration: on by default, announce anything not yet announced ----
+rep("  narrate: false,\n  shield: false,", "  narrate: true,\n  shield: false,")
+rep("state.narrate=localStorage.getItem('astha.narrate')==='1';", "state.narrate=localStorage.getItem('astha.narrate')!=='0';")
+rep("auto_narrate: 'Announce new objects automatically (off by default for screen readers)'", "auto_narrate: 'Announce objects out loud the moment they appear'")
+rep("const fresh = worldSorted().filter(o => (state.announced.get(o.id) || 0) < now - 12000 && now - o.first < 2500 && o.score >= (o.src === 'coco' ? 0.55 : 0.28));\n  if (fresh.length && now - (state.lastNarration || 0) > 3000) {",
+    "const fresh = worldSorted().filter(o => (state.announced.get(o.id) || 0) < now - 10000 && o.score >= (o.src === 'coco' ? 0.55 : 0.28));\n  if (fresh.length && now - (state.lastNarration || 0) > 1500) {")
+
+# ---- voice: prefer the natural (female) voice, let the user pick ----
+rep("const selected = privacyMode ? matches.find(v => v.localService) : matches[0];", "const selected = privacyMode ? matches.find(v => v.localService) : pickVoice(matches, language);")
+rep('<label class="field" for="ocr-language">Reading language<select class="select-dropdown" id="ocr-language" onchange="savePreferences()"><option value="ben+eng">বাংলা + English</option><option value="eng">English</option></select></label>',
+    '<label class="field" for="ocr-language">Reading language<select class="select-dropdown" id="ocr-language" onchange="savePreferences()"><option value="ben+eng">বাংলা + English</option><option value="eng">English</option></select></label>\n'
+    '      <label class="field" for="voice-select">Astha\'s voice<select class="select-dropdown" id="voice-select" onchange="onVoiceChosen(this.value)"></select></label>')
+rep("  voiceLang = next;\n  updateVoiceSupport();", "  voiceLang = next;\n  updateVoiceSupport();\n  if (typeof populateVoices === 'function') populateVoices();")
+
+# If Bangla is selected but the device has no Bangla voice, speak the English text with the preferred English voice.
+rep("  const useBn = voiceLang === 'bn' && !!bnText;\n  const text = useBn ? bnText : enText;",
+    "  const useBn = voiceLang === 'bn' && !!bnText && voices.some(v => /^bn/i.test(v.lang));\n  const text = useBn ? bnText : enText;")
+
+# ---- reading never depends on pasted text ----
+# Camera start: if a read was requested, begin reading as soon as the camera is live (OCR only), load vision models in the background.
+rep("    state.cameraPending=false; state.sceneKey=null; showSource('camera');\n    announce('Camera on. Loading recognition models.', 'ক্যামেরা চালু। শনাক্তকরণ মডেল লোড হচ্ছে।');",
+    "    state.cameraPending=false; state.sceneKey=null; showSource('camera');\n    if (state.pendingRead) { state.pendingRead=false; startReading(); ensureVisionModels(); return; }\n"
+    "    if (state.pendingAction) {\n"
+    "      const act=state.pendingAction; state.pendingAction=null;\n"
+    "      if (cloudReady()) { act(); ensureVisionModels().then(() => { if (state.source==='camera') startLiveLoop(); }); return; }\n"
+    "      announce('Camera on. Loading the vision models, then I will look.', 'ক্যামেরা চালু। মডেল লোড হচ্ছে, তারপর দেখছি।');\n"
+    "      if (!await ensureVisionModels() || token!==cameraRequest || state.source!=='camera') return;\n"
+    "      startLiveLoop(); act(); return;\n"
+    "    }\n"
+    "    announce('Camera on. Loading recognition models.', 'ক্যামেরা চালু। শনাক্তকরণ মডেল লোড হচ্ছে।');")
+# Visual questions start the camera themselves instead of asking for a source.
+rep("function describeScene() {\n  if (!state.source) { setCaption(t('ready_title'), t('need_source'), 'vision', null, tBn('need_source')); speak(t('need_source'), tBn('need_source')); return; }",
+    "function describeScene() {\n  if (withCamera(describeScene)) return;")
+rep("function safetyCheck(silentIfClear) {\n  if (!state.source) { setCaption(t('agent_safety'), t('need_source'), 'safety', null, tBn('need_source')); speak(t('need_source'), tBn('need_source')); return; }",
+    "function safetyCheck(silentIfClear) {\n  if (!state.source) { if (silentIfClear) return; return withCamera(safetyCheck); }")
+rep("    stopCamera(); announce('Camera could not start. Check permission and use HTTPS or localhost, or upload a photo.',",
+    "    state.pendingRead=false; state.pendingAction=null; stopCamera(); announce('Camera could not start. Check permission and use HTTPS or localhost, or upload a photo.',")
+# Voice: every "read …" request goes to the camera reader.
+rep("return state.source === 'camera' ? readText() : startReader();", "return readText();")
+# Reader card: an empty transcript means "read with the camera", never "paste text".
+rep("  if (!text) return announce('Add text to the reader first.', 'আগে রিডারে লেখা যোগ করুন।');", "  if (!text) return readText();")
+rep('<div class="card-head"><h2>Book & document reader</h2>', '<div class="card-head"><h2>Reading transcript</h2>')
+rep('<p class="help">Read a page with the camera and add it here, or paste text. All paragraphs are read aloud; add pages in order for longer documents.</p>',
+    '<p class="help">Everything Astha reads from the camera is collected here. Say “Astha, read this” or tap “Read to me” to read a book or letter. Pasting text is optional.</p>')
+rep('<label class="field" for="reader-text">Text to read<textarea id="reader-text" placeholder="Paste Bangla or English text…" oninput="readerTextChanged()"></textarea></label>',
+    '<label class="field" for="reader-text">Transcript<textarea id="reader-text" placeholder="Pages Astha has read will appear here." oninput="readerTextChanged()"></textarea></label>')
+rep('<button class="btn accent" onclick="startReader()">Read all</button>', '<button class="btn accent" onclick="startReader()">Read the transcript again</button>')
+
+# ---- Astha's eye on your screen (replaces the earlier "Clicky" panel) ----
+eye_js = (HERE / "eye.js").read_text(encoding="utf-8")
+EYE_HTML = r"""    <div class="card" id="eye-card">
+      <div class="card-head">
+        <h2>♥ Astha on your screen</h2>
+        <span class="pill" id="eye-pill">Not watching</span>
+      </div>
+      <p class="help">The heart is Astha's eye. Share your screen once and Astha watches it: she tells you which app you are in, where a button is, when a pop-up has gone, and opens apps or sites for you when the browser allows. Say “Astha, watch my screen”.</p>
+      <div class="eye-view">
+        <div class="empty" id="eye-empty"><div>Screen not shared yet.</div></div>
+        <video id="eye-video" autoplay muted playsinline hidden></video>
+        <div class="heart idle" id="eye-heart" hidden aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M12 21s-7.5-4.6-9.6-9.1C.9 8.5 2.6 5 6.1 5c2 0 3.3 1.1 3.9 2.1C10.6 6.1 11.9 5 13.9 5c3.5 0 5.2 3.5 3.7 6.9C19.5 16.4 12 21 12 21z"/></svg>
+          <span class="heart-label" id="eye-heart-label" hidden></span>
+        </div>
+      </div>
+      <div class="utility-row"><button class="btn accent" id="eye-start" onclick="toggleEye()">Let Astha see my screen</button><button class="btn" onclick="eyeWhatsOnScreen()">What is on my screen?</button><button class="btn" onclick="eyeReadError()">Read the error</button><button class="btn" onclick="eyeOpen('vs code')">Open VS Code</button></div>
+      <label class="field" for="eye-paste">Or paste screen or terminal text<textarea id="eye-paste" placeholder="Paste a terminal error here, then say “Astha, read the error”."></textarea></label>
+      <div class="toggle-row"><span>Keyboard guidance: name each control as I Tab to it</span><button class="switch" id="focus-switch" role="switch" aria-checked="false" onclick="toggleFocusNarration()" aria-label="Keyboard guidance"></button></div>
+      <p class="help">Astha opens websites and VS Code herself. Clicking inside other apps needs the small desktop agent from the roadmap; until then she guides your keys and confirms what she sees.</p>
+    </div>
+  </section>
+"""
+rep('<div class="utility-row"><button class="btn accent" onclick="startReader()">Read the transcript again</button><button class="btn" onclick="pauseReader()">Pause</button><button class="btn" onclick="resumeReader()">Resume</button><button class="btn" onclick="stopAllSpeech()">Stop</button><button class="btn" onclick="clearReader()">Clear text</button></div>\n    </div>\n  </section>\n',
+    '<div class="utility-row"><button class="btn accent" onclick="startReader()">Read the transcript again</button><button class="btn" onclick="pauseReader()">Pause</button><button class="btn" onclick="resumeReader()">Resume</button><button class="btn" onclick="stopAllSpeech()">Stop</button><button class="btn" onclick="clearReader()">Clear text</button></div>\n    </div>\n' + EYE_HTML)
+rep("</style>\n</head>", """  .eye-view { position: relative; aspect-ratio: 16 / 9; background: var(--bg); border: 2px solid var(--border); border-radius: 12px; overflow: hidden; margin: .5rem 0; }
+  .eye-view video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #000; }
+  .eye-view .empty { position: absolute; inset: 0; display: grid; place-items: center; color: var(--muted); font-weight: 600; }
+</style>
+</head>""")
+# Voice routes for the screen eye (before the generic rules)
+rep("  if (/hands.?free|always listen|keep listening|হ্যান্ডস ?ফ্রি|সবসময় শোনো/.test(q)) return toggleHandsFree();\n",
+    "  if (/hands.?free|always listen|keep listening|হ্যান্ডস ?ফ্রি|সবসময় শোনো/.test(q)) return toggleHandsFree();\n"
+    "  if (/watch my screen|see my screen|share (my )?screen|look at my screen|স্ক্রিন দেখো|স্ক্রিন শেয়ার/.test(q)) return eyeStart();\n"
+    "  if (/stop watching|stop (the )?screen|স্ক্রিন দেখা বন্ধ/.test(q)) return eyeStop();\n"
+    "  if (/(^|\\s)(open|launch|start|go to|switch to)\\s|খোলো|খুলো|চালু করো|যাও/.test(q) && appFromText(q)) return eyeOpen(q);\n"
+    "  if (/i want to (code|write code|program|work)|let'?s code|help me code|time to code|কোড করব|কোড লিখব|কাজ করব/.test(q)) return eyeSetTask(q);\n"
+    "  if (/close (it|this|that|the pop.?up|the dialog|the window)|cancel (it|this|that)|dismiss|পপ.?আপ বন্ধ|বাতিল করো/.test(q)) return eyeCloseDialog();\n"
+    "  if (/where('s| is) (the )?[a-z ]+ (button|icon|link|option)|find the [a-z ]+ (button|icon|link)|বোতাম কোথায়/.test(q)) return eyeFind(q);\n"
+    "  if (/read (the |this |that )?(error|terminal|output)|what went wrong|explain the error|ভুলটা পড়|এরর/.test(q)) return eyeReadError();\n"
+    "  if (/what('s| is) on (the |my )?screen|which (app|tab|window)|where am i|wrong (tab|window)|কোন উইন্ডো|কোন অ্যাপ|কোথায় আছি|স্ক্রিনে কী/.test(q)) return eyeWhatsOnScreen();\n"
+    "  if (/keyboard guidance|focus narration|কীবোর্ড গাইড/.test(q)) return toggleFocusNarration();\n")
+# Anything unrecognised goes to the fuzzy intent matcher, then to a scene description, never to a refusal.
+rep("  return announce('I did not recognise that request. Try Describe surroundings, Read this, or Find my glasses.', 'অনুরোধ বুঝতে পারিনি। বলুন চারপাশ বলো, এটা পড়ো অথবা আমার চশমা কোথায়।');",
+    "  return smartFallback(query, q);")
+# The old one-tap recogniser stopped at the first pause; the module defines the replacement.
+rep_between("function toggleListening() {\n  if (state.listening) { stopListening(); return; }\n  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;\n  if (!SR) { setCaption(t('agent_voice'), t('voice_unavailable'), 'voice'); speak(t('voice_unavailable'), tBn('voice_unavailable')); return; }\n  if (reader.active) pauseReader();",
+            "function stopListening() {", "")
+rep("function stopListening() {\n  state.listening = false;", "function stopListening() {\n  state.listening = false; clearTimeout(listenTimer);")
+# Speak by the dominant script and only with a voice that exists; strip symbols that get spelled out.
+rep("  const u = makeUtterance(text, /[\\u0980-\\u09ff]/.test(text) ? 'bn' : 'en');\n  if (!u) { stopReader(); $('reader-progress').textContent = 'No local voice available'; return; }",
+    "  const langFor = speechLangFor(text);\n  if (!langFor) { reader.index++; return readNextChunk(generation); }\n  const u = makeUtterance(sanitizeForSpeech(text), langFor);\n  if (!u) { stopReader(); $('reader-progress').textContent = 'No local voice available'; return; }")
+rep("    const lines = (data.lines || []).filter(l => l.confidence >= 55).map(l => l.text.replace(/\\s+/g, ' ').trim())\n      .filter(l => { const letters = l.replace(/[^\\p{L}\\p{N}]/gu, '').length; return letters >= 2 && letters / l.length >= 0.5; });\n    const text = lines.join('\\n');\n    if (!text) { $('ocr-result').hidden = true;",
+    "    const lines = (data.lines || []).filter(l => l.confidence >= 55).map(l => cleanOcrLine(l.text))\n      .filter(l => { const letters = l.replace(/[^\\p{L}\\p{N}]/gu, '').length; return letters >= 2 && letters / l.length >= 0.5; });\n    const text = lines.join('\\n');\n    if (!text) { $('ocr-result').hidden = true;")
+# Listening language preference + OCR language follows the voice language by default.
+rep("      <label class=\"field\" for=\"voice-select\">Astha's voice<select class=\"select-dropdown\" id=\"voice-select\" onchange=\"onVoiceChosen(this.value)\"></select></label>",
+    "      <label class=\"field\" for=\"voice-select\">Astha's voice<select class=\"select-dropdown\" id=\"voice-select\" onchange=\"onVoiceChosen(this.value)\"></select></label>\n"
+    "      <label class=\"field\" for=\"stt-lang\">I speak<select class=\"select-dropdown\" id=\"stt-lang\" onchange=\"try{localStorage.setItem('astha.stt',this.value)}catch(e){}\"><option value=\"auto\">Same as the voice language</option><option value=\"en-US\">English</option><option value=\"bn-BD\">বাংলা (Banglish works too)</option></select></label>")
+rep("    if(['ben+eng','eng'].includes(p.ocr))$('ocr-language').value=p.ocr;",
+    "    if(['ben+eng','eng'].includes(p.ocr))$('ocr-language').value=p.ocr; else if(voiceLang==='en')$('ocr-language').value='eng';\n    const stt=localStorage.getItem('astha.stt'); if(stt && $('stt-lang'))$('stt-lang').value=stt;")
+rep("const q = query.toLowerCase().replace(/^(?:hey\\s+)?astha[,.!\\s]*/i, '')", "const q = query.toLowerCase().replace(/^(?:hey\\s+)?(?:astha|asta|ashtha)[,.!\\s]*/i, '')")
+
+# ---- Round 1 memory: approved object events with time and confidence ----
+rep("    const partsEn = fresh.slice(0, 3).map(o => `${labelWithArticle(o.id)} ${t('pos_' + o.pos)}`);\n    const partsBn = fresh.slice(0, 3).map(o => `${tBn('pos_' + o.pos)} ${labelBn(o.id)}`);\n    const msgEn = t('new_object', { list: joinList(partsEn, false) });\n    const msgBn = tBn('new_object', { list: joinList(partsBn, true) });",
+    "    const partsEn = fresh.slice(0, 3).map(o => `${objLabelWithArticle(o)} ${t('pos_' + o.pos)}`);\n    const partsBn = fresh.slice(0, 3).map(o => `${tBn('pos_' + o.pos)} ${objLabelBn(o)}`);\n    let msgEn = t('new_object', { list: joinList(partsEn, false) });\n    let msgBn = tBn('new_object', { list: joinList(partsBn, true) });\n"
+    "    // Approved object events: offer to remember a confident personal item, never save silently.\n"
+    "    const keep = fresh.find(o => (VOCAB_BY_ID[o.id] || {}).personal && o.score >= 0.7 && now - (state.lastRememberOffer || 0) > 45000);\n"
+    "    if (keep && !privacyMode) { state.lastRememberOffer = now; state.rememberCandidate = keep.id; msgEn += ` Say “remember this” to save where your ${objLabel(keep)} is.`; msgBn += ` আপনার ${objLabelBn(keep)} কোথায় আছে মনে রাখতে বলুন “এটা মনে রাখো”।`; }")
+
+rep("    const item = worldSorted()[0];\n    if (item) return remember(item.id, item.pos);",
+    "    const item = (state.rememberCandidate && state.world.get(state.rememberCandidate)) || worldSorted().find(o => (VOCAB_BY_ID[o.id] || {}).personal) || worldSorted()[0];\n    state.rememberCandidate = null;\n    if (item) return remember(item.id, item.pos);")
+
+
+# ---- Cloud reasoning, modes, owner ID, secure-connection banner ----
+cloud_js = (HERE / "cloud.js").read_text(encoding="utf-8")
+rep('<p class="prototype-note">Browser prototype · Camera recognition and reading are experimental. Use your usual mobility aid; Astha cannot confirm a safe path.</p>',
+    '<p class="prototype-note">Browser prototype · Recognition and reading run on this device (or through Gemini when you add a key) and are still experimental. Keep using your usual mobility aid.</p>\n'
+    '      <p class="prototype-note" id="secure-banner" hidden style="border-color:var(--danger)"><strong>This page is open on an insecure address.</strong> Chrome will ask for the microphone and camera every time and may block them. Open it as <code>http://localhost:8765</code> or over HTTPS. On Android, use Chrome\'s port forwarding (chrome://inspect on the computer) so the phone sees localhost, or a Cloudflare tunnel.</p>')
+rep('        <button class="chip-btn" id="hf-btn" onclick="toggleHandsFree()" aria-pressed="false" title="Keep listening for “Astha, …”">🎧 <span id="hf-label">Hands-free: off</span></button>\n      </div>',
+    '        <button class="chip-btn" id="hf-btn" onclick="toggleHandsFree()" aria-pressed="false" title="Keep listening for “Astha, …”">🎧 <span id="hf-label">Hands-free: off</span></button>\n'
+    '        <div class="segmented" role="group" aria-label="Speaking mode" title="Auto: speaks up in busy places. Quiet: speaks only when asked.">\n'
+    '          <button id="mode-auto" onclick="setMode(\'auto\')" aria-pressed="true">Auto · busy area</button>\n'
+    '          <button id="mode-quiet" onclick="setMode(\'quiet\')" aria-pressed="false">Quiet · ask me</button>\n'
+    '        </div>\n      </div>')
+rep('      <label class="field" for="speech-rate">Speaking speed',
+    '      <label class="field" for="gemini-key">Personal Gemini key (optional backup)<input id="gemini-key" type="password" autocomplete="off" placeholder="Leave blank -- the Astha server already provides this" onchange="setGeminiKey(this.value)"></label>\n'
+    '      <p class="help">Astha\'s own server holds a Gemini key so describing, identifying, clothes, reading and screen understanding are accurate out of the box, with a strict “never invent” instruction. Paste a personal key here only as a backup for when the server is unreachable.</p>\n'
+    '      <label class="field" for="speech-rate">Speaking speed')
+rep('        <h2 data-i18n="engine_title">On-device AI engine</h2>\n        <button class="btn small accent" id="load-models-btn" onclick="loadAllModels()" data-i18n="engine_load">Load models</button>',
+    '        <h2 data-i18n="engine_title">On-device AI engine</h2>\n        <span class="pill" id="cloud-pill">Checking cloud…</span>\n        <button class="btn small accent" id="load-models-btn" onclick="loadAllModels()" data-i18n="engine_load">Load models</button>')
+rep('    <!-- AI Model Diagnostics -->',
+    '    <div class="card" id="owner-card">\n'
+    '      <div class="card-head"><h2>Owner ID</h2></div>\n'
+    '      <p class="help">Astha can learn your face and, experimentally, your voice. With Owner lock on she only takes commands after recognising you. Browser permission prompts for the microphone and camera cannot be skipped by voice; keep the page on localhost or HTTPS so they are asked only once.</p>\n'
+    '      <div class="utility-row"><button class="btn accent" onclick="enrollOwnerFace()">Remember my face</button><button class="btn" onclick="enrollOwnerVoice()">Remember my voice (experimental)</button><button class="btn" onclick="ownerItsMe()">It\'s me</button><button class="btn" id="owner-lock-btn" aria-pressed="false" onclick="toggleOwnerLock()">Owner lock: off</button></div>\n'
+    '      <p class="help" id="owner-status" role="status"></p>\n'
+    '    </div>\n\n    <!-- AI Model Diagnostics -->')
+# Cloud-first actions with on-device fallback
+rep("function describeScene() {\n  if (withCamera(describeScene)) return;", "function describeScene(skipCloud) {\n  if (withCamera(describeScene)) return;\n  if (cloudReady() && !skipCloud) return cloudDescribe();")
+# Auto mode: the cloud checks the frame before Astha speaks about new on-device detections; stricter thresholds otherwise.
+rep("const fresh = worldSorted().filter(o => (state.announced.get(o.id) || 0) < now - 10000 && o.score >= (o.src === 'coco' ? 0.55 : 0.28));",
+    "const fresh = worldSorted().filter(o => (state.announced.get(o.id) || 0) < now - 10000 && o.score >= (o.src === 'coco' ? (STRICT_COCO.has(o.id) ? 0.75 : 0.65) : 0.3));")
+rep("    setCaption(t('new_title'), msgEn, 'vision', null, msgBn);\n    speak(msgEn, msgBn);\n    heartPointAt(fresh[0]);",
+    "    if (cloudReady()) { cloudVerifyAndSpeak(fresh, msgEn, msgBn); return; }\n    setCaption(t('new_title'), msgEn, 'vision', null, msgBn);\n    speak(msgEn, msgBn);\n    heartPointAt(fresh[0]);")
+# Still-image reading through the cloud when available
+rep("    const frame = captureFrame(1280);\n    setCaption(t('reading_title'), t('ocr_working'), 'ocr', 'busy', tBn('ocr_working'));\n    speak(t('ocr_working'), tBn('ocr_working'));\n    const { data } = await worker.recognize(frame);\n    const lines = (data.lines || []).filter(l => l.confidence >= 55).map(l => cleanOcrLine(l.text))\n      .filter(l => { const letters = l.replace(/[^\\p{L}\\p{N}]/gu, '').length; return letters >= 2 && letters / l.length >= 0.5; });\n    const text = lines.join('\\n');",
+    "    const frame = captureFrame(1280);\n    setCaption(t('reading_title'), t('ocr_working'), 'ocr', 'busy', tBn('ocr_working'));\n    speak(t('ocr_working'), tBn('ocr_working'));\n    let lines = null, explain = null;\n    if (cloudReady()) { try { const r = await cloudReadLines(frame); lines = r.lines; explain = r; } catch (e) { cloudFail(e); } }\n    if (!lines) {\n      const { data } = await worker.recognize(frame);\n      lines = (data.lines || []).filter(l => l.confidence >= 55).map(l => cleanOcrLine(l.text))\n        .filter(l => { const letters = l.replace(/[^\\p{L}\\p{N}]/gu, '').length; return letters >= 2 && letters / l.length >= 0.5; });\n    }\n    const text = lines.join('\\n');\n    if (explain && explain.explainEn) reader.onFinish = () => speak(explain.explainEn, explain.explainBn);")
+# Voice: yes/no follow-ups, owner lock, modes, screen reading, owner commands
+rep("  if (!privacyMode) logEvent('Request: ' + query);\n",
+    "  if (!privacyMode) logEvent('Request: ' + query);\n"
+    "  if (answerYesNo(q)) return;\n"
+    "  if (!ownerGate(query)) return;\n"
+    "  if (/auto mode|busy (area|place|road)|speak (up )?automatically|announce automatically|অটো মোড|নিজে থেকে বলো|ব্যস্ত জায়গা/.test(q)) return setMode('auto');\n"
+    "  if (/quiet mode|silent mode|only when i ask|speak only when|stop announcing|শান্ত মোড|চুপচাপ মোড|জিজ্ঞাসা করলে বলো/.test(q)) return setMode('quiet');\n"
+    "  if (/read (what i wrote|what i typed|my code|the code|the screen|the document|this page on (the )?screen|what is written|what's written)|read aloud what|স্ক্রিনের লেখা পড়|কোড পড়|যা লিখেছি পড়/.test(q)) return eyeReadScreen();\n"
+    "  if (/remember my face|learn my face|enrol+ my face|আমার মুখ মনে রাখো|মুখ শেখো/.test(q)) return enrollOwnerFace();\n"
+    "  if (/remember my voice|learn my voice|enrol+ my voice|আমার কণ্ঠ মনে রাখো|গলা শেখো/.test(q)) return enrollOwnerVoice();\n"
+    "  if (/^(it'?s me|this is me|unlock)\\b|আমি আস্থা|আনলক করো|এটা আমি/.test(q)) return ownerItsMe();\n"
+    "  if (/owner lock|মালিক লক/.test(q)) return toggleOwnerLock();\n")
+# Keep the owner verified quietly while the camera runs
+rep("      drawOverlay(frame, objs, state.lastClipHits);\n      afterLiveUpdate();\n    }\n  } catch (e) { console.warn('coco tick', e); }",
+    "      drawOverlay(frame, objs, state.lastClipHits);\n      afterLiveUpdate();\n      ownerAutoCheck();\n    }\n  } catch (e) { console.warn('coco tick', e); }")
+
+
+
+# ---- remove the browser-encrypted vault UI; server storage + account passcode replace it ----
+rep('      <details><summary>Encrypted storage on this browser</summary>\n'
+    '        <p class="help">Use a passphrase to save memories between visits. It is never stored. Keep it safe: a forgotten passphrase cannot be recovered.</p>\n'
+    '        <label class="field" for="vault-password">Passphrase (at least 10 characters)<input id="vault-password" type="password" minlength="10" maxlength="200" autocomplete="off"></label>\n'
+    '        <div class="utility-row"><button class="btn" onclick="unlockVault()">Unlock / create</button><button class="btn" onclick="lockVault()">Lock & clear session</button></div>\n'
+    '        <p id="vault-status" class="help" role="status">Encrypted storage is locked.</p>\n'
+    '      </details>\n',
+    '')
+
+# ---- account row: who is signed in, with a sign-out button ----
+rep('      <div class="card-head"><h2>Your preferences</h2></div>',
+    '      <div class="card-head"><h2>Your preferences</h2></div>\n'
+    '      <p class="help" id="account-row" role="status">Signed in.</p>\n'
+    '      <button class="btn small" onclick="signOut()">Sign out</button>\n')
+
+# ---- PWA head tags ----
+rep('<title>Astha Vision — AI Visual Companion</title>',
+    '<title>Astha</title>\n'
+    '<meta name="theme-color" content="#0a0e17">\n'
+    '<link rel="manifest" href="manifest.webmanifest">\n'
+    '<link rel="apple-touch-icon" href="icons/icon-192.png">\n'
+    '<meta name="apple-mobile-web-app-capable" content="yes">\n'
+    '<meta name="mobile-web-app-capable" content="yes">')
+
+# ---- the sign-in / create-account gate shown before the app boots ----
+AUTH_GATE = ('<div id="auth-gate" role="dialog" aria-modal="true" aria-labelledby="auth-title">\n'
+    '  <div class="auth-card">\n'
+    '    <h1 id="auth-title">Astha — আস্থা</h1>\n'
+    '    <p class="auth-sub">Your voice-first visual companion. Create an account once; Astha remembers your things and rooms after that.</p>\n'
+    '    <div class="segmented" role="group" aria-label="Account action" style="margin-bottom:14px">\n'
+    '      <button id="auth-tab-signup" onclick="setAuthTab(\'signup\')" aria-pressed="true">Create account</button>\n'
+    '      <button id="auth-tab-login" onclick="setAuthTab(\'login\')" aria-pressed="false">Log in</button>\n'
+    '    </div>\n'
+    '    <form id="auth-form" onsubmit="event.preventDefault(); submitAuth();">\n'
+    '      <label class="field" id="auth-name-field" for="auth-name">Your name<input id="auth-name" autocomplete="name" maxlength="80" required></label>\n'
+    '      <label class="field" for="auth-phone">Phone number<input id="auth-phone" type="tel" inputmode="numeric" autocomplete="tel" maxlength="20" required placeholder="01XXXXXXXXX"></label>\n'
+    '      <label class="field" for="auth-passcode">Passcode (4 to 8 digits)<input id="auth-passcode" type="password" inputmode="numeric" autocomplete="new-password" minlength="4" maxlength="8" required></label>\n'
+    '      <button class="btn accent" type="submit" id="auth-submit" style="width:100%">Create my account</button>\n'
+    '    </form>\n'
+    '    <p class="help" id="auth-status" role="status"></p>\n'
+    '    <p class="help">Your name and phone are used only to sign you back in. Everything Astha remembers stays tied to your account.</p>\n'
+    '  </div>\n'
+    '</div>\n')
+rep('<a class="skip-link" href="#companion-main">Skip to companion</a>\n',
+    '<a class="skip-link" href="#companion-main">Skip to companion</a>\n' + AUTH_GATE)
+
+# ---- client scripts: config (deployment overrides) + backend (auth gate wiring) ----
+rep('</script>\n</body>\n</html>',
+    '</script>\n<script src="config.js"></script>\n<script src="backend.js"></script>\n</body>\n</html>')
+
+
+# ---- module + boot ----
+rep("\n(function boot() {", module.rstrip("\n") + "\n" + eye_js.rstrip("\n") + "\n" + cloud_js.rstrip("\n") + "\n\n(function boot() {")
+rep("  renderSpatialLayout();\n  enhancementBoot();\n})();", "  renderSpatialLayout();\n  enhancementBoot();\n  companionBoot();\n  eyeBoot();\n  cloudBoot();\n})();")
+
+# ---- boot(): expose it instead of self-invoking, so backend.js can run it after sign-in ----
+rep('(function boot() {', 'window.__asthaBoot = function boot() {')
+rep('  companionBoot();\n  eyeBoot();\n  cloudBoot();\n})();',
+    '  companionBoot();\n  eyeBoot();\n  cloudBoot();\n  refreshMemory();\n  refreshRooms();\n};')
+DST.write_text(html, encoding="utf-8")
+print("wrote", DST, len(html), "bytes")

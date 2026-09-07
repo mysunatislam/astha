@@ -1,0 +1,76 @@
+// Per-user memory: approved object events, room notes, and a short activity log.
+// Every write here is something the user explicitly asked Astha to remember.
+import { Router } from 'express';
+import { nanoid } from 'nanoid';
+import { run, get, all } from './db.js';
+
+export const memoryRouter = Router();
+
+memoryRouter.get('/memories', (req, res) => {
+  const q = (req.query.q || '').toLowerCase();
+  const rows = all('SELECT * FROM memories WHERE user_id = ? ORDER BY created_at DESC LIMIT 200', [req.user.id]);
+  const filtered = q ? rows.filter(r => (r.item + ' ' + r.location).toLowerCase().includes(q)) : rows;
+  res.json({ memories: filtered });
+});
+memoryRouter.post('/memories', (req, res) => {
+  const { item, location, source, score } = req.body || {};
+  if (!item || !location) return res.status(400).json({ error: 'item_and_location_required' });
+  const id = nanoid();
+  run('INSERT INTO memories (id, user_id, item, location, source, score, created_at) VALUES (?,?,?,?,?,?,?)',
+    [id, req.user.id, String(item).slice(0, 120), String(location).slice(0, 240), source || 'Your note', score ?? null, Date.now()]);
+  res.json({ id });
+});
+memoryRouter.delete('/memories/:id', (req, res) => {
+  run('DELETE FROM memories WHERE id = ? AND user_id = ?', [req.params.id, req.user.id]);
+  res.json({ ok: true });
+});
+memoryRouter.delete('/memories', (req, res) => {
+  run('DELETE FROM memories WHERE user_id = ?', [req.user.id]);
+  res.json({ ok: true });
+});
+
+memoryRouter.get('/rooms', (req, res) => {
+  res.json({ rooms: all('SELECT * FROM rooms WHERE user_id = ? ORDER BY updated_at DESC LIMIT 100', [req.user.id]) });
+});
+memoryRouter.post('/rooms', (req, res) => {
+  const { name, notes } = req.body || {};
+  if (!name || !notes) return res.status(400).json({ error: 'name_and_notes_required' });
+  const existing = get('SELECT id FROM rooms WHERE user_id = ? AND lower(name) = lower(?)', [req.user.id, name]);
+  const id = existing ? existing.id : nanoid();
+  const now = Date.now();
+  if (existing) run('UPDATE rooms SET notes = ?, updated_at = ? WHERE id = ?', [String(notes).slice(0, 2000), now, id]);
+  else run('INSERT INTO rooms (id, user_id, name, notes, updated_at) VALUES (?,?,?,?,?)', [id, req.user.id, String(name).slice(0, 80), String(notes).slice(0, 2000), now]);
+  res.json({ id });
+});
+memoryRouter.delete('/rooms/:id', (req, res) => {
+  run('DELETE FROM rooms WHERE id = ? AND user_id = ?', [req.params.id, req.user.id]);
+  res.json({ ok: true });
+});
+
+memoryRouter.delete('/rooms', (req, res) => {
+  run('DELETE FROM rooms WHERE user_id = ?', [req.user.id]);
+  res.json({ ok: true });
+});
+
+memoryRouter.get('/log', (req, res) => {
+  res.json({ events: all('SELECT * FROM events WHERE user_id = ? ORDER BY created_at DESC LIMIT 30', [req.user.id]) });
+});
+memoryRouter.delete('/log', (req, res) => {
+  run('DELETE FROM events WHERE user_id = ?', [req.user.id]);
+  res.json({ ok: true });
+});
+
+memoryRouter.post('/log', (req, res) => {
+  const { kind, text } = req.body || {};
+  if (!text) return res.status(400).json({ error: 'text_required' });
+  run('INSERT INTO events (id, user_id, kind, text, created_at) VALUES (?,?,?,?,?)', [nanoid(), req.user.id, kind || 'note', String(text).slice(0, 300), Date.now()]);
+  res.json({ ok: true });
+});
+
+memoryRouter.put('/settings', (req, res) => {
+  const { voice_lang, mode, face_descriptor } = req.body || {};
+  if (voice_lang) run('UPDATE users SET voice_lang = ? WHERE id = ?', [voice_lang, req.user.id]);
+  if (mode) run('UPDATE users SET mode = ? WHERE id = ?', [mode, req.user.id]);
+  if (face_descriptor !== undefined) run('UPDATE users SET face_descriptor = ? WHERE id = ?', [face_descriptor ? JSON.stringify(face_descriptor) : null, req.user.id]);
+  res.json({ ok: true });
+});

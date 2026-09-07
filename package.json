@@ -1,0 +1,12 @@
+{
+  "name": "astha",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Astha -- a Bangla-first, voice-led AI visual companion for blind and low-vision users.",
+  "scripts": {
+    "build": "python tools/build.py",
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js",
+    "install:server": "npm --prefix server install"
+  }
+}

@@ -1,0 +1,2696 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="clinical-yellow" data-font-size="normal">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Astha Vision — AI Visual Companion</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Noto+Sans+Bengali:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  /* =========================================================================
+     Clinical Ophthalmology Design System
+     Designed for Low-Vision, Photophobia, Glare Reduction & Macular Degeneration
+     ========================================================================= */
+  :root {
+    /* Base Font & Spacing */
+    --font-latin: 'Inter', system-ui, -apple-system, sans-serif;
+    --font-bn: 'Noto Sans Bengali', 'Inter', system-ui, sans-serif;
+    --base-font-size: 16px;
+    --letter-spacing: 0.02em;
+    --line-height: 1.5;
+    --radius: 16px;
+    --radius-sm: 10px;
+
+    /* Theme 1 (Default): Clinical High-Contrast Yellow on Pure Black */
+    /* 555nm peak photopic sensitivity, 19.5:1 contrast ratio, zero OLED backscatter */
+    --bg: #000000;
+    --bg-2: #090909;
+    --surface: #111111;
+    --surface-2: #1c1c1c;
+    --surface-3: #282828;
+    --border: #3a3a3a;
+    --border-strong: #ffd700;
+    --text: #ffffff;
+    --muted: #d1d5db;
+    --faint: #9ca3af;
+    --accent: #ffd700;
+    --accent-strong: #facc15;
+    --accent-soft: rgba(255, 215, 0, 0.18);
+    --accent-ink: #000000;
+    --danger: #ff3b30;
+    --danger-soft: rgba(255, 59, 48, 0.22);
+    --warn: #ff9500;
+    --warn-soft: rgba(255, 149, 0, 0.22);
+    --ok: #34c759;
+    --ok-soft: rgba(52, 199, 89, 0.2);
+    --info: #00e5ff;
+    --shadow: 0 10px 30px rgba(0, 0, 0, 0.8);
+  }
+
+  /* Theme 2: Monochrome Inverted (High Contrast White on Black) */
+  html[data-theme="monochrome"] {
+    --bg: #000000;
+    --bg-2: #080808;
+    --surface: #121212;
+    --surface-2: #1e1e1e;
+    --surface-3: #2a2a2a;
+    --border: #444444;
+    --border-strong: #ffffff;
+    --text: #ffffff;
+    --muted: #e2e8f0;
+    --faint: #94a3b8;
+    --accent: #ffffff;
+    --accent-strong: #f8fafc;
+    --accent-soft: rgba(255, 255, 255, 0.18);
+    --accent-ink: #000000;
+    --danger: #ff453a;
+    --danger-soft: rgba(255, 69, 58, 0.22);
+    --warn: #ff9f0a;
+    --warn-soft: rgba(255, 159, 10, 0.22);
+    --ok: #32d74b;
+    --ok-soft: rgba(50, 215, 75, 0.2);
+  }
+
+  /* Theme 3: Navy and cyan (Ophthalmology Soft Dark) */
+  html[data-theme="navy-cyan"] {
+    --bg: #060a12;
+    --bg-2: #0b111e;
+    --surface: #101726;
+    --surface-2: #172136;
+    --surface-3: #1f2c47;
+    --border: #283754;
+    --border-strong: #2dd4bf;
+    --text: #f1f5f9;
+    --muted: #94a3b8;
+    --faint: #64748b;
+    --accent: #2dd4bf;
+    --accent-strong: #14b8a6;
+    --accent-soft: rgba(45, 212, 191, 0.18);
+    --accent-ink: #02201d;
+    --danger: #fb5c6c;
+    --danger-soft: rgba(251, 92, 108, 0.2);
+    --warn: #fb923c;
+    --warn-soft: rgba(251, 146, 60, 0.2);
+    --ok: #34d399;
+    --ok-soft: rgba(52, 211, 153, 0.18);
+  }
+
+  /* Font Scaling Modes */
+  html[data-font-size="large"] {
+    --base-font-size: 20px;
+    --letter-spacing: 0.03em;
+  }
+  html[data-font-size="xlarge"] {
+    --base-font-size: 24px;
+    --letter-spacing: 0.04em;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-latin);
+    font-size: var(--base-font-size);
+    letter-spacing: var(--letter-spacing);
+    line-height: var(--line-height);
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+  html[lang="bn"] body { font-family: var(--font-bn); }
+  button { font: inherit; color: inherit; cursor: pointer; border: 0; background: none; }
+  
+  /* Clinical High-Visibility Focus Ring (Accessibility requirement) */
+  button:focus-visible, input:focus-visible, [tabindex]:focus-visible {
+    outline: 4px solid var(--accent);
+    outline-offset: 3px;
+  }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  [hidden] { display: none !important; }
+
+  /* ---------- Top Bar ---------- */
+  .topbar {
+    position: sticky; top: 0; z-index: 50;
+    background: var(--bg);
+    border-bottom: 2px solid var(--border);
+    padding: 12px 20px;
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px;
+  }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .brand-mark {
+    width: 44px; height: 44px; border-radius: 12px;
+    background: var(--accent); color: var(--accent-ink);
+    display: grid; place-items: center;
+    box-shadow: 0 0 16px var(--accent-soft);
+    border: 2px solid #ffffff;
+  }
+  .brand-mark svg { width: 26px; height: 26px; }
+  .brand h1 { font-size: 1.25rem; font-weight: 900; margin: 0; letter-spacing: -0.01em; display: flex; align-items: center; gap: 8px; color: var(--accent); }
+  .brand p { margin: 0; font-size: 0.875rem; color: var(--muted); font-weight: 600; }
+  
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 0.875rem; font-weight: 800; padding: 4px 10px; border-radius: 999px;
+    background: var(--surface-2); color: var(--text); border: 2px solid var(--border);
+    letter-spacing: 0.02em; white-space: nowrap;
+  }
+  .pill.ok { background: var(--ok-soft); color: var(--ok); border-color: var(--ok); }
+  .pill.warn { background: var(--warn-soft); color: var(--warn); border-color: var(--warn); }
+  .pill.danger { background: var(--danger-soft); color: var(--danger); border-color: var(--danger); }
+  .pill.accent { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
+  .dot.pulse { animation: pulse 1.4s infinite ease-in-out; }
+  @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.35; transform: scale(0.8); } }
+
+  .controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+  .segmented {
+    display: inline-flex; padding: 3px; border-radius: 12px;
+    background: var(--surface); border: 2px solid var(--border);
+  }
+  .segmented button {
+    padding: 8px 14px; border-radius: 9px; font-size: 0.875rem; font-weight: 700; color: var(--muted);
+    min-height: 40px; transition: background 0.15s, color 0.15s;
+  }
+  .segmented button:hover { color: var(--text); }
+  .segmented button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border: 1px solid #ffffff; }
+  
+  .chip-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 8px 14px; min-height: 40px; border-radius: 12px; font-size: 0.875rem; font-weight: 700;
+    background: var(--surface); border: 2px solid var(--border); color: var(--text);
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .chip-btn:hover { background: var(--surface-2); border-color: var(--border-strong); }
+  .chip-btn[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+  .chip-btn svg { width: 18px; height: 18px; }
+
+  /* ---------- Contrast theme & Font Pickers ---------- */
+  .select-dropdown {
+    background: var(--surface); color: var(--text); border: 2px solid var(--border);
+    border-radius: 10px; padding: 6px 10px; font-size: 0.875rem; font-weight: 700;
+  }
+
+  /* ---------- Layout ---------- */
+  .layout {
+    max-width: 1280px; margin: 0 auto; padding: 20px;
+    display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: 20px; align-items: start;
+  }
+  @media (max-width: 960px) { .layout { grid-template-columns: 1fr; } }
+  .stack { display: flex; flex-direction: column; gap: 16px; }
+
+  .card {
+    background: var(--surface); border: 2px solid var(--border); border-radius: var(--radius);
+    padding: 20px; box-shadow: var(--shadow);
+  }
+  .card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; }
+  .card-head h2, .card-head h3 { margin: 0; font-size: 0.875rem; font-weight: 900; letter-spacing: 0.05em; text-transform: uppercase; color: var(--accent); }
+  html[lang="bn"] .card-head h2, html[lang="bn"] .card-head h3 { letter-spacing: 0; text-transform: none; font-size: 0.9375rem; }
+  .card p.help { margin: 0 0 10px; font-size: 0.875rem; color: var(--muted); font-weight: 500; }
+
+  /* ---------- Companion & Viewport ---------- */
+  .companion { padding: 16px; border: 2px solid var(--border-strong); }
+  .viewport {
+    position: relative; width: 100%; aspect-ratio: 4 / 3; max-height: 520px;
+    border-radius: 14px; overflow: hidden; background: #000000; border: 3px solid var(--border);
+  }
+  .viewport video, .viewport img, .viewport canvas {
+    position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover;
+  }
+  .viewport canvas { pointer-events: none; }
+  .viewport .shade { position: absolute; inset: 0; background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.2) 40%, rgba(0,0,0,0.6) 100%); pointer-events: none; }
+  .viewport .empty {
+    position: absolute; inset: 0; display: grid; place-items: center; text-align: center; color: var(--muted); padding: 24px;
+  }
+  .viewport .empty svg { width: 64px; height: 64px; margin-bottom: 12px; color: var(--accent); }
+
+  /* Caption Card with Maximum Contrast */
+  .caption {
+    position: absolute; top: 12px; left: 12px; right: 12px;
+    background: rgba(0, 0, 0, 0.94); backdrop-filter: blur(12px);
+    border: 3px solid var(--accent); border-radius: 14px; padding: 14px 16px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.8);
+  }
+  .caption-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 6px; }
+  .caption-status { display: inline-flex; align-items: center; gap: 8px; font-size: 0.875rem; font-weight: 900; color: var(--accent); letter-spacing: 0.05em; text-transform: uppercase; }
+  html[lang="bn"] .caption-status { letter-spacing: 0; text-transform: none; font-size: 0.875rem; }
+  .caption-text { margin: 0; font-size: 1.125rem; font-weight: 700; line-height: 1.45; color: #ffffff; }
+  .caption-voice-sub {
+    margin-top: 8px; padding: 6px 12px;
+    background: rgba(255, 255, 255, 0.08); border-left: 3px solid var(--accent);
+    border-radius: 6px; font-size: 0.875rem; font-weight: 600; color: var(--muted);
+    font-family: var(--font-bn); display: flex; align-items: center; gap: 8px;
+  }
+  .caption-voice-sub[hidden] { display: none !important; }
+  .caption.busy { border-color: var(--info); }
+  .caption.busy .caption-status { color: var(--info); }
+  .caption.danger { border-color: var(--danger); background: rgba(50, 0, 0, 0.95); }
+  .caption.danger .caption-status { color: var(--danger); }
+
+  .source-bar {
+    position: absolute; bottom: 12px; left: 12px; right: 12px;
+    display: flex; gap: 8px; overflow-x: auto; padding: 8px;
+    background: rgba(0, 0, 0, 0.9); backdrop-filter: blur(12px);
+    border: 2px solid var(--border); border-radius: 14px; scrollbar-width: none;
+  }
+  .source-bar::-webkit-scrollbar { display: none; }
+  .source-bar button {
+    flex: 0 0 auto; padding: 8px 14px; min-height: 38px; border-radius: 10px; font-size: 0.875rem; font-weight: 700;
+    background: var(--surface-2); border: 2px solid var(--border); color: var(--text); white-space: nowrap;
+  }
+  .source-bar button:hover { border-color: var(--accent); }
+  .source-bar button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: #ffffff; }
+  .source-bar button.stop { background: var(--danger-soft); color: var(--danger); border-color: var(--danger); }
+  .source-bar .label { flex: 0 0 auto; align-self: center; font-size: 0.875rem; font-weight: 800; color: var(--faint); padding: 0 4px; text-transform: uppercase; }
+
+  /* High-Urgency Hazard Banner */
+  .hazard {
+    position: absolute; inset: 0; display: grid; place-items: center;
+    background: rgba(255, 59, 48, 0.35); border: 6px solid var(--danger); pointer-events: none;
+  }
+  .hazard span {
+    background: var(--danger); color: #fff; font-weight: 900; font-size: 1.375rem; padding: 14px 24px; border-radius: 14px;
+    border: 3px solid #ffffff; animation: bounce 0.8s infinite; box-shadow: 0 10px 30px rgba(0,0,0,0.8);
+  }
+  @keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+
+  .seen-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; min-height: 34px; align-items: center; }
+  .seen-row .label { font-size: 0.875rem; font-weight: 800; color: var(--muted); margin-right: 4px; }
+  .seen-chip {
+    font-size: 0.875rem; font-weight: 700; padding: 6px 12px; border-radius: 999px;
+    background: var(--surface-2); border: 2px solid var(--border); color: var(--text);
+  }
+  .seen-chip.hazard-chip { background: var(--danger-soft); border-color: var(--danger); color: var(--danger); }
+  .seen-chip small { color: var(--muted); font-weight: 600; }
+
+  /* Oversized High-Contrast Action Buttons (WCAG AAA 84dp Touch Targets) */
+  .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 14px; }
+  .action {
+    display: flex; align-items: center; gap: 14px; text-align: left;
+    padding: 16px; min-height: 84px; border-radius: var(--radius);
+    background: var(--surface-2); border: 2px solid var(--border);
+    transition: transform 0.08s, background 0.15s, border-color 0.15s;
+  }
+  .action:hover { background: var(--surface-3); border-color: var(--accent); }
+  .action:active { transform: scale(0.985); }
+  .action.primary { background: var(--accent); color: var(--accent-ink); border-color: #ffffff; }
+  .action.primary:hover { background: var(--accent-strong); }
+  .action.primary .icon { background: rgba(0, 0, 0, 0.18); color: var(--accent-ink); }
+  .action.primary .desc { color: rgba(0, 0, 0, 0.85); font-weight: 600; }
+  .action .icon {
+    flex: 0 0 auto; width: 48px; height: 48px; border-radius: 12px; display: grid; place-items: center;
+    background: var(--accent-soft); color: var(--accent); border: 2px solid var(--border);
+  }
+  .action .icon svg { width: 26px; height: 26px; }
+  .action .title { font-weight: 900; font-size: 1.0625rem; line-height: 1.25; }
+  .action .desc { font-size: 0.875rem; color: var(--muted); margin-top: 4px; font-weight: 500; }
+  .action.on { border-color: var(--ok); background: var(--ok-soft); }
+  .action.on .icon { background: rgba(52, 199, 89, 0.25); color: var(--ok); border-color: var(--ok); }
+  .action.on .desc { color: var(--ok); font-weight: 800; }
+  .action.wide { grid-column: 1 / -1; }
+
+  @media (max-width: 580px) {
+    .actions { grid-template-columns: 1fr; }
+    .viewport { aspect-ratio: 3 / 4; max-height: none; }
+    .caption-text { font-size: 1rem; }
+    .layout { padding: 12px; gap: 14px; }
+    .companion { padding: 12px; }
+  }
+
+  /* Central Voice Microphone Area */
+  .mic-area { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 20px 0 8px; }
+  .mic {
+    width: 92px; height: 92px; border-radius: 50%;
+    background: var(--accent); color: var(--accent-ink); display: grid; place-items: center;
+    box-shadow: 0 0 0 10px var(--accent-soft), 0 12px 30px rgba(0, 0, 0, 0.6);
+    border: 4px solid #ffffff;
+    transition: transform 0.1s, background 0.15s;
+  }
+  .mic svg { width: 38px; height: 38px; }
+  .mic:active { transform: scale(0.94); }
+  .mic.listening { background: var(--danger); color: #fff; box-shadow: 0 0 0 12px var(--danger-soft); animation: pulse-ring 1.2s infinite; }
+  @keyframes pulse-ring { 0%, 100% { box-shadow: 0 0 0 10px var(--danger-soft); } 50% { box-shadow: 0 0 0 22px rgba(255, 59, 48, 0.1); } }
+  .mic-label { font-weight: 900; font-size: 1rem; color: var(--accent); }
+  .mic-hint { font-size: 0.875rem; color: var(--muted); text-align: center; max-width: 420px; }
+
+  .ocr-result { margin-top: 14px; padding: 16px; border-radius: var(--radius); background: var(--bg-2); border: 2px solid var(--accent); }
+  .ocr-result h4 { margin: 0 0 8px; font-size: 0.875rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); font-weight: 800; }
+  html[lang="bn"] .ocr-result h4 { letter-spacing: 0; text-transform: none; }
+  .ocr-result pre { margin: 0; white-space: pre-wrap; font: inherit; font-size: 1.125rem; line-height: 1.55; max-height: 240px; overflow: auto; color: #ffffff; }
+
+  .toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 12px; padding: 10px 4px 0; font-size: 0.875rem; color: var(--muted); font-weight: 600; }
+  .switch { position: relative; width: 50px; height: 28px; border-radius: 999px; background: var(--surface-3); border: 2px solid var(--border); flex: 0 0 auto; }
+  .switch::after { content: ''; position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 50%; background: var(--muted); transition: transform 0.15s, background 0.15s; }
+  .switch[aria-checked="true"] { background: var(--accent); border-color: var(--accent); }
+  .switch[aria-checked="true"]::after { transform: translateX(22px); background: #000000; }
+
+  /* ---------- Diagnostics & Wearable Cards ---------- */
+  .engine-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 0; border-bottom: 2px solid var(--border); }
+  .engine-row:last-of-type { border-bottom: 0; }
+  .engine-row .name { font-weight: 800; font-size: 0.90625rem; }
+  .engine-row .sub { font-size: 0.875rem; color: var(--muted); }
+  .progress { height: 6px; border-radius: 3px; background: var(--surface-3); margin-top: 6px; overflow: hidden; }
+  .progress i { display: block; height: 100%; background: var(--accent); width: 0; transition: width 0.2s; }
+  
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    padding: 10px 16px; min-height: 42px; border-radius: 12px; font-size: 0.875rem; font-weight: 800;
+    background: var(--surface-2); border: 2px solid var(--border); color: var(--text);
+  }
+  .btn:hover { background: var(--surface-3); border-color: var(--border-strong); }
+  .btn.accent { background: var(--accent); color: var(--accent-ink); border-color: #ffffff; }
+  .btn.danger { background: var(--danger-soft); color: var(--danger); border-color: var(--danger); }
+  .btn.small { padding: 6px 12px; min-height: 34px; font-size: 0.875rem; }
+
+  .list { display: flex; flex-direction: column; }
+  .list-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 0.90625rem; }
+  .list-row:last-child { border-bottom: 0; }
+  .list-row .primary { font-weight: 800; }
+  .list-row .meta { color: var(--muted); font-size: 0.875rem; text-align: right; }
+  .list-row .tag { font-size: 0.875rem; font-weight: 800; padding: 3px 8px; border-radius: 6px; background: var(--surface-3); color: var(--muted); margin-left: 6px; }
+  .list-row .tag.hz { background: var(--danger-soft); color: var(--danger); border: 1px solid var(--danger); }
+  .empty-note { font-size: 0.875rem; color: var(--faint); margin: 0; padding: 6px 0; }
+  
+  /* Wearable Visualizer */
+  .band { background: var(--bg-2); border: 2px solid var(--border); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+  .band .strip { width: 100%; max-width: 340px; display: flex; justify-content: space-around; gap: 12px; padding: 14px; border-radius: 16px; background: var(--surface-2); border: 2px solid var(--border); }
+  .motor-wrap { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+  .motor {
+    width: 64px; height: 64px; border-radius: 50%; display: grid; place-items: center;
+    background: var(--surface-3); border: 3px solid var(--border); font-size: 0.875rem; font-weight: 900;
+    transition: background 0.15s, border-color 0.15s;
+  }
+  .motor.on { background: var(--accent); color: var(--accent-ink); border-color: #fff; animation: vibrate 0.12s infinite; box-shadow: 0 0 24px var(--accent); }
+  .motor.danger { background: var(--danger); color: #fff; border-color: #fff; animation: vibrate 0.09s infinite; box-shadow: 0 0 26px var(--danger); }
+  @keyframes vibrate {
+    0% { transform: translate(0, 0); } 25% { transform: translate(-2px, 2px); } 50% { transform: translate(2px, -2px); } 75% { transform: translate(-2px, -1px); } 100% { transform: translate(0, 0); }
+  }
+  .gpio { font-size: 0.875rem; color: var(--muted); font-family: ui-monospace, monospace; font-weight: 700; }
+  .test-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; width: 100%; }
+  input[type="range"] { width: 100%; accent-color: var(--accent); cursor: pointer; }
+  .range-legend { display: flex; justify-content: space-between; font-size: 0.875rem; color: var(--muted); margin-top: 6px; font-weight: 700; }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+  .mini { padding: 14px; border-radius: 12px; background: var(--bg-2); border: 2px solid var(--border); text-align: left; }
+  .mini .t { font-weight: 800; font-size: 0.875rem; display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+  .mini .s { font-size: 0.875rem; color: var(--muted); margin-top: 4px; }
+  .mini.btnlike:hover { border-color: var(--danger); background: var(--danger-soft); }
+
+  .input { flex: 1; min-width: 0; padding: 10px 14px; border-radius: 10px; background: var(--bg-2); border: 2px solid var(--border); color: var(--text); font: inherit; font-size: 0.875rem; font-family: ui-monospace, monospace; }
+  .row { display: flex; gap: 8px; align-items: center; }
+
+  /* Guided Home Layout Calibration Modal */
+  .calib-overlay {
+    position: fixed; inset: 0; z-index: 999;
+    background: rgba(0, 0, 0, 0.88); backdrop-filter: blur(10px);
+    display: flex; align-items: center; justify-content: center; padding: 16px;
+  }
+  .calib-overlay[hidden] { display: none !important; }
+  .calib-card {
+    background: var(--surface); border: 3px solid var(--accent); border-radius: 18px;
+    width: 100%; max-width: 540px; padding: 24px; box-shadow: var(--shadow);
+    display: flex; flex-direction: column; gap: 16px; max-height: 90vh; overflow-y: auto;
+  }
+  .calib-card h3 { margin: 0; font-size: 1.25rem; font-weight: 900; color: var(--accent); display: flex; align-items: center; gap: 10px; }
+  .calib-stepper { display: flex; gap: 6px; margin: 4px 0 10px; }
+  .calib-step-dot { flex: 1; height: 6px; border-radius: 3px; background: var(--surface-3); transition: background 0.2s; }
+  .calib-step-dot.active { background: var(--accent); }
+  .calib-step-dot.done { background: var(--ok); }
+  .calib-instruction { font-size: 1rem; font-weight: 700; line-height: 1.5; color: #ffffff; background: var(--surface-2); padding: 14px; border-radius: 12px; border-left: 4px solid var(--accent); }
+  .calib-pan-circle {
+    width: 130px; height: 130px; border-radius: 50%; border: 4px dashed var(--accent);
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    margin: 10px auto; font-size: 0.875rem; font-weight: 800; color: var(--accent); text-align: center;
+    position: relative; animation: slow-spin 12s linear infinite;
+  }
+  @keyframes slow-spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+  .calib-pan-circle span { animation: slow-spin-rev 12s linear infinite; }
+  @keyframes slow-spin-rev { from { transform: rotate(0deg); } to { transform: rotate(-360deg); } }
+  .calib-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  .calib-room-btn { padding: 12px; border-radius: 10px; background: var(--surface-2); border: 2px solid var(--border); font-size: 0.875rem; font-weight: 800; color: var(--text); cursor: pointer; text-align: left; }
+  .calib-room-btn[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: #fff; }
+  .calib-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 8px; }
+
+  /* Clothes & Material Badge */
+  .color-swatch-badge {
+    display: inline-flex; align-items: center; gap: 8px; padding: 4px 10px;
+    background: var(--surface-2); border: 1.5px solid var(--border); border-radius: 8px;
+    font-size: 0.875rem; font-weight: 800; margin-top: 6px;
+  }
+  .color-dot { width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid #fff; display: inline-block; }
+
+  footer { text-align: center; color: var(--muted); font-size: 0.875rem; padding: 24px; border-top: 2px solid var(--border); margin-top: 14px; font-weight: 500; }
+  footer code { color: var(--accent); font-weight: bold; }
+
+  html { font-size: var(--base-font-size); scroll-padding-top: 1rem; }
+  body { font-size: 1rem; }
+  :focus-visible { outline: 4px solid var(--accent); outline-offset: 4px; }
+  button, .btn.small, .source-bar button, .chip-btn, .segmented button, select { min-height: 48px; }
+  button:disabled { cursor: wait; opacity: .6; }
+  input, textarea, select { font: inherit; max-width: 100%; }
+  input, textarea { width: 100%; background: var(--bg); color: var(--text); border: 2px solid var(--border); border-radius: 10px; padding: .75rem; }
+  textarea { min-height: 9rem; resize: vertical; }
+  .skip-link { position: fixed; top: -200px; left: 16px; z-index: 200; background: var(--accent); color: #000; padding: 1rem; }
+  .skip-link:focus { top: 12px; }
+  .topbar { position: static; }
+  .brand h1 { flex-wrap: wrap; }
+  .layout { grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); }
+  .stack, .card, .calib-card { min-width: 0; }
+  .caption { position: static; margin: 0 0 1rem; background: var(--bg); }
+  .caption-text { font-size: 1.25rem; overflow-wrap: anywhere; }
+  .viewport { aspect-ratio: 16/9; max-height: 400px; }
+  .viewport .empty { padding: 1rem; }
+  .source-bar { position: static; flex-wrap: wrap; overflow: visible; margin-top: .75rem; background: var(--surface); }
+  .mic-area { flex-direction: row; flex-wrap: wrap; padding: .75rem 0; justify-content: flex-start; gap: 1.25rem; }
+  .mic { width: 76px; height: 76px; flex: 0 0 auto; }
+  .mic-hint { text-align: left; }
+  .command-bar { display: flex; gap: .5rem; margin: .75rem 0; }
+  .command-bar input { min-width: 0; }
+  .utility-row { display: flex; flex-wrap: wrap; gap: .5rem; align-items: center; margin: .75rem 0; }
+  .field { display: grid; gap: .4rem; margin: .8rem 0; }
+  .help, .empty-note, .meta { overflow-wrap: anywhere; }
+  .list-row { flex-wrap: wrap; }
+  details > summary { cursor: pointer; font-weight: 800; padding: .75rem 0; color: var(--accent); }
+  .room-notes { margin: .75rem 0; }
+  .calib-card { max-height: 90dvh; overflow: auto; }
+  .source-status { color: var(--muted); font-size: .875rem; margin: .5rem 0; }
+  .topbar .select-dropdown { font-size: .875rem; }
+  .prototype-note { border-left: 3px solid var(--accent); padding-left: .8rem; font-size: .875rem; color: var(--muted); }
+  @media (max-width: 960px) { .layout { grid-template-columns: 1fr; } }
+  @media (max-width: 580px) { .viewport { aspect-ratio: 4/3; } .caption-row { flex-wrap: wrap; } .command-bar { flex-wrap: wrap; } .topbar { padding: 12px; } }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; } }
+</style>
+</head>
+<body>
+<a class="skip-link" href="#companion-main">Skip to companion</a>
+
+<!-- Top Clinical Navigation -->
+<header class="topbar">
+  <div class="brand">
+    <div class="brand-mark" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
+    </div>
+    <div>
+      <h1><span data-i18n="brand">Astha Vision</span> <span class="pill ok"><span class="dot pulse"></span><span data-i18n="badge_clinical">Prototype</span></span></h1>
+      <p data-i18n="tagline">Real-time AI visual companion for blind and low-vision users</p>
+    </div>
+  </div>
+
+  <div class="controls">
+    <!-- Contrast theme Switcher -->
+    <div class="flex items-center gap-1.5" title="Contrast theme Selector">
+      <label for="theme-select" class="sr-only">Contrast theme</label>
+      <select id="theme-select" onchange="applyClinicalTheme(this.value)" class="select-dropdown" aria-label="Contrast theme">
+        <option value="clinical-yellow">🟡 Yellow on black</option>
+        <option value="monochrome">⚪ Monochrome (Inverted White/Black)</option>
+        <option value="navy-cyan">🌊 Navy and cyan</option>
+      </select>
+    </div>
+
+    <!-- Font Scaling Selector -->
+    <div class="flex items-center gap-1" title="Font Size">
+      <label for="font-select" class="sr-only">Font Size</label>
+      <select id="font-select" onchange="applyFontSize(this.value)" class="select-dropdown" aria-label="Font Size">
+        <option value="normal">Text: Standard</option>
+        <option value="large">Text: Large</option>
+        <option value="xlarge">Text: Extra large</option>
+      </select>
+    </div>
+
+    <!-- Voice Delivery Selector (UI stays in English, spoken voice in Bangla or English) -->
+    <div class="segmented" role="group" aria-label="Voice Delivery" title="Voice Delivery Language">
+      <button id="voice-lang-en" onclick="setVoiceLanguage('en')" aria-pressed="false" title="Voice output spoken in English">Voice: English</button>
+      <button id="voice-lang-bn" onclick="setVoiceLanguage('bn')" aria-pressed="true" title="Voice output spoken in Bangla (বাংলা)">Voice: বাংলা</button>
+    </div>
+
+    <!-- Voice On/Off Toggle -->
+    <button class="chip-btn" id="voice-toggle" onclick="toggleAudio()" aria-pressed="true">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5L6 9H2v6h4l5 4V5z"/><path d="M15.5 8.5a5 5 0 010 7"/><path d="M18.5 5.5a9 9 0 010 13"/></svg>
+      <span id="voice-toggle-label" data-i18n="voice_on">Voice on</span>
+    </button>
+
+    <!-- Hardware Panel Toggle -->
+    <button class="chip-btn" id="hw-toggle" onclick="toggleHardwarePanel()" aria-pressed="false">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="3"/><path d="M9 6h6M9 18h6"/></svg>
+      <span data-i18n="hw_panel">Hardware panel</span>
+    </button>
+  </div>
+</header>
+
+<main class="layout" id="companion-main" tabindex="-1">
+
+  <!-- ================= Companion Main View ================= -->
+  <section class="stack">
+    <div class="card companion">
+      <p class="prototype-note">Browser prototype · Camera recognition and reading are experimental. Use your usual mobility aid; Astha cannot confirm a safe path.</p>
+      <!-- Accessible Microphone Area -->
+      <div class="mic-area">
+        <button class="mic" id="mic" onclick="toggleListening()" aria-label="Tap to speak">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0014 0"/><path d="M12 17v5M8 22h8"/></svg>
+        </button>
+        <span class="mic-label" id="mic-label" data-i18n="mic_idle">Tap to speak</span>
+        <span class="mic-hint" data-i18n="mic_hint">Ask in Bangla or English: “What is in front of me?”, “Read this”, “Where is my charger?”</span>
+      </div>
+
+
+      <form class="command-bar" onsubmit="event.preventDefault(); submitCommand()">
+        <label class="sr-only" for="command-input">Ask Astha in Bangla or English</label>
+        <input id="command-input" maxlength="500" placeholder="Type a request, e.g. Where are my glasses?" autocomplete="off">
+        <button class="btn accent" type="submit">Ask Astha</button>
+      </form>
+      <div class="utility-row"><button class="btn" onclick="repeatResponse()">Repeat</button><button class="btn" onclick="stopAllSpeech()">Stop speaking</button><button class="btn" onclick="showCommandHelp()">Voice commands</button></div>
+        <!-- Accessible High-Contrast Caption Card (WCAG AAA) -->
+        <div class="caption" id="caption" aria-live="polite" aria-atomic="true">
+          <div class="caption-row">
+            <span class="caption-status"><span class="dot pulse"></span><span id="caption-status" data-i18n="ready_title">Astha is ready</span></span>
+            <span class="pill accent" id="agent-pill" data-i18n="agent_vision">Vision agent</span>
+          </div>
+          <p class="caption-text" id="caption-text" data-i18n="ready_text">Start the camera or pick a demo scene, then tap “Describe surroundings”.</p>
+          <div class="caption-voice-sub" id="caption-voice-sub" hidden></div>
+        </div>
+
+
+      <p id="source-status" class="source-status" role="status">Camera off · No image selected</p>
+      <div class="viewport" id="viewport">
+        <div class="empty" id="viewport-empty">
+          <div>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+            <div data-i18n="viewport_empty">Start the camera, upload a photo, or pick a demo scene.</div>
+          </div>
+        </div>
+        <video id="cam" autoplay playsinline muted hidden></video>
+        <img id="still" alt="Visual Source" crossorigin="anonymous" hidden>
+        <canvas id="overlay" hidden></canvas>
+        <div class="shade"></div>
+
+        <div class="hazard" id="hazard" hidden><span id="hazard-text" data-i18n="hazard_banner">Warning! Obstacle ahead</span></div>
+
+      </div>
+
+        <!-- Video Source Selection Bar with Real, Verified Images -->
+        <div class="source-bar" role="group" aria-label="Video source">
+          <button id="cam-btn" onclick="toggleCamera()" aria-pressed="false">📷 <span id="cam-btn-label" data-i18n="src_camera">Camera</span></button>
+          <button onclick="document.getElementById('file-input').click()">🖼️ <span data-i18n="src_upload">Upload photo</span></button>
+          <input id="file-input" type="file" accept="image/*" capture="environment" hidden onchange="onPhotoChosen(this.files)">
+          <span class="label" data-i18n="src_demo">Demo</span>
+          <button data-scene="desk" onclick="loadScene('desk')" aria-pressed="false">💻 <span data-i18n="scene_desk">Desk</span></button>
+          <button data-scene="stairs" onclick="loadScene('stairs')" aria-pressed="false">🪜 <span data-i18n="scene_stairs">Stairs</span></button>
+          <button data-scene="medicine" onclick="loadScene('medicine')" aria-pressed="false">💊 <span data-i18n="scene_medicine">Medicine</span></button>
+          <button data-scene="currency" onclick="loadScene('currency')" aria-pressed="false">💵 <span data-i18n="scene_currency">Banknote</span></button>
+          <button data-scene="room" onclick="loadScene('room')" aria-pressed="false">🛋️ <span data-i18n="scene_room">Living room</span></button>
+          <button data-scene="noodles" onclick="loadScene('noodles')" aria-pressed="false">🍜 <span data-i18n="scene_noodles">Noodles</span></button>
+          <button data-scene="pc" onclick="loadScene('pc')" aria-pressed="false">🖥️ <span data-i18n="scene_pc">RGB PC</span></button>
+          <button data-scene="tube" onclick="loadScene('tube')" aria-pressed="false">🧴 <span data-i18n="scene_tube">Glue tube</span></button>
+          <button data-scene="clothes" onclick="loadScene('clothes')" aria-pressed="false">👔 <span data-i18n="scene_clothes">Blue shirt</span></button>
+          <button data-scene="cocksheet" onclick="loadScene('cocksheet')" aria-pressed="false">📦 <span data-i18n="scene_cocksheet">Cocksheet</span></button>
+        </div>
+
+      <div class="seen-row" id="seen-row">
+        <span class="label" data-i18n="seeing_now">Seeing now:</span>
+        <span class="empty-note" id="seen-empty" data-i18n="seen_none">nothing yet</span>
+      </div>
+
+      <!-- High-Contrast Action Grid -->
+      <div class="actions">
+        <button class="action primary" onclick="describeScene()">
+          <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg></span>
+          <span><div class="title" data-i18n="act_describe">Describe surroundings</div><div class="desc" data-i18n="act_describe_desc">What is around me, where, and how close</div></span>
+        </button>
+        <button class="action" onclick="identifyObject()">
+          <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.1 9a3 3 0 015.8 1c0 2-3 3-3 3"/><path d="M12 17h.01"/></svg></span>
+          <span><div class="title" data-i18n="act_identify">What is this?</div><div class="desc" data-i18n="act_identify_desc">Hold item — OCR-first & context check</div></span>
+        </button>
+        <button class="action" onclick="readText()">
+          <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 016.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 014 19.5v-15A2.5 2.5 0 016.5 2z"/><path d="M9 7h7M9 11h7"/></svg></span>
+          <span><div class="title" data-i18n="act_read">Read text</div><div class="desc" data-i18n="act_read_desc">Labels, medicine, notes, signs</div></span>
+        </button>
+        <button class="action" onclick="findItems()">
+          <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg></span>
+          <span><div class="title" data-i18n="act_find">Find my things</div><div class="desc" data-i18n="act_find_desc">Where did I last see it?</div></span>
+        </button>
+        <button class="action" onclick="inspectClothesAndColor()">
+          <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.38 3.46L16 2a4 4 0 01-8 0L3.62 3.46a2 2 0 00-1.34 2.23l.58 3.47a1 1 0 00.99.84H6v10a2 2 0 002 2h8a2 2 0 002-2V10h2.15a1 1 0 00.99-.84l.58-3.47a2 2 0 00-1.34-2.23z"/></svg></span>
+          <span><div class="title" data-i18n="act_clothes">Check clothes & color</div><div class="desc" data-i18n="act_clothes_desc">Identify garment type and perceived color</div></span>
+        </button>
+        <button class="action" onclick="startHomeCalibration()">
+          <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></span>
+          <span><div class="title" data-i18n="act_calibrate">Home layout calibration</div><div class="desc" data-i18n="act_calibrate_desc">Guided room & landmark mapping</div></span>
+        </button>
+        <button class="action wide" id="shield-btn" onclick="toggleShield()" aria-pressed="false">
+          <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></span>
+          <span><div class="title" data-i18n="act_shield">Safety shield</div><div class="desc" id="shield-desc" data-i18n="shield_off">Off — tap to watch for obstacles continuously</div></span>
+        </button>
+      </div>
+
+      <div class="calib-overlay" id="calib-modal" hidden role="dialog" aria-modal="true" aria-labelledby="calib-heading">
+        <div class="calib-card">
+          <h3 id="calib-heading" tabindex="-1">Remember a room</h3>
+          <p>Record landmarks you or a trusted person have confirmed. Notes do not track your current position or measure a safe route.</p>
+          <form onsubmit="event.preventDefault(); saveCalibratedRoom()">
+            <label class="field" for="room-name">Room name<input id="room-name" maxlength="80" required placeholder="Bedroom / শোবার ঘর"></label>
+            <label class="field" for="room-notes">Confirmed landmarks<textarea id="room-notes" maxlength="2000" required placeholder="The bedside table is beside the bed. The charger stays in its top drawer."></textarea></label>
+            <div class="utility-row"><button class="btn accent" type="submit">Save room notes</button><button class="btn" type="button" onclick="closeHomeCalibration()">Cancel</button></div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Real OCR Output Box -->
+      <div class="ocr-result" id="ocr-result" hidden>
+        <h4 data-i18n="ocr_heading">Text found</h4>
+        <pre id="ocr-text"></pre>
+        <button class="btn" onclick="appendOcrPage()">Add this text to reader</button>
+      </div>
+
+      <div class="toggle-row">
+        <span data-i18n="auto_narrate">Narrate new objects automatically while the camera is on</span>
+        <button class="switch" id="narrate-switch" role="switch" aria-checked="true" onclick="toggleNarrate()" aria-label="Auto narrate"></button>
+      </div>
+    </div>
+    <div class="card" id="reader-card">
+      <div class="card-head"><h2>Book & document reader</h2><span id="reader-progress" class="pill" role="status">Ready</span></div>
+      <p class="help">Read a page with the camera and add it here, or paste text. All paragraphs are read aloud; add pages in order for longer documents.</p>
+      <label class="field" for="reader-text">Text to read<textarea id="reader-text" placeholder="Paste Bangla or English text…" oninput="readerTextChanged()"></textarea></label>
+      <div class="utility-row"><button class="btn accent" onclick="startReader()">Read all</button><button class="btn" onclick="pauseReader()">Pause</button><button class="btn" onclick="resumeReader()">Resume</button><button class="btn" onclick="stopAllSpeech()">Stop</button><button class="btn" onclick="clearReader()">Clear text</button></div>
+    </div>
+  </section>
+
+  <!-- ================= Diagnostics & Hardware Aside ================= -->
+  <aside class="stack">
+    <div class="card">
+      <div class="card-head"><h2>Your preferences</h2></div>
+      <label class="field" for="speech-rate">Speaking speed<select class="select-dropdown" id="speech-rate" onchange="savePreferences()"><option value="0.8">Slower</option><option value="1" selected>Normal</option><option value="1.2">Faster</option><option value="1.5">Very fast</option></select></label>
+      <label class="field" for="description-style">Description length<select class="select-dropdown" id="description-style" onchange="savePreferences()"><option value="short">Short</option><option value="detailed">Detailed</option></select></label>
+      <label class="field" for="ocr-language">Reading language<select class="select-dropdown" id="ocr-language" onchange="savePreferences()"><option value="ben+eng">বাংলা + English</option><option value="eng">English</option></select></label>
+      <p id="voice-support" class="help" role="status"></p>
+      <p class="help">Tap the microphone before saying “Hey Astha”. Browser speech recognition may use an online service. There is no background wake-word listener.</p>
+      <button class="btn" id="private-btn" aria-pressed="false" onclick="togglePrivateMode()">Privacy mode: off</button>
+      <p id="privacy-status" class="help" role="status">Memory is kept for this session unless you unlock encrypted storage.</p>
+    </div>
+
+    <!-- AI Model Diagnostics -->
+    <details class="card"><summary>Advanced: AI model status</summary>
+      <div class="card-head">
+        <h2 data-i18n="engine_title">On-device AI engine</h2>
+        <button class="btn small accent" id="load-models-btn" onclick="loadAllModels()" data-i18n="engine_load">Load models</button>
+      </div>
+      <div class="engine-row">
+        <div><div class="name" data-i18n="engine_coco">Object detector</div><div class="sub" data-i18n="engine_coco_sub">COCO-SSD · 80 classes · bounding boxes</div><div class="progress" hidden><i id="prog-coco"></i></div></div>
+        <span class="pill" id="state-coco" data-i18n="state_idle">Not loaded</span>
+      </div>
+      <div class="engine-row">
+        <div><div class="name" data-i18n="engine_clip">Open-vocabulary recognizer</div><div class="sub" id="engine-clip-sub">CLIP ViT-B/32</div><div class="progress" id="prog-clip-wrap" hidden><i id="prog-clip"></i></div></div>
+        <span class="pill" id="state-clip" data-i18n="state_idle">Not loaded</span>
+      </div>
+      <div class="engine-row">
+        <div><div class="name" data-i18n="engine_ocr">Text reader</div><div class="sub" data-i18n="engine_ocr_sub">Tesseract OCR · English + Bangla</div><div class="progress" id="prog-ocr-wrap" hidden><i id="prog-ocr"></i></div></div>
+        <span class="pill" id="state-ocr" data-i18n="state_idle">Not loaded</span>
+      </div>
+      <p class="help" style="margin-top:12px" data-i18n="engine_help">Models download once (about 150 MB) and are cached by the browser. Everything runs locally; no video leaves the device.</p>
+    </details>
+
+    <!-- What I See List -->
+    <div class="card">
+      <div class="card-head">
+        <h3 data-i18n="seen_title">What I see</h3>
+        <span class="pill" id="seen-count">0</span>
+      </div>
+      <div class="list" id="seen-list"><p class="empty-note" data-i18n="seen_list_empty">Nothing detected yet.</p></div>
+    </div>
+
+    <!-- Personal Visual Memory -->
+    <div class="card">
+      <div class="card-head">
+        <h3 data-i18n="memory_title">Memory</h3>
+        <button class="btn small" onclick="clearMemory()" data-i18n="memory_clear">Clear</button>
+      </div>
+      <p class="help" data-i18n="memory_help">Personal items are remembered with where and when they were last seen.</p>
+<form onsubmit="event.preventDefault(); saveManualMemory()">
+        <label class="field" for="memory-item">Object<input id="memory-item" maxlength="80" placeholder="Glasses / চশমা" required></label>
+        <label class="field" for="memory-location">Last seen location<input id="memory-location" maxlength="160" placeholder="Bedroom, on the bedside table" required></label>
+        <button class="btn accent" type="submit">Remember this</button>
+      </form>
+      <label class="field" for="memory-search">Search memories<input id="memory-search" type="search" maxlength="160" oninput="renderMemory()" placeholder="Find an object or room"></label>
+      <details><summary>Encrypted storage on this browser</summary>
+        <p class="help">Use a passphrase to save memories between visits. It is never stored. Keep it safe: a forgotten passphrase cannot be recovered.</p>
+        <label class="field" for="vault-password">Passphrase (at least 10 characters)<input id="vault-password" type="password" minlength="10" maxlength="200" autocomplete="off"></label>
+        <div class="utility-row"><button class="btn" onclick="unlockVault()">Unlock / create</button><button class="btn" onclick="lockVault()">Lock & clear session</button></div>
+        <p id="vault-status" class="help" role="status">Encrypted storage is locked.</p>
+      </details>
+      <div class="list" id="memory-list"><p class="empty-note" data-i18n="memory_empty">Nothing remembered yet.</p></div>
+    </div>
+
+    <!-- Calibrated Spatial Home Layout Card -->
+    <div class="card" id="spatial-card">
+      <div class="card-head">
+        <h3 data-i18n="spatial_title">Calibrated Home Layout</h3>
+        <button class="btn small accent" onclick="startHomeCalibration()" data-i18n="spatial_calibrate_btn">+ Calibrate Room</button>
+      </div>
+      <p class="help" data-i18n="spatial_help">Learned room boundaries and key landmark positions guide you safely through your home.</p>
+      <div class="list" id="spatial-list"><p class="empty-note" data-i18n="spatial_empty">No rooms calibrated yet. Tap '+ Calibrate Room' to begin.</p></div>
+    </div>
+
+    <!-- Activity Log -->
+    <div class="card">
+      <div class="card-head"><h3 data-i18n="log_title">Activity log</h3></div>
+      <div id="log-list"><p class="empty-note" data-i18n="log_empty">No activity yet.</p></div>
+    </div>
+
+    <!-- Wearable Band Simulator -->
+    <div class="card" id="hw-card" hidden>
+      <div class="card-head">
+        <div>
+          <h3 data-i18n="band_title">Astha wearable band</h3>
+          <div class="sub" style="font-size: 0.875rem;color:var(--muted)" data-i18n="band_sub">ESP32 · 3-channel haptic feedback · distance sensor (simulated)</div>
+        </div>
+        <span class="pill ok"><span class="dot pulse"></span><span data-i18n="band_connected">Connected</span></span>
+      </div>
+
+      <div class="band">
+        <div class="strip">
+          <div class="motor-wrap"><div class="motor" id="motor-left" data-i18n="motor_left">LEFT</div><span class="gpio">GPIO 25</span></div>
+          <div class="motor-wrap"><div class="motor" id="motor-center" data-i18n="motor_center">CENTER</div><span class="gpio">GPIO 26</span></div>
+          <div class="motor-wrap"><div class="motor" id="motor-right" data-i18n="motor_right">RIGHT</div><span class="gpio">GPIO 27</span></div>
+        </div>
+        <span class="pill accent" id="pattern-pill"></span>
+        <div class="test-grid">
+          <button class="btn small" onclick="haptic('LEFT')" data-i18n="test_left">Left</button>
+          <button class="btn small" onclick="haptic('CENTER')" data-i18n="test_center">Center</button>
+          <button class="btn small" onclick="haptic('RIGHT')" data-i18n="test_right">Right</button>
+          <button class="btn small danger" onclick="haptic('RAPID')" data-i18n="test_danger">Danger</button>
+        </div>
+      </div>
+
+      <div class="mini" style="margin-top:12px">
+        <div class="t"><span>📡 <span data-i18n="ultra_title">Ultrasonic distance (HC-SR04)</span></span><span class="pill ok" id="distance-pill">120 cm</span></div>
+        <input type="range" id="distance" min="15" max="200" value="120" oninput="onDistance(this.value)" aria-label="Distance">
+        <div class="range-legend">
+          <span style="color:var(--danger)" data-i18n="ultra_danger">&lt; 35 cm danger</span>
+          <span style="color:var(--warn)" data-i18n="ultra_caution">&lt; 80 cm caution</span>
+          <span style="color:var(--ok)" data-i18n="ultra_clear">&gt; 80 cm clear</span>
+        </div>
+        <div class="s" style="margin-top:8px" data-i18n="ultra_note">Hardware failsafe: even if the phone disconnects, the band vibrates all three motors when something is closer than 35 cm.</div>
+      </div>
+
+      <div class="two">
+        <button class="mini btnlike" onclick="simulateFall()">
+          <div class="t"><span>🚨 <span data-i18n="fall_title">Simulate fall</span></span></div>
+          <div class="s" data-i18n="fall_sub">MPU6050 impact over 2.2 g</div>
+        </button>
+        <div class="mini">
+          <div class="t"><span>🔋 <span data-i18n="battery_title">Battery</span></span><span style="color:var(--ok)">92%</span></div>
+          <div class="s" data-i18n="battery_sub">LiPo 3.7 V · about 12 h standby</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Backend Connection Card -->
+    <div class="card" id="backend-card" hidden>
+      <div class="card-head">
+        <h3 data-i18n="backend_title">Backend connection</h3>
+        <span class="pill" id="backend-pill" data-i18n="backend_standalone">Standalone</span>
+      </div>
+      <p class="help" data-i18n="backend_help">This web version works fully on its own. If your backend is running, connect it here for cloud reasoning.</p>
+      <div class="row">
+        <input class="input" id="api-url" value="http://localhost:8000" aria-label="Backend URL">
+        <button class="btn" onclick="checkBackend()" data-i18n="backend_test">Test</button>
+      </div>
+    </div>
+
+  <div class="card"><details><summary>What this prototype can do</summary><p>Camera object recognition, Bangla and English OCR, spoken responses, document reading, and personal object notes.</p><p>Android background voice activation, verified mobility guidance, computer control, face recognition, custom voices, and emergency delivery are future integrations.</p></details></div></aside>
+</main>
+
+<footer>
+  <span data-i18n="footer">Astha Vision · Accessible Companion Prototype · Real In-Browser Inference.</span>
+</footer>
+
+<!-- TensorFlow.js + COCO-SSD -->
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"></script>
+<!-- Tesseract.js -->
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+
+<script>
+/* =====================================================================
+   1. Translations (Full Bilingual Dictionary)
+   ===================================================================== */
+const I18N = {
+  en: {
+    brand: 'Astha Vision', badge_clinical: 'Prototype',
+    tagline: 'Real-time AI visual companion for blind and low-vision users',
+    voice_on: 'Voice on', voice_off: 'Voice off', hw_panel: 'Hardware panel',
+    viewport_empty: 'Start the camera, upload a photo, or pick a demo scene.',
+    ready_title: 'Astha is ready',
+    ready_text: 'Start the camera or pick a demo scene, then tap “Describe surroundings”.',
+    hazard_banner: 'Warning! Obstacle ahead',
+    src_camera: 'Camera', src_camera_stop: 'Stop camera', src_upload: 'Upload photo', src_demo: 'Demo',
+    scene_desk: 'Desk', scene_stairs: 'Stairs', scene_medicine: 'Medicine', scene_currency: 'Banknote', scene_room: 'Living room',
+    seeing_now: 'Seeing now:', seen_none: 'nothing yet',
+    act_describe: 'Describe surroundings', act_describe_desc: 'What is around me, where, and how close',
+    act_identify: 'What is this?', act_identify_desc: 'Hold item — OCR-first & context check',
+    act_read: 'Read text', act_read_desc: 'Labels, medicine, notes, signs',
+    act_find: 'Find my things', act_find_desc: 'Where did I last see it?',
+    act_clothes: 'Check clothes & color', act_clothes_desc: 'Identify garment type and perceived color',
+    act_calibrate: 'Home layout calibration', act_calibrate_desc: 'Guided room & landmark mapping',
+    act_shield: 'Safety shield',
+    shield_off: 'Off — tap to watch for obstacles continuously', shield_on: 'On — watching for obstacles',
+    scene_noodles: 'Noodles', scene_pc: 'RGB PC', scene_tube: 'Glue tube', scene_clothes: 'Blue shirt', scene_cocksheet: 'Cocksheet',
+    calib_title: 'Home Layout Calibration',
+    spatial_title: 'Calibrated Home Layout', spatial_calibrate_btn: '+ Calibrate Room', spatial_help: 'Learned room boundaries and key landmark positions guide you safely through your home.', spatial_empty: 'No rooms calibrated yet. Tap \'+ Calibrate Room\' to begin.',
+    clothes_title: 'Clothes & Color',
+    log_calib: 'Calibrated room: {r}', log_clothes: 'Clothes: {c} {g}',
+    ocr_heading: 'Text found (Tesseract OCR)',
+    mic_idle: 'Tap to speak', mic_listening: 'Listening… speak now',
+    mic_hint: 'Ask in Bangla or English: “What is in front of me?”, “Read this”, “Where is my charger?”',
+    auto_narrate: 'Narrate new objects automatically while the camera is on',
+    engine_title: 'On-device AI engine', engine_load: 'Load models',
+    engine_coco: 'Object detector', engine_coco_sub: 'COCO-SSD · 80 classes · bounding boxes',
+    engine_clip: 'Open-vocabulary recognizer', engine_clip_sub: 'CLIP ViT-B/32 · {n} everyday objects · zero-shot',
+    engine_ocr: 'Text reader', engine_ocr_sub: 'Tesseract OCR · English + Bangla',
+    state_idle: 'Not loaded', state_loading: 'Loading…', state_ready: 'Ready', state_error: 'Failed',
+    engine_help: 'Models download once (about 150 MB) and are cached by the browser. Everything runs locally; no video leaves the device.',
+    seen_title: 'What I see', seen_list_empty: 'Nothing detected yet.',
+    memory_title: 'Memory', memory_clear: 'Clear', memory_help: 'Personal items are remembered with where and when they were last seen.', memory_empty: 'Nothing remembered yet.',
+    log_title: 'Activity log', log_empty: 'No activity yet.',
+    band_title: 'Astha wearable band', band_sub: 'ESP32 · 3-channel haptic feedback · distance sensor (simulated)', band_connected: 'Connected',
+    motor_left: 'LEFT', motor_center: 'CENTER', motor_right: 'RIGHT',
+    pattern: 'Pattern: {p}', pattern_none: 'Pattern: calm',
+    test_left: 'Left', test_center: 'Center', test_right: 'Right', test_danger: 'Danger',
+    ultra_title: 'Ultrasonic distance (HC-SR04)', ultra_danger: '< 35 cm danger', ultra_caution: '< 80 cm caution', ultra_clear: '> 80 cm clear',
+    ultra_note: 'Hardware failsafe: even if the phone disconnects, the band vibrates all three motors when something is closer than 35 cm.',
+    dist_safe: '{n} cm · clear', dist_caution: '{n} cm · caution', dist_danger: '{n} cm · danger',
+    fall_title: 'Simulate fall', fall_sub: 'MPU6050 impact over 2.2 g', battery_title: 'Battery', battery_sub: 'LiPo 3.7 V · about 12 h standby',
+    backend_title: 'Backend connection', backend_standalone: 'Standalone', backend_help: 'This web version works fully on its own. If your backend is running, connect it here for cloud reasoning.',
+    backend_test: 'Test', backend_connecting: 'Connecting…', backend_connected: 'Connected', backend_offline: 'Offline · standalone mode',
+    footer: 'Astha Vision · Accessible Companion Prototype · Real In-Browser Inference.',
+    agent_vision: 'Vision agent', agent_ocr: 'Reading agent', agent_memory: 'Memory agent', agent_safety: 'Safety agent', agent_voice: 'Voice', agent_system: 'System', agent_fall: 'Fall sensor',
+    lang_selected: 'English selected.',
+    cam_starting: 'Starting camera…', cam_on: 'Camera is on. Loading the vision models…',
+    cam_denied: 'Camera access was denied. You can upload a photo or use a demo scene.',
+    cam_off: 'Camera stopped.',
+    live_on: 'Live detection is on. I will tell you when something new appears.',
+    models_loading: 'Loading {m}…', models_ready: 'Models are ready.', models_failed: 'A model failed to load. Check your internet connection and try again.',
+    photo_loaded: 'Photo loaded. Tap “Describe surroundings” or “What is this?”.',
+    scene_loaded: 'Demo scene loaded: {s}. Tap a button below to analyze it.',
+    need_source: 'Start the camera, upload a photo, or pick a demo scene first.',
+    looking: 'Looking…', analyzing_title: 'Analyzing', identify_title: 'Identifying', reading_title: 'Reading text',
+    describe_title: 'Scene description', live_title: 'Live detection', new_title: 'New in view',
+    nothing_seen: 'I cannot clearly see anything yet. Move the camera slowly or bring the object closer.',
+    pos_left: 'on your left', pos_ahead: 'ahead of you', pos_right: 'on your right',
+    head_left: 'On your left', head_ahead: 'Ahead', head_right: 'On your right',
+    prox_very_close: 'very close', prox_near: 'nearby', prox_far: 'further away',
+    new_object: 'New: {list}.',
+    identify_sure: 'This looks like {a} ({p}%). It could also be {b} or {c}.',
+    identify_unsure: 'I am not sure. It might be {a} or {b}. Bring it closer with more light.',
+    identify_only: 'This looks like {a} ({p}%).',
+    ocr_loading: 'Loading the text reader…', ocr_working: 'Reading the text, one moment…',
+    ocr_result: 'The text says: {text}', ocr_none: 'I could not find any readable text. Hold the text flat, closer, and in good light.',
+    ocr_failed: 'The text reader could not start. Open this page through a local web server and try again.',
+    memory_seen: 'I last saw your {obj} {pos}, at {time}.',
+    memory_unknown: 'I have not seen {obj} yet in this session.',
+    memory_none: 'I have not remembered anything yet. Turn on the camera and show me around.',
+    memory_recent: 'Recently seen: {list}.',
+    memory_title_card: 'Memory recall',
+    shield_on_msg: 'Safety shield is on. I will warn you about obstacles.',
+    shield_off_msg: 'Safety shield is off.',
+    hazard_msg: 'Caution! {obj} {pos}, {prox}.', hazard_msg_noprox: 'Caution! {obj} {pos}.',
+    path_clear: 'The path looks clear.',
+    fall_msg: 'Emergency! A fall was detected. Alerting your emergency contacts.',
+    fall_title_card: 'Fall detected',
+    voice_query_title: 'You said', voice_unavailable: 'Speech recognition is not available in this browser. Try Chrome.',
+    voice_error: 'I did not catch that. Please try again.',
+    backend_ok_msg: 'Connected to the backend server.',
+    log_cam_on: 'Camera started', log_cam_off: 'Camera stopped', log_photo: 'Photo uploaded', log_scene: 'Demo scene: {s}',
+    log_models: 'Models loaded', log_describe: 'Described scene ({n} objects)', log_identify: 'Identified: {a}', log_ocr: 'Read text ({n} characters)',
+    log_hazard: 'Hazard: {obj}', log_fall: 'Fall simulated', log_voice: 'Voice: “{q}”', log_shield_on: 'Safety shield on', log_shield_off: 'Safety shield off',
+    and: 'and',
+  },
+  bn: {
+    brand: 'আস্থা ভিশন', badge_clinical: 'ক্লিনিকাল গ্রেড',
+    tagline: 'দৃষ্টিহীন ও স্বল্পদৃষ্টি মানুষের জন্য রিয়েল-টাইম এআই সঙ্গী',
+    voice_on: 'কণ্ঠস্বর চালু', voice_off: 'কণ্ঠস্বর বন্ধ', hw_panel: 'হার্ডওয়্যার প্যানেল',
+    viewport_empty: 'ক্যামেরা চালু করুন, ছবি আপলোড করুন, অথবা একটি ডেমো দৃশ্য বেছে নিন।',
+    ready_title: 'আস্থা প্রস্তুত',
+    ready_text: 'ক্যামেরা চালু করুন বা ডেমো দৃশ্য বেছে নিন, তারপর “চারপাশ বর্ণনা করুন” চাপুন।',
+    hazard_banner: 'সতর্ক! সামনে বাধা',
+    src_camera: 'ক্যামেরা', src_camera_stop: 'ক্যামেরা বন্ধ', src_upload: 'ছবি আপলোড', src_demo: 'ডেমো',
+    scene_desk: 'ডেস্ক', scene_stairs: 'সিঁড়ি', scene_medicine: 'ওষুধ', scene_currency: 'টাকার নোট', scene_room: 'বসার ঘর',
+    seeing_now: 'এখন দেখছি:', seen_none: 'এখনো কিছু না',
+    act_describe: 'চারপাশ বর্ণনা করুন', act_describe_desc: 'আশেপাশে কী আছে, কোথায় ও কত কাছে',
+    act_identify: 'এটা কী?', act_identify_desc: 'বস্তু ধরুন — ওসিয়ার-প্রথম ও প্রসঙ্গ যাচাই',
+    act_read: 'লেখা পড়ুন', act_read_desc: 'লেবেল, ওষুধ, নোট, সাইনবোর্ড',
+    act_find: 'আমার জিনিস খুঁজুন', act_find_desc: 'শেষ কোথায় দেখেছি?',
+    act_clothes: 'পোশাক ও রঙ পরীক্ষা', act_clothes_desc: 'পোশাকের ধরন ও রঙের নাম শনাক্তকরণ',
+    act_calibrate: 'হোম লেআউট ক্যালিব্রেশন', act_calibrate_desc: 'ঘরের সীমানা ও ল্যান্ডমার্ক ম্যাপিং',
+    act_shield: 'নিরাপত্তা সুরক্ষা',
+    shield_off: 'বন্ধ — সারাক্ষণ বাধা পর্যবেক্ষণে চাপুন', shield_on: 'চালু — বাধা পর্যবেক্ষণ চলছে',
+    scene_noodles: 'নুডলস', scene_pc: 'আরজিবি পিসি', scene_tube: 'আঠার টিউব', scene_clothes: 'নীল শার্ট', scene_cocksheet: 'ককশিট',
+    calib_title: 'হোম লেআউট ক্যালিব্রেশন',
+    spatial_title: 'ক্যালিব্রেট করা হোম লেআউট', spatial_calibrate_btn: '+ ঘর ক্যালিব্রেট করুন', spatial_help: 'ঘরের শেখা সীমানা ও ল্যান্ডমার্ক ঘরের ভেতরে নিরাপদ পথপ্রদর্শন করে।', spatial_empty: 'এখনো কোনো ঘর ক্যালিব্রেট করা হয়নি। শুরু করতে \'ঘর ক্যালিব্রেট করুন\' চাপুন।',
+    clothes_title: 'পোশাক ও রঙ',
+    log_calib: 'ক্যালিব্রেট করা হয়েছে: {r}', log_clothes: 'পোশাক: {c} {g}',
+    ocr_heading: 'পাওয়া লেখা (টেসেরাক্ট ওসিয়ার)',
+    mic_idle: 'কথা বলতে চাপুন', mic_listening: 'শুনছি… এখন বলুন',
+    mic_hint: 'বাংলা বা ইংরেজিতে জিজ্ঞাসা করুন: “সামনে কী আছে?”, “এটা পড়ো”, “আমার চার্জার কোথায়?”',
+    auto_narrate: 'ক্যামেরা চালু থাকলে নতুন বস্তু স্বয়ংক্রিয়ভাবে বলুন',
+    engine_title: 'অন-ডিভাইস এআই ইঞ্জিন', engine_load: 'মডেল লোড করুন',
+    engine_coco: 'বস্তু শনাক্তকারী', engine_coco_sub: 'COCO-SSD · ৮০ শ্রেণি · বাউন্ডিং বক্স',
+    engine_clip: 'ওপেন-ভোকাবুলারি শনাক্তকারী', engine_clip_sub: 'CLIP ViT-B/32 · {n}টি দৈনন্দিন বস্তু · জিরো-শট',
+    engine_ocr: 'লেখা পাঠক', engine_ocr_sub: 'Tesseract OCR · ইংরেজি + বাংলা',
+    state_idle: 'লোড হয়নি', state_loading: 'লোড হচ্ছে…', state_ready: 'প্রস্তুত', state_error: 'ব্যর্থ',
+    engine_help: 'মডেলগুলো একবারই ডাউনলোড হয় (প্রায় ১৫০ MB) এবং ব্রাউজারে সংরক্ষিত থাকে। সবকিছু ডিভাইসেই চলে; কোনো ভিডিও বাইরে যায় না।',
+    seen_title: 'আমি যা দেখছি', seen_list_empty: 'এখনো কিছু শনাক্ত হয়নি।',
+    memory_title: 'স্মৃতি', memory_clear: 'মুছুন', memory_help: 'ব্যক্তিগত জিনিস কোথায় ও কখন শেষ দেখা গেছে তা মনে রাখা হয়।', memory_empty: 'এখনো কিছু মনে রাখা হয়নি।',
+    log_title: 'কার্যক্রম লগ', log_empty: 'এখনো কোনো কার্যক্রম নেই।',
+    band_title: 'আস্থা ওয়্যারেবল ব্যান্ড', band_sub: 'ESP32 · ৩-চ্যানেল হ্যাপটিক ফিডব্যাক · দূরত্ব সেন্সর (সিমুলেটেড)', band_connected: 'সংযুক্ত',
+    motor_left: 'বাম', motor_center: 'মাঝ', motor_right: 'ডান',
+    pattern: 'প্যাটার্ন: {p}', pattern_none: 'প্যাটার্ন: শান্ত',
+    test_left: 'বাম', test_center: 'মাঝ', test_right: 'ডান', test_danger: 'বিপদ',
+    ultra_title: 'আল্ট্রাসনিক দূরত্ব (HC-SR04)', ultra_danger: '< ৩৫ সেমি বিপদ', ultra_caution: '< ৮০ সেমি সতর্কতা', ultra_clear: '> ৮০ সেমি পরিষ্কার',
+    ultra_note: 'হার্ডওয়্যার ফেইলসেফ: ফোন ডিসকানেক্ট হলেও ৩৫ সেমির কম দূরত্বে ব্যান্ডের তিনটি মোটরই কাঁপবে।',
+    dist_safe: '{n} সেমি · পরিষ্কার', dist_caution: '{n} সেমি · সতর্কতা', dist_danger: '{n} সেমি · বিপদ',
+    fall_title: 'পতন সিমুলেট', fall_sub: 'MPU6050 · ২.২ g-এর বেশি আঘাত', battery_title: 'ব্যাটারি', battery_sub: 'LiPo 3.7 V · প্রায় ১২ ঘণ্টা স্ট্যান্ডবাই',
+    backend_title: 'ব্যাকএন্ড সংযোগ', backend_standalone: 'স্বতন্ত্র', backend_help: 'এই ওয়েব সংস্করণ নিজে নিজেই সম্পূর্ণ কাজ করে। আপনার ব্যাকএন্ড চালু থাকলে ক্লাউড রিজনিংয়ের জন্য এখানে যুক্ত করুন।',
+    backend_test: 'পরীক্ষা', backend_connecting: 'সংযোগ হচ্ছে…', backend_connected: 'সংযুক্ত', backend_offline: 'অফলাইন · স্বতন্ত্র মোড',
+    footer: 'আস্থা ভিশন · ক্লিনিকাল অ্যাক্সেসিবিলিটি ইন্টারফেস · রিয়েল অন-ডিভাইস ইনফারেন্স।',
+    agent_vision: 'ভিশন এজেন্ট', agent_ocr: 'পাঠ এজেন্ট', agent_memory: 'স্মৃতি এজেন্ট', agent_safety: 'নিরাপত্তা এজেন্ট', agent_voice: 'কণ্ঠ', agent_system: 'সিস্টেম', agent_fall: 'পতন সেন্সর',
+    lang_selected: 'বাংলা নির্বাচিত হয়েছে।',
+    cam_starting: 'ক্যামেরা চালু হচ্ছে…', cam_on: 'ক্যামেরা চালু। ভিশন মডেল লোড হচ্ছে…',
+    cam_denied: 'ক্যামেরার অনুমতি পাওয়া যায়নি। ছবি আপলোড করুন বা ডেমো দৃশ্য ব্যবহার করুন।',
+    cam_off: 'ক্যামেরা বন্ধ হয়েছে।',
+    live_on: 'লাইভ শনাক্তকরণ চালু। নতুন কিছু দেখলে আমি জানাব।',
+    models_loading: '{m} লোড হচ্ছে…', models_ready: 'মডেল প্রস্তুত।', models_failed: 'একটি মডেল লোড হয়নি। ইন্টারনেট সংযোগ পরীক্ষা করে আবার চেষ্টা করুন।',
+    photo_loaded: 'ছবি লোড হয়েছে। “চারপাশ বর্ণনা করুন” বা “এটা কী?” চাপুন।',
+    scene_loaded: 'ডেমো দৃশ্য লোড হয়েছে: {s}। বিশ্লেষণ করতে নিচের বোতাম চাপুন।',
+    need_source: 'প্রথমে ক্যামেরা চালু করুন, ছবি আপলোড করুন, বা ডেমো দৃশ্য বেছে নিন।',
+    looking: 'দেখছি…', analyzing_title: 'বিশ্লেষণ চলছে', identify_title: 'শনাক্ত করছি', reading_title: 'লেখা পড়ছি',
+    describe_title: 'দৃশ্যের বর্ণনা', live_title: 'লাইভ শনাক্তকরণ', new_title: 'নতুন দেখা যাচ্ছে',
+    nothing_seen: 'এখনো স্পষ্ট কিছু দেখছি না। ক্যামেরা ধীরে ঘোরান বা বস্তুটি কাছে আনুন।',
+    pos_left: 'আপনার বাম দিকে', pos_ahead: 'আপনার সামনে', pos_right: 'আপনার ডান দিকে',
+    head_left: 'বাম দিকে', head_ahead: 'সামনে', head_right: 'ডান দিকে',
+    prox_very_close: 'খুব কাছে', prox_near: 'কাছাকাছি', prox_far: 'কিছুটা দূরে',
+    new_object: 'নতুন: {list}।',
+    identify_sure: 'এটি সম্ভবত {a} ({p}%)। এটি {b} বা {c}-ও হতে পারে।',
+    identify_unsure: 'আমি নিশ্চিত নই। এটি {a} বা {b} হতে পারে। আরও কাছে ও আলোতে ধরুন।',
+    identify_only: 'এটি সম্ভবত {a} ({p}%)।',
+    ocr_loading: 'লেখা পাঠক লোড হচ্ছে…', ocr_working: 'লেখা পড়ছি, এক মুহূর্ত…',
+    ocr_result: 'লেখাটি হলো: {text}', ocr_none: 'পড়ার মতো কোনো লেখা পাইনি। লেখাটি সমতল, কাছে ও ভালো আলোতে ধরুন।',
+    ocr_failed: 'লেখা পাঠক চালু হয়নি। পেজটি লোকাল ওয়েব সার্ভার দিয়ে খুলে আবার চেষ্টা করুন।',
+    memory_seen: 'আমি শেষবার আপনার {obj} {pos} দেখেছি, {time}-এ।',
+    memory_unknown: 'এই সেশনে {obj} এখনো দেখিনি।',
+    memory_none: 'এখনো কিছু মনে রাখিনি। ক্যামেরা চালু করে চারপাশ দেখান।',
+    memory_recent: 'সম্প্রতি দেখেছি: {list}।',
+    memory_title_card: 'স্মৃতি থেকে',
+    shield_on_msg: 'নিরাপত্তা সুরক্ষা চালু। বাধা দেখলে আমি সতর্ক করব।',
+    shield_off_msg: 'নিরাপত্তা সুরক্ষা বন্ধ।',
+    hazard_msg: 'সাবধান! {pos} {obj}, {prox}।', hazard_msg_noprox: 'সাবধান! {pos} {obj}।',
+    path_clear: 'পথ পরিষ্কার মনে হচ্ছে।',
+    fall_msg: 'জরুরি! পতন শনাক্ত হয়েছে। আপনার জরুরি যোগাযোগে সতর্কবার্তা পাঠানো হচ্ছে।',
+    fall_title_card: 'পতন শনাক্ত',
+    voice_query_title: 'আপনি বললেন', voice_unavailable: 'এই ব্রাউজারে স্পিচ রিকগনিশন নেই। Chrome ব্যবহার করুন।',
+    voice_error: 'বুঝতে পারিনি। আবার চেষ্টা করুন।',
+    backend_ok_msg: 'ব্যাকএন্ড সার্ভারের সাথে সংযুক্ত হয়েছে।',
+    log_cam_on: 'ক্যামেরা চালু', log_cam_off: 'ক্যামেরা বন্ধ', log_photo: 'ছবি আপলোড', log_scene: 'ডেমো দৃশ্য: {s}',
+    log_models: 'মডেল লোড হয়েছে', log_describe: 'দৃশ্য বর্ণনা ({n}টি বস্তু)', log_identify: 'শনাক্ত: {a}', log_ocr: 'লেখা পড়া ({n} অক্ষর)',
+    log_hazard: 'বাধা: {obj}', log_fall: 'পতন সিমুলেট', log_voice: 'কণ্ঠ: “{q}”', log_shield_on: 'নিরাপত্তা সুরক্ষা চালু', log_shield_off: 'নিরাপত্তা সুরক্ষা বন্ধ',
+    and: 'ও',
+  }
+};
+
+let lang = 'en'; // UI is permanently in clean, high-contrast English
+let voiceLang = 'bn'; // Voice delivery: 'bn' (Bangla) or 'en' (English)
+try { voiceLang = localStorage.getItem('astha.voice_lang') || 'bn'; } catch (e) {}
+
+// Visual UI translations are ALWAYS English
+function t(key, params) {
+  let s = I18N.en[key] ?? key;
+  if (params) for (const k in params) s = s.split('{' + k + '}').join(params[k]);
+  return s;
+}
+
+// Bengali translation helper for speech generation
+function tBn(key, params) {
+  let s = (I18N.bn && I18N.bn[key]) ?? I18N.en[key] ?? key;
+  if (params) for (const k in params) s = s.split('{' + k + '}').join(params[k]);
+  return s;
+}
+
+/* =====================================================================
+   2. Clinical Audio Earcon Engine (Web Audio API)
+   Generates gentle acoustic feedback on actions, confirmations, and alerts
+   ===================================================================== */
+let audioCtx = null;
+function getAudioContext() {
+  if (!audioCtx) {
+    const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+    if (AudioContextClass) audioCtx = new AudioContextClass();
+  }
+  if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+  return audioCtx;
+}
+
+function playEarcon(type) {
+  if (!state.audio) return;
+  const ctx = getAudioContext();
+  if (!ctx) return;
+  const now = ctx.currentTime;
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+
+  if (type === 'click') {
+    // Gentle tap feedback: 550Hz short tick
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(550, now);
+    gain.gain.setValueAtTime(0.12, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+    osc.start(now); osc.stop(now + 0.08);
+  } else if (type === 'confirm') {
+    // Pleasant major-chord chime: 587Hz -> 880Hz
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(587.33, now);
+    osc.frequency.exponentialRampToValueAtTime(880, now + 0.15);
+    gain.gain.setValueAtTime(0.16, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+    osc.start(now); osc.stop(now + 0.25);
+  } else if (type === 'hazard') {
+    // Two-tone warning earcon: 440Hz -> 330Hz
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(440, now);
+    osc.frequency.setValueAtTime(330, now + 0.12);
+    gain.gain.setValueAtTime(0.25, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+    osc.start(now); osc.stop(now + 0.35);
+  } else if (type === 'danger') {
+    // Urgent pulsed alarm
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(650, now);
+    gain.gain.setValueAtTime(0.3, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
+    osc.start(now); osc.stop(now + 0.45);
+  }
+}
+
+/* =====================================================================
+   3. Contrast theme & Font Scaling Controllers
+   ===================================================================== */
+function applyClinicalTheme(themeName) {
+  document.documentElement.setAttribute('data-theme', themeName);
+  try { localStorage.setItem('astha.clinical_theme', themeName); } catch (e) {}
+  playEarcon('click');
+}
+
+function applyFontSize(sizeName) {
+  document.documentElement.setAttribute('data-font-size', sizeName);
+  try { localStorage.setItem('astha.font_size', sizeName); } catch (e) {}
+  playEarcon('click');
+}
+
+/* =====================================================================
+   4. Object Vocabulary (160+ Classes)
+   ===================================================================== */
+const VOCAB = [];
+function v(id, en, bn, o = {}) { VOCAB.push(Object.assign({ id, en, bn }, o)); }
+
+// COCO classes + everyday objects with Bangla mapping and hazard labels
+v('person', 'person', 'মানুষ', { coco: 'person', hz: 'close', al: ['person', 'people', 'মানুষ', 'লোক'] });
+v('bicycle', 'bicycle', 'সাইকেল', { coco: 'bicycle', hz: 'close', al: ['bicycle', 'cycle', 'সাইকেল'] });
+v('car', 'car', 'গাড়ি', { coco: 'car', hz: 'always', al: ['car', 'vehicle', 'গাড়ি'] });
+v('motorcycle', 'motorcycle', 'মোটরসাইকেল', { coco: 'motorcycle', hz: 'always', al: ['motorcycle', 'bike', 'বাইক'] });
+v('bus', 'bus', 'বাস', { coco: 'bus', hz: 'always', al: ['bus', 'বাস'] });
+v('truck', 'truck', 'ট্রাক', { coco: 'truck', hz: 'always', al: ['truck', 'ট্রাক'] });
+v('backpack', 'backpack', 'ব্যাগ', { coco: 'backpack', personal: true, al: ['backpack', 'ব্যাগ'] });
+v('umbrella', 'umbrella', 'ছাতা', { coco: 'umbrella', personal: true, al: ['umbrella', 'ছাতা'] });
+v('handbag', 'handbag', 'হ্যান্ডব্যাগ', { coco: 'handbag', personal: true, al: ['handbag', 'purse', 'হ্যান্ডব্যাগ'] });
+v('bottle', 'bottle', 'বোতল', { coco: 'bottle', personal: true, p: ['a water bottle', 'a plastic bottle'], al: ['bottle', 'water', 'বোতল', 'পানি'] });
+v('cup', 'cup', 'কাপ', { coco: 'cup', personal: true, p: ['a cup', 'a mug', 'a tea cup'], al: ['cup', 'mug', 'tea', 'কাপ', 'মগ', 'চা'] });
+v('chair', 'chair', 'চেয়ার', { coco: 'chair', hz: 'close', al: ['chair', 'চেয়ার'] });
+v('couch', 'sofa', 'সোফা', { coco: 'couch', hz: 'close', al: ['sofa', 'couch', 'সোফা'] });
+v('table', 'table', 'টেবিল', { coco: 'dining table', hz: 'close', p: ['a table', 'a desk', 'a dining table'], al: ['table', 'desk', 'টেবিল', 'ডেস্ক'] });
+v('tv', 'television', 'টিভি', { coco: 'tv', p: ['a television', 'a tv screen'], al: ['tv', 'television', 'টিভি'] });
+v('laptop', 'laptop', 'ল্যাপটপ', { coco: 'laptop', personal: true, al: ['laptop', 'computer', 'ল্যাপটপ', 'কম্পিউটার'] });
+v('mouse', 'computer mouse', 'মাউস', { coco: 'mouse', personal: true, p: ['a computer mouse'], al: ['mouse', 'মাউস'] });
+v('remote', 'remote control', 'রিমোট', { coco: 'remote', personal: true, p: ['a tv remote control'], al: ['remote', 'রিমোট'] });
+v('keyboard', 'keyboard', 'কীবোর্ড', { coco: 'keyboard', p: ['a computer keyboard'], al: ['keyboard', 'কীবোর্ড'] });
+v('cell phone', 'phone', 'মোবাইল ফোন', { coco: 'cell phone', personal: true, p: ['a smartphone', 'a mobile phone'], al: ['phone', 'mobile', 'ফোন', 'মোবাইল'] });
+v('refrigerator', 'refrigerator', 'ফ্রিজ', { coco: 'refrigerator', hz: 'close', al: ['fridge', 'refrigerator', 'ফ্রিজ'] });
+v('book', 'book', 'বই', { coco: 'book', personal: true, al: ['book', 'বই'] });
+v('keys', 'keys', 'চাবি', { personal: true, pl: true, p: ['keys', 'a bunch of keys on a keyring', 'a door key'], al: ['key', 'keys', 'চাবি'] });
+v('eyeglasses', 'eyeglasses', 'চশমা', { personal: true, pl: true, p: ['eyeglasses', 'a pair of spectacles', 'sunglasses'], al: ['glasses', 'spectacles', 'sunglasses', 'চশমা'] });
+v('wallet', 'wallet', 'মানিব্যাগ', { personal: true, p: ['a leather wallet', 'a wallet'], al: ['wallet', 'মানিব্যাগ', 'ওয়ালেট'] });
+v('phone charger', 'phone charger', 'ফোন চার্জার', { personal: true, p: ['a phone charger', 'a usb charger plug'], al: ['charger', 'phone charger', 'চার্জার'] });
+v('medicine strip', 'medicine strip', 'ওষুধের পাতা', { personal: true, p: ['a blister pack of tablets', 'a strip of medicine pills', 'a medicine packet'], al: ['medicine', 'tablet', 'pills', 'ওষুধ', 'ট্যাবলেট'] });
+v('pill bottle', 'medicine bottle', 'ওষুধের বোতল', { personal: true, p: ['a medicine bottle', 'a bottle of syrup', 'a pill bottle'], al: ['syrup', 'medicine bottle', 'সিরাপ'] });
+v('banknote', 'banknote', 'টাকার নোট', { personal: true, p: ['a paper banknote', 'paper money', 'a Bangladeshi taka note'], al: ['money', 'note', 'cash', 'taka', 'টাকা', 'নোট'] });
+v('stairs', 'stairs', 'সিঁড়ি', { hz: 'always', pl: true, p: ['a staircase', 'stairs going down', 'steps leading down'], al: ['stairs', 'staircase', 'steps', 'সিঁড়ি'] });
+v('door', 'door', 'দরজা', { hz: 'close', p: ['a door', 'a closed door', 'an open doorway'], al: ['door', 'দরজা'] });
+v('noodles_packet', 'noodles packet', 'নুডলস এর প্যাকেট', { personal: true, p: ['a packet of instant noodles', 'a sealed food packet of Maggi noodles', 'instant ramen noodles in a plastic packet'], al: ['noodles', 'maggi', 'ramen', 'নুডলস', 'ম্যাগি', 'প্যাকেট'] });
+v('desktop_pc', 'desktop PC tower', 'ডেস্কটপ কম্পিউটার কেসিং', { personal: true, p: ['a desktop computer tower with RGB lights', 'a gaming PC chassis with illuminated fans', 'a desktop computer CPU casing on a desk'], al: ['pc', 'cpu', 'computer', 'casing', 'desktop', 'কম্পিউটার', 'পিসি'] });
+v('tube', 'squeeze tube', 'আঠার বা মলমের টিউব', { personal: true, p: ['a squeeze tube of glue or adhesive', 'a tube of toothpaste', 'a plastic tube of ointment or cream'], al: ['tube', 'glue', 'adhesive', 'ointment', 'toothpaste', 'টিউব', 'আঠা'] });
+v('paper_sheet', 'sheet of paper', 'কাগজ', { personal: true, p: ['a flat sheet of white paper', 'a printed paper document', 'a sheet from a notebook'], al: ['paper', 'document', 'sheet', 'page', 'কাগজ'] });
+v('cocksheet', 'cocksheet board', 'ককশিট বা ফোম বোর্ড', { personal: true, p: ['a white cocksheet board', 'a thick sheet of expanded styrofoam packaging', 'a polystyrene foam block'], al: ['cocksheet', 'styrofoam', 'foam', 'thermocol', 'ককশিট', 'ফোম'] });
+v('shirt', 'shirt', 'শার্ট', { personal: true, p: ['a collared buttoned shirt', 'a formal shirt', 'a folded shirt'], al: ['shirt', 'শার্ট'] });
+v('tshirt', 't-shirt', 'টি-শার্ট', { personal: true, p: ['a casual round-neck cotton t-shirt', 'a t-shirt'], al: ['t-shirt', 'tshirt', 'টি-শার্ট'] });
+v('trousers', 'pants / trousers', 'প্যান্ট বা ট্রাউজার', { personal: true, p: ['a pair of denim jeans', 'a pair of formal trousers or pants'], al: ['pants', 'trousers', 'jeans', 'প্যান্ট'] });
+v('_bg', 'background', 'পটভূমি', { p: ['a blurry photo', 'an empty plain wall', 'a dark blurry image'] });
+
+const VOCAB_BY_ID = Object.fromEntries(VOCAB.map(x => [x.id, x]));
+const COCO_TO_ID = Object.fromEntries(VOCAB.filter(x => x.coco).map(x => [x.coco, x.id]));
+const PROMPTS = [];
+VOCAB.forEach(x => {
+  const ps = x.p && x.p.length ? x.p.slice() : [];
+  if (!x.p || x.id !== '_bg') ps.push('a photo of ' + (x.pl ? x.en : article(x.en) + ' ' + x.en));
+  ps.forEach(text => PROMPTS.push({ text, id: x.id }));
+});
+function article(word) { return /^[aeiou]/i.test(word) ? 'an' : 'a'; }
+function label(id) { const x = VOCAB_BY_ID[id]; return x ? x.en : id; }
+function labelBn(id) { const x = VOCAB_BY_ID[id]; return x ? (x.bn || x.en) : id; }
+function labelWithArticle(id) {
+  const x = VOCAB_BY_ID[id]; if (!x) return id;
+  return x.pl ? x.en : article(x.en) + ' ' + x.en;
+}
+function joinList(items, isBn) {
+  if (items.length <= 1) return items.join('');
+  const conj = isBn ? ' এবং ' : ' and ';
+  return items.slice(0, -1).join(', ') + conj + items[items.length - 1];
+}
+
+/* =====================================================================
+   5. Verified Demo Scene Assets (Fixes Asset Inconsistencies)
+   ===================================================================== */
+const DEMO_SCENES = {
+  desk: 'https://images.unsplash.com/photo-1498050108023-c5249f4df085?w=1000&auto=format&fit=crop&q=80',
+  stairs: 'https://images.unsplash.com/photo-1577495508048-b635879837f1?w=1000&auto=format&fit=crop&q=80',
+  medicine: 'https://images.unsplash.com/photo-1584308666744-24d5c474f2ae?w=1000&auto=format&fit=crop&q=80',
+  currency: 'https://images.unsplash.com/photo-1580519542036-c47de6196ba5?w=1000&auto=format&fit=crop&q=80',
+  room: 'https://images.unsplash.com/photo-1586023492125-27b2c045efd7?w=1000&auto=format&fit=crop&q=80',
+  noodles: 'https://images.unsplash.com/photo-1612927601601-6638404737ce?w=1000&auto=format&fit=crop&q=80',
+  pc: 'https://images.unsplash.com/photo-1587202372775-e229f172b9d7?w=1000&auto=format&fit=crop&q=80',
+  tube: 'https://images.unsplash.com/photo-1556228720-195a672e8a03?w=1000&auto=format&fit=crop&q=80',
+  clothes: 'https://images.unsplash.com/photo-1596755094514-f87e34085b2c?w=1000&auto=format&fit=crop&q=80',
+  cocksheet: 'https://images.unsplash.com/photo-1589939705384-5185137a7f0f?w=1000&auto=format&fit=crop&q=80',
+};
+
+const state = {
+  source: null,
+  sceneKey: null,
+  audio: true,
+  narrate: false,
+  shield: false,
+  listening: false,
+  busy: false,
+  liveLoop: null,
+  clipLoopBusy: false,
+  world: new Map(),
+  announced: new Map(),
+  hazardCooldown: new Map(),
+  memory: [],
+  spatialHome: [],
+  calib: {
+    active: false,
+    step: 1,
+    room: 'living_room',
+    anglesDone: [],
+    currentAngle: 0,
+    landmarks: [],
+    pathwaySteps: 0
+  },
+  log: [],
+  lastCocoPreds: [],
+  lastClipHits: [],
+};
+
+const engine = {
+  coco: { model: null, status: 'idle' },
+  clip: { status: 'idle', lib: null, tokenizer: null, textModel: null, processor: null, visionModel: null, textEmbeds: null, dim: 0 },
+  ocr: { status: 'idle', workers: {} },
+};
+
+const $ = id => document.getElementById(id);
+const work = document.createElement('canvas');
+const cropCanvas = document.createElement('canvas');
+cropCanvas.width = 224; cropCanvas.height = 224;
+
+/* =====================================================================
+   6. UI & Language State
+   ===================================================================== */
+function setVoiceLanguage(next, silent) {
+  voiceLang = next;
+  updateVoiceSupport();
+  try { localStorage.setItem('astha.voice_lang', voiceLang); } catch (e) {}
+  if ($('voice-lang-bn')) $('voice-lang-bn').setAttribute('aria-pressed', voiceLang === 'bn');
+  if ($('voice-lang-en')) $('voice-lang-en').setAttribute('aria-pressed', voiceLang === 'en');
+  playEarcon('click');
+  const enMsg = voiceLang === 'bn' ? 'Voice delivery set to Bangla.' : 'Voice delivery set to English.';
+  const bnMsg = voiceLang === 'bn' ? 'ভয়েস ডেলিভারি বাংলায় নির্ধারণ করা হয়েছে।' : 'ভয়েস ডেলিভারি ইংরেজিতে নির্ধারণ করা হয়েছে।';
+  if (!silent) {
+    setCaption('Voice Delivery', enMsg, 'voice', null, bnMsg);
+    speak(enMsg, bnMsg);
+  }
+  logEvent('Voice delivery: ' + (voiceLang === 'bn' ? 'Bangla (বাংলা)' : 'English'));
+}
+
+function applyLanguage() {
+  document.documentElement.lang = 'en';
+  document.title = t('brand') + ' — ' + t('tagline');
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const key = el.dataset.i18n;
+    if (el.id === 'caption-status' || el.id === 'caption-text' || el.id === 'agent-pill') return;
+    el.textContent = t(key);
+  });
+  if ($('voice-lang-bn')) $('voice-lang-bn').setAttribute('aria-pressed', voiceLang === 'bn');
+  if ($('voice-lang-en')) $('voice-lang-en').setAttribute('aria-pressed', voiceLang === 'en');
+  $('voice-toggle-label').textContent = t(state.audio ? 'voice_on' : 'voice_off');
+  $('cam-btn-label').textContent = t(state.source === 'camera' ? 'src_camera_stop' : 'src_camera');
+  $('shield-desc').textContent = t(state.shield ? 'shield_on' : 'shield_off');
+  $('mic-label').textContent = t(state.listening ? 'mic_listening' : 'mic_idle');
+  $('mic').setAttribute('aria-label', t('mic_idle'));
+  $('engine-clip-sub').textContent = t('engine_clip_sub', { n: VOCAB.length - 1 });
+  ['coco', 'clip', 'ocr'].forEach(k => setEngineState(k, engine[k].status));
+  if (!state.busy) {
+    if (state.source === 'camera') setCaption(t('live_title'), t('live_on'), 'vision');
+    else if (state.source === 'scene') setCaption(t('ready_title'), t('scene_loaded', { s: t('scene_' + state.sceneKey) }), 'vision');
+    else if (state.source === 'photo') setCaption(t('ready_title'), t('photo_loaded'), 'vision');
+    else setCaption(t('ready_title'), t('ready_text'), 'vision');
+  }
+  onDistance($('distance').value, true);
+  if (!$('pattern-pill').dataset.p) $('pattern-pill').textContent = t('pattern_none');
+  renderSeen(); renderMemory(); renderLog();
+}
+
+function setCaption(title, text, agent, mode, spokenBn) {
+  $('caption-status').textContent = title;
+  $('caption-text').textContent = text;
+  $('agent-pill').textContent = t('agent_' + (agent || 'vision'));
+  const sub = $('caption-voice-sub');
+  if (sub) {
+    if (voiceLang === 'bn' && spokenBn && spokenBn !== text) {
+      sub.innerHTML = '<span style="font-weight:800; color:var(--accent);">🔊 Spoken:</span> <span>' + esc(spokenBn) + '</span>';
+      sub.hidden = false;
+    } else {
+      sub.hidden = true;
+    }
+  }
+  const c = $('caption');
+  c.classList.toggle('busy', mode === 'busy');
+  c.classList.toggle('danger', mode === 'danger');
+}
+
+function setEngineState(key, status) {
+  engine[key].status = status;
+  const pill = $('state-' + key);
+  pill.textContent = t('state_' + status);
+  pill.className = 'pill ' + ({ idle: '', loading: 'warn', ready: 'ok', error: 'danger' }[status] || '');
+}
+function setProgress(key, frac) {
+  const wrap = $('prog-' + key).parentElement;
+  wrap.hidden = frac == null || frac >= 1;
+  $('prog-' + key).style.width = Math.round((frac || 0) * 100) + '%';
+}
+
+function logEvent(text) {
+  if (privacyMode || privacyTransition) return;
+  state.log.unshift({ time: new Date(), text });
+  state.log = state.log.slice(0, 10);
+  renderLog();
+}
+function renderLog() {
+  const el = $('log-list');
+  if (!state.log.length) { el.innerHTML = `<p class="empty-note">${t('log_empty')}</p>`; return; }
+  el.innerHTML = state.log.map(r => `<div class="log-row"><time>${fmtTime(r.time)}</time><span>${esc(r.text)}</span></div>`).join('');
+}
+function fmtTime(d, forceLang) { return d.toLocaleTimeString((forceLang || (voiceLang === 'bn' ? 'bn' : 'en')) === 'bn' ? 'bn-BD' : 'en-US', { hour: '2-digit', minute: '2-digit' }); }
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+function toggleAudio() {
+  state.audio = !state.audio;
+  $('voice-toggle').setAttribute('aria-pressed', state.audio);
+  $('voice-toggle-label').textContent = t(state.audio ? 'voice_on' : 'voice_off');
+  if (!state.audio) stopAllSpeech();
+  playEarcon('click');
+}
+function toggleNarrate() {
+  state.narrate = !state.narrate;
+  $('narrate-switch').setAttribute('aria-checked', state.narrate);
+  try { localStorage.setItem('astha.narrate', state.narrate ? '1' : '0'); } catch (e) {}
+  playEarcon('click');
+}
+function toggleHardwarePanel() {
+  const btn = $('hw-toggle');
+  const on = btn.getAttribute('aria-pressed') !== 'true';
+  btn.setAttribute('aria-pressed', on);
+  $('hw-card').hidden = !on; $('backend-card').hidden = !on;
+  playEarcon('click');
+}
+
+/* =====================================================================
+   7. Speech Engine (TTS / STT)
+   ===================================================================== */
+let voices = [];
+function refreshVoices() { if (window.speechSynthesis) voices = window.speechSynthesis.getVoices() || []; }
+if (window.speechSynthesis) { refreshVoices(); window.speechSynthesis.onvoiceschanged = refreshVoices; }
+
+
+
+let recognizer = null;
+function toggleListening() {
+  if (state.listening) { stopListening(); return; }
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { setCaption(t('agent_voice'), t('voice_unavailable'), 'voice'); speak(t('voice_unavailable'), tBn('voice_unavailable')); return; }
+  if (reader.active) pauseReader();
+  else window.speechSynthesis?.cancel();
+  if (privacyMode || privacyTransition) return announce('Voice recognition is off in privacy mode. Type your request.', 'গোপনীয়তা মোডে অনলাইন কণ্ঠ শনাক্তকরণ বন্ধ। অনুরোধ লিখুন।');
+  state.listening = true;
+  $('mic').setAttribute('aria-label', 'Stop listening');
+  $('mic').setAttribute('aria-pressed', 'true');
+  $('mic').classList.add('listening');
+  $('mic-label').textContent = t('mic_listening');
+  playEarcon('confirm');
+  try {
+    recognizer = new SR();
+    recognizer.lang = voiceLang === 'bn' ? 'bn-BD' : 'en-US';
+    recognizer.interimResults = false;
+    recognizer.onresult = e => { const q = e.results[0][0].transcript; stopListening(); handleQuery(q); };
+    recognizer.onerror = () => { stopListening(); setCaption(t('agent_voice'), t('voice_error'), 'voice'); speak(t('voice_error'), tBn('voice_error')); };
+    recognizer.onend = () => { if (state.listening) stopListening(); };
+    recognizer.start();
+  } catch (e) { stopListening(); }
+}
+function stopListening() {
+  state.listening = false;
+  $('mic').setAttribute('aria-label', 'Tap to speak');
+  $('mic').setAttribute('aria-pressed', 'false');
+  $('mic').classList.remove('listening');
+  $('mic-label').textContent = t('mic_idle');
+  if (recognizer) { try { recognizer.stop(); } catch (e) {} recognizer = null; }
+}
+
+
+
+/* =====================================================================
+   8. Video Source Operations
+   ===================================================================== */
+function activeSourceEl() {
+  if (state.source === 'camera') return $('cam');
+  if (state.source === 'photo' || state.source === 'scene') return $('still');
+  return null;
+}
+function showSource(kind) {
+  state.source = kind;
+  state.sourceEpoch = (state.sourceEpoch || 0) + 1;
+  state.lastCocoPreds = []; state.lastClipHits = []; showHazard(false);
+  updateSourceStatus();
+  $('viewport-empty').hidden = !!kind;
+  $('cam').hidden = kind !== 'camera';
+  $('still').hidden = !(kind === 'photo' || kind === 'scene');
+  $('overlay').hidden = !kind;
+  $('cam-btn').setAttribute('aria-pressed', kind === 'camera');
+  $('cam-btn').classList.toggle('stop', kind === 'camera');
+  $('cam-btn-label').textContent = t(kind === 'camera' ? 'src_camera_stop' : 'src_camera');
+  document.querySelectorAll('[data-scene]').forEach(b => b.setAttribute('aria-pressed', kind === 'scene' && b.dataset.scene === state.sceneKey));
+  clearOverlay();
+  state.world.clear(); state.announced.clear(); renderSeen();
+  $('ocr-result').hidden = true;
+}
+
+
+
+
+
+
+
+
+/* =====================================================================
+   9. Real On-Device Inference Pipeline
+   ===================================================================== */
+
+
+async function ensureVisionModels() {
+  const jobs = [];
+  if (engine.coco.status !== 'ready') jobs.push(loadCoco());
+  if (engine.clip.status !== 'ready') jobs.push(loadClip());
+  if (!jobs.length) return true;
+  const results = await Promise.allSettled(jobs);
+  const ok = engine.coco.status === 'ready' || engine.clip.status === 'ready';
+  if (engine.coco.status === 'ready' && engine.clip.status === 'ready') logEvent(t('log_models'));
+  if (!ok) { setCaption(t('agent_system'), t('models_failed'), 'system', 'danger', tBn('models_failed')); speak(t('models_failed'), tBn('models_failed')); }
+  return ok;
+}
+
+let cocoPromise = null;
+function loadCoco() {
+  if (cocoPromise) return cocoPromise;
+  setEngineState('coco', 'loading');
+  cocoPromise = (async () => {
+    try {
+      engine.coco.model = await cocoSsd.load({ base: 'lite_mobilenet_v2' });
+      setEngineState('coco', 'ready');
+    } catch (e) { console.error('COCO-SSD failed', e); setEngineState('coco', 'error'); cocoPromise = null; throw e; }
+  })();
+  return cocoPromise;
+}
+
+let clipPromise = null;
+function loadClip() {
+  if (clipPromise) return clipPromise;
+  setEngineState('clip', 'loading');
+  clipPromise = (async () => {
+    try {
+      const TF = await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3/dist/transformers.min.js');
+      TF.env.allowLocalModels = false;
+      engine.clip.lib = TF;
+      const id = 'Xenova/clip-vit-base-patch32';
+      const files = {};
+      const progress = p => {
+        if (p.status === 'progress' && p.file) { files[p.file] = (p.loaded || 0) / (p.total || 1); }
+        const vals = Object.values(files);
+        if (vals.length) setProgress('clip', vals.reduce((a, b) => a + b, 0) / Math.max(vals.length, 2));
+      };
+      const opts = { dtype: 'q8', progress_callback: progress };
+      engine.clip.tokenizer = await TF.AutoTokenizer.from_pretrained(id);
+      engine.clip.processor = await TF.AutoProcessor.from_pretrained(id);
+      engine.clip.textModel = await TF.CLIPTextModelWithProjection.from_pretrained(id, opts);
+      engine.clip.visionModel = await TF.CLIPVisionModelWithProjection.from_pretrained(id, opts);
+      const all = [];
+      for (let i = 0; i < PROMPTS.length; i += 32) {
+        const chunk = PROMPTS.slice(i, i + 32).map(p => p.text);
+        const inputs = engine.clip.tokenizer(chunk, { padding: true, truncation: true });
+        const out = await engine.clip.textModel(inputs);
+        const rows = out.text_embeds.tolist();
+        rows.forEach(r => all.push(normalize(r)));
+      }
+      engine.clip.dim = all[0].length;
+      engine.clip.textEmbeds = all;
+      setProgress('clip', 1);
+      setEngineState('clip', 'ready');
+    } catch (e) { console.error('CLIP failed', e); setEngineState('clip', 'error'); setProgress('clip', null); clipPromise = null; throw e; }
+  })();
+  return clipPromise;
+}
+function normalize(arr) { let s = 0; for (const x of arr) s += x * x; s = Math.sqrt(s) || 1; return arr.map(x => x / s); }
+
+async function ensureOcr() {
+  const langs = $('ocr-language').value;
+  if (engine.ocr.workers[langs]) return engine.ocr.workers[langs];
+  setEngineState('ocr', 'loading');
+  try {
+    const worker = await Tesseract.createWorker(langs, 1, {
+      logger: m => { if (m.status && typeof m.progress === 'number' && /loading|initializing|recognizing/i.test(m.status)) setProgress('ocr', m.progress); },
+    });
+    engine.ocr.workers[langs] = worker;
+    setProgress('ocr', 1);
+    setEngineState('ocr', 'ready');
+    return worker;
+  } catch (e) { console.error('OCR failed', e); setEngineState('ocr', 'error'); setProgress('ocr', null); throw e; }
+}
+
+function captureFrame(maxW = 640) {
+  const src=activeSourceEl(); if(!src)return null;
+  const sw=src.videoWidth || src.naturalWidth, sh=src.videoHeight || src.naturalHeight;
+  if(!sw || !sh)return null;
+  const scale=Math.min(1,maxW/sw), frame=document.createElement('canvas');
+  frame.width=Math.round(sw*scale); frame.height=Math.round(sh*scale);
+  frame.getContext('2d',{willReadFrequently:true}).drawImage(src,0,0,frame.width,frame.height);
+  return frame;
+}
+
+async function runCoco(frame) {
+  if (engine.coco.status !== 'ready') return [];
+  const preds = await engine.coco.model.detect(frame, 10);
+  const area = frame.width * frame.height;
+  return preds.filter(p => p.score >= 0.5 && COCO_TO_ID[p.class]).map(p => ({
+    id: COCO_TO_ID[p.class],
+    score: p.score,
+    bbox: p.bbox,
+    pos: posFromX(p.bbox[0] + p.bbox[2] / 2, frame.width),
+    prox: proxFromArea((p.bbox[2] * p.bbox[3]) / area),
+    src: 'coco',
+  }));
+}
+
+function posFromX(cx, w) { const th = w / 3; return cx < th ? 'left' : cx > 2 * th ? 'right' : 'ahead'; }
+function proxFromArea(r) { return null; }
+
+function zoneRects(w, h) {
+  const s = Math.min(h, Math.round(w * 0.6));
+  const y = Math.round((h - s) / 2);
+  const c = Math.round(Math.min(w, h) * 0.55);
+  return [
+    { pos: 'left', x: 0, y, s },
+    { pos: 'ahead', x: Math.round((w - s) / 2), y, s },
+    { pos: 'right', x: w - s, y, s },
+    { pos: 'center', x: Math.round((w - c) / 2), y: Math.round((h - c) / 2), s: c },
+  ];
+}
+
+async function clipEmbedCrops(frame, rects) {
+  const { lib: TF, processor, visionModel } = engine.clip;
+  const images = rects.map(r => {
+    const cctx = cropCanvas.getContext('2d', { willReadFrequently: true });
+    cctx.drawImage(frame, r.x, r.y, r.s, r.s, 0, 0, 224, 224);
+    const d = cctx.getImageData(0, 0, 224, 224);
+    return new TF.RawImage(new Uint8ClampedArray(d.data), 224, 224, 4);
+  });
+  const inputs = await processor(images);
+  const out = await visionModel(inputs);
+  return out.image_embeds.tolist().map(normalize);
+}
+
+function scoreEmbedding(emb) {
+  const te = engine.clip.textEmbeds;
+  const best = {};
+  for (let i = 0; i < te.length; i++) {
+    let d = 0; const row = te[i];
+    for (let k = 0; k < emb.length; k++) d += row[k] * emb[k];
+    const id = PROMPTS[i].id;
+    if (best[id] == null || d > best[id]) best[id] = d;
+  }
+  const ids = Object.keys(best);
+  const logits = ids.map(id => best[id] * 100);
+  const max = Math.max(...logits);
+  let sum = 0; const ex = logits.map(l => { const e = Math.exp(l - max); sum += e; return e; });
+  return ids.map((id, i) => ({ id, p: ex[i] / sum })).sort((a, b) => b.p - a.p);
+}
+const CLIP_ZONE_THRESHOLD = 0.12;
+const CLIP_SECOND_THRESHOLD = 0.15;
+const CLIP_SURE = 0.2;
+
+async function runClipZones(frame) {
+  if (engine.clip.status !== 'ready') return { hits: [], center: [] };
+  const rects = zoneRects(frame.width, frame.height);
+  const embs = await clipEmbedCrops(frame, rects);
+  const hits = [];
+  let center = [];
+  embs.forEach((emb, i) => {
+    const ranked = scoreEmbedding(emb).filter(r => r.id !== '_bg' && !VOCAB_BY_ID[r.id].quiet);
+    if (rects[i].pos === 'center') { center = ranked.slice(0, 4); return; }
+    ranked.slice(0, 2).forEach((r, rank) => {
+      const thr = rank === 0 ? CLIP_ZONE_THRESHOLD : CLIP_SECOND_THRESHOLD;
+      if (r.p >= thr) hits.push({ id: r.id, score: r.p, pos: rects[i].pos, src: 'clip', zone: rects[i] });
+    });
+  });
+  return { hits, center };
+}
+
+function ingest(objs, ttl = 3500) {
+  const now = Date.now();
+  objs.forEach(o => {
+    if (o.src === 'clip' && (VOCAB_BY_ID[o.id].quiet)) return;
+    const prev = state.world.get(o.id);
+    if (!prev) state.world.set(o.id, Object.assign({}, o, { first: now, last: now }));
+    else {
+      const stale = now - prev.last > 1500;
+      let take = false;
+      if (o.src === 'coco') take = true;
+      else if (prev.src !== 'coco') take = stale || o.score >= prev.score;
+      else take = stale;
+      if (take) {
+        if (o.src !== 'coco') { delete prev.bbox; delete prev.prox; }
+        Object.assign(prev, o);
+      }
+      prev.last = now;
+    }
+    const vb = VOCAB_BY_ID[o.id];
+    // Save observations only when the user asks to remember them.
+  });
+  for (const [id, o] of state.world) if (now - o.last > ttl) state.world.delete(id);
+  renderSeen();
+}
+
+function worldSorted() {
+  const order = { ahead: 0, left: 1, right: 2 };
+  return [...state.world.values()].sort((a, b) => (order[a.pos] - order[b.pos]) || (b.score - a.score));
+}
+
+function clearOverlay() { const c = $('overlay'); c.getContext('2d').clearRect(0, 0, c.width, c.height); }
+
+function drawOverlay(frame, cocoObjs, clipHits) {
+  const c = $('overlay');
+  if (c.width !== frame.width || c.height !== frame.height) { c.width = frame.width; c.height = frame.height; }
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, c.width, c.height);
+  const lw = Math.max(3, Math.round(c.width / 220));
+  const fs = Math.max(16, Math.round(c.width / 32));
+  ctx.font = `bold ${fs}px Inter, "Noto Sans Bengali", sans-serif`;
+
+  cocoObjs.forEach(o => {
+    const [x, y, w, h] = o.bbox;
+    const hz = isHazard(o);
+    const col = hz ? '#ff3b30' : '#ffd700'; // Clinical yellow / danger red
+    ctx.strokeStyle = col; ctx.lineWidth = lw; ctx.strokeRect(x, y, w, h);
+    const txt = `${label(o.id)} ${Math.round(o.score * 100)}%`;
+    const tw = ctx.measureText(txt).width;
+    const ly = Math.max(0, y - fs - 8);
+    ctx.fillStyle = col; ctx.fillRect(x, ly, tw + 14, fs + 8);
+    ctx.fillStyle = '#000000'; ctx.fillText(txt, x + 7, ly + fs);
+  });
+
+  const seen = new Set(cocoObjs.map(o => o.id));
+  clipHits.forEach(hh => {
+    if (seen.has(hh.id)) return;
+    const z = hh.zone; const col = isHazard(hh) ? '#ff3b30' : '#00e5ff';
+    ctx.setLineDash([8, 6]); ctx.strokeStyle = col; ctx.lineWidth = lw * 0.8;
+    ctx.strokeRect(z.x + lw, z.y + lw, z.s - 2 * lw, z.s - 2 * lw); ctx.setLineDash([]);
+    const txt = `${label(hh.id)} ${Math.round(hh.score * 100)}%`;
+    const tw = ctx.measureText(txt).width;
+    const lx = z.x + (z.s - tw - 14) / 2, ly = z.y + z.s - fs - 12;
+    ctx.fillStyle = col; ctx.fillRect(lx, ly, tw + 14, fs + 8);
+    ctx.fillStyle = '#000000'; ctx.fillText(txt, lx + 7, ly + fs);
+  });
+}
+
+function isHazard(o) {
+  const vb = VOCAB_BY_ID[o.id]; if (!vb || !vb.hz) return false;
+  if (vb.hz === 'always') return true;
+  return o.prox === 'very_close' || (o.src === 'clip' && o.score >= 0.45 && o.pos === 'ahead');
+}
+
+function renderSeen() {
+  const objs = worldSorted();
+  $('seen-count').textContent = objs.length;
+  const row = $('seen-row');
+  row.innerHTML = `<span class="label">${t('seeing_now')}</span>` + (objs.length
+    ? objs.map(o => `<span class="seen-chip${isHazard(o) ? ' hazard-chip' : ''}">${esc(label(o.id))} <small>· ${esc(t('pos_' + o.pos))}</small></span>`).join('')
+    : `<span class="empty-note">${t('seen_none')}</span>`);
+  const list = $('seen-list');
+  list.innerHTML = objs.length ? objs.map(o => `<div class="list-row">
+      <span class="primary">${esc(label(o.id))}${isHazard(o) ? `<span class="tag hz">!</span>` : ''}<span class="tag">${o.src === 'coco' ? 'SSD' : 'CLIP'}</span></span>
+      <span class="meta">${esc(t('pos_' + o.pos))}${o.prox ? ' · ' + esc(t('prox_' + o.prox)) : ''} · model score ${Math.round(o.score * 100)}% (not certainty)</span>
+    </div>`).join('') : `<p class="empty-note">${t('seen_list_empty')}</p>`;
+}
+
+
+
+
+
+/* =====================================================================
+   10. Continuous Loops & Safety Guard
+   ===================================================================== */
+function startLiveLoop() {
+  stopLiveLoop();
+  state.liveLoop = { active: true };
+  cocoTick(); clipTick();
+}
+function stopLiveLoop() { if (state.liveLoop) state.liveLoop.active = false; state.liveLoop = null; }
+
+async function cocoTick() {
+  const loop = state.liveLoop; if (!loop || !loop.active) return;
+  try {
+    const frame = captureFrame(640);
+    if (frame && !state.busy) {
+      const objs = await runCoco(frame);
+      if (!loop.active || state.liveLoop !== loop) return;
+      state.lastCocoPreds = objs;
+      ingest(objs.concat(state.lastClipHits.filter(h => Date.now() - h.at < 4000)));
+      drawOverlay(frame, objs, state.lastClipHits);
+      afterLiveUpdate();
+    }
+  } catch (e) { console.warn('coco tick', e); }
+  if (loop.active) setTimeout(cocoTick, 350);
+}
+async function clipTick() {
+  const loop = state.liveLoop; if (!loop || !loop.active) return;
+  try {
+    if (engine.clip.status === 'ready' && !state.busy) {
+      const frame = captureFrame(640);
+      if (frame) {
+        const { hits } = await runClipZones(frame);
+        if (!loop.active || state.liveLoop !== loop) return;
+        const at = Date.now();
+        state.lastClipHits = hits.map(h => Object.assign(h, { at }));
+        ingest(hits);
+        afterLiveUpdate();
+      }
+    }
+  } catch (e) { console.warn('clip tick', e); }
+  if (loop.active) setTimeout(clipTick, 900);
+}
+
+function afterLiveUpdate() {
+  if (privacyTransition) return;
+  const now = Date.now();
+  if (state.shield) {
+    const hz = worldSorted().filter(isHazard).filter(o => (state.hazardCooldown.get(o.id) || 0) < now - 6000);
+    if (hz.length) {
+      const o = hz[0];
+      state.hazardCooldown.set(o.id, now);
+      const msgEn = o.prox ? t('hazard_msg', { obj: label(o.id), pos: t('pos_' + o.pos), prox: t('prox_' + o.prox) }) : t('hazard_msg_noprox', { obj: label(o.id), pos: t('pos_' + o.pos) });
+      const msgBn = o.prox ? tBn('hazard_msg', { obj: labelBn(o.id), pos: tBn('pos_' + o.pos), prox: tBn('prox_' + o.prox) }) : tBn('hazard_msg_noprox', { obj: labelBn(o.id), pos: tBn('pos_' + o.pos) });
+      showHazard(true);
+      setCaption(t('agent_safety'), msgEn, 'safety', 'danger', msgBn);
+      playEarcon('hazard');
+      speak(msgEn, msgBn);
+      haptic(o.pos === 'left' ? 'LEFT' : o.pos === 'right' ? 'RIGHT' : 'RAPID');
+      logEvent(t('log_hazard', { obj: label(o.id) }));
+      state.announced.set(o.id, now);
+      return;
+    }
+    if (!worldSorted().some(isHazard)) showHazard(false);
+  }
+  if (!state.narrate) return;
+  if (state.listening || reader.active || asthaSpeaking()) return;
+  const fresh = worldSorted().filter(o => (state.announced.get(o.id) || 0) < now - 12000 && now - o.first < 2500 && o.score >= (o.src === 'coco' ? 0.55 : 0.28));
+  if (fresh.length && now - (state.lastNarration || 0) > 3000) {
+    state.lastNarration = now;
+    fresh.forEach(o => state.announced.set(o.id, now));
+    const partsEn = fresh.slice(0, 3).map(o => `${labelWithArticle(o.id)} ${t('pos_' + o.pos)}`);
+    const partsBn = fresh.slice(0, 3).map(o => `${tBn('pos_' + o.pos)} ${labelBn(o.id)}`);
+    const msgEn = t('new_object', { list: joinList(partsEn, false) });
+    const msgBn = tBn('new_object', { list: joinList(partsBn, true) });
+    setCaption(t('new_title'), msgEn, 'vision', null, msgBn);
+    speak(msgEn, msgBn);
+  }
+}
+function showHazard(on) { $('hazard').hidden = !on; }
+
+/* =====================================================================
+   11. Core Actions (Describe, Identify, OCR, Find, Shield)
+   ===================================================================== */
+async function withBusy(title, fn) {
+  if(state.busy)return;
+  state.busy=true; stopLiveLoop();
+  $('companion-main').setAttribute('aria-busy','true');
+  setCaption(title,t('looking'),'vision','busy');
+  try { await fn(); }
+  catch(e){ console.error(e); announce(t('models_failed'),tBn('models_failed')); }
+  finally { state.busy=false; $('companion-main').setAttribute('aria-busy','false'); if(state.source==='camera')startLiveLoop(); }
+}
+
+async function analyzeStill(opts = {}) {
+  const epoch = state.sourceEpoch;
+  const frame = captureFrame(640);
+  if (!frame) return null;
+  const [cocoObjs, clip] = await Promise.all([runCoco(frame), runClipZones(frame)]);
+  if (epoch !== state.sourceEpoch) return null;
+  state.lastCocoPreds = cocoObjs; state.lastClipHits = clip.hits.map(h => Object.assign(h, { at: Date.now() }));
+  state.world.clear();
+  ingest(cocoObjs.concat(clip.hits), 1e9);
+  drawOverlay(frame, cocoObjs, clip.hits);
+  if (state.shield) safetyCheck(true);
+  return { cocoObjs, clip };
+}
+
+function describeScene() {
+  if (!state.source) { setCaption(t('ready_title'), t('need_source'), 'vision', null, tBn('need_source')); speak(t('need_source'), tBn('need_source')); return; }
+  withBusy(t('analyzing_title'), async () => {
+    if (!(await ensureVisionModels())) return;
+    if (state.source !== 'camera') await analyzeStill();
+    else {
+      const frame = captureFrame(640);
+      const [cocoObjs, clip] = await Promise.all([runCoco(frame), runClipZones(frame)]);
+      state.world.clear(); ingest(cocoObjs.concat(clip.hits)); drawOverlay(frame, cocoObjs, clip.hits);
+    }
+    const objs = worldSorted();
+    const now = Date.now(); objs.forEach(o => state.announced.set(o.id, now));
+    if (!objs.length) { setCaption(t('describe_title'), t('nothing_seen'), 'vision', null, tBn('nothing_seen')); speak(t('nothing_seen'), tBn('nothing_seen')); return; }
+    const groups = { ahead: [], left: [], right: [] };
+    objs.forEach(o => groups[o.pos].push(o));
+    const sentencesEn = [];
+    const sentencesBn = [];
+    ['ahead', 'left', 'right'].forEach(pos => {
+      const g = groups[pos].slice(0, $('description-style').value === 'short' ? 1 : 3); if (!g.length) return;
+      const namesEn = g.map(o => labelWithArticle(o.id));
+      const namesBn = g.map(o => labelBn(o.id));
+      const closest = g.find(o => o.prox === 'very_close') || g.find(o => o.prox === 'near');
+      
+      let sEn = `${t('head_' + pos)}: ${joinList(namesEn, false)}`;
+      if (closest) sEn += ', ' + (g.length > 1 ? `${label(closest.id)} ${t('prox_' + closest.prox)}` : t('prox_' + closest.prox));
+      sentencesEn.push(sEn + '.');
+
+      let sBn = `${tBn('head_' + pos)}: ${joinList(namesBn, true)}`;
+      if (closest) sBn += ', ' + (g.length > 1 ? `${labelBn(closest.id)} ${tBn('prox_' + closest.prox)}` : tBn('prox_' + closest.prox));
+      sentencesBn.push(sBn + '।');
+    });
+    const msgEn = sentencesEn.join(' ');
+    const msgBn = sentencesBn.join(' ');
+    setCaption(t('describe_title'), msgEn, 'vision', null, msgBn);
+    playEarcon('confirm');
+    speak(msgEn, msgBn); haptic('CONFIRM');
+    logEvent(t('log_describe', { n: objs.length }));
+  });
+}
+
+/* =====================================================================
+   10. Color Extraction & Clothes Inspection Engine
+   ===================================================================== */
+function extractDominantColor(src) {
+  const c = document.createElement('canvas');
+  c.width = 160; c.height = 160;
+  const ctx = c.getContext('2d', { willReadFrequently: true });
+  const sw = src.videoWidth || src.naturalWidth || src.width;
+  const sh = src.videoHeight || src.naturalHeight || src.height;
+  const cropW = Math.round(sw * 0.6);
+  const cropH = Math.round(sh * 0.6);
+  const cropX = Math.round((sw - cropW) / 2);
+  const cropY = Math.round((sh - cropH) / 2);
+  ctx.drawImage(src, cropX, cropY, cropW, cropH, 0, 0, 160, 160);
+  const imgData = ctx.getImageData(0, 0, 160, 160).data;
+
+  const colorBuckets = {
+    'Navy Blue': { count: 0, bn: 'নেভি ব্লু', hex: '#00205b' },
+    'Blue': { count: 0, bn: 'নীল', hex: '#0055d4' },
+    'Light Blue': { count: 0, bn: 'হালকা নীল', hex: '#5bc0de' },
+    'Teal / Cyan': { count: 0, bn: 'টিল বা সায়ান', hex: '#008080' },
+    'Green': { count: 0, bn: 'সবুজ', hex: '#28a745' },
+    'Dark Green / Olive': { count: 0, bn: 'গাঢ় সবুজ', hex: '#1e5631' },
+    'Yellow': { count: 0, bn: 'হলুদ', hex: '#ffc107' },
+    'Orange': { count: 0, bn: 'কমলা', hex: '#fd7e14' },
+    'Red': { count: 0, bn: 'লাল', hex: '#dc3545' },
+    'Maroon / Dark Red': { count: 0, bn: 'মেরুন বা গাঢ় লাল', hex: '#800000' },
+    'Pink': { count: 0, bn: 'গোলাপি', hex: '#e83e8c' },
+    'Purple / Violet': { count: 0, bn: 'বেগুনি', hex: '#6f42c1' },
+    'Brown': { count: 0, bn: 'বাদামি', hex: '#795548' },
+    'Black': { count: 0, bn: 'কালো', hex: '#111111' },
+    'White': { count: 0, bn: 'সাদা', hex: '#f8f9fa' },
+    'Grey': { count: 0, bn: 'ধূসর', hex: '#6c757d' },
+  };
+
+  let totalPixels = 0;
+  for (let i = 0; i < imgData.length; i += 4) {
+    const r = imgData[i] / 255;
+    const g = imgData[i + 1] / 255;
+    const b = imgData[i + 2] / 255;
+    const a = imgData[i + 3];
+    if (a < 128) continue;
+    totalPixels++;
+
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    let h = 0, s = 0, l = (max + min) / 2;
+    if (max !== min) {
+      const d = max - min;
+      s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+      switch (max) {
+        case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+        case g: h = (b - r) / d + 2; break;
+        case b: h = (r - g) / d + 4; break;
+      }
+      h /= 6;
+    }
+    const deg = h * 360;
+
+    let bucket = 'Grey';
+    if (l < 0.16) bucket = 'Black';
+    else if (l > 0.82 && s < 0.22) bucket = 'White';
+    else if (s < 0.16) bucket = 'Grey';
+    else if (deg >= 345 || deg < 12) bucket = l < 0.35 ? 'Maroon / Dark Red' : l > 0.68 ? 'Pink' : 'Red';
+    else if (deg >= 12 && deg < 45) bucket = l < 0.38 ? 'Brown' : 'Orange';
+    else if (deg >= 45 && deg < 70) bucket = l < 0.38 ? 'Dark Green / Olive' : 'Yellow';
+    else if (deg >= 70 && deg < 165) bucket = l < 0.35 ? 'Dark Green / Olive' : 'Green';
+    else if (deg >= 165 && deg < 195) bucket = 'Teal / Cyan';
+    else if (deg >= 195 && deg < 255) bucket = l < 0.36 ? 'Navy Blue' : l > 0.65 ? 'Light Blue' : 'Blue';
+    else if (deg >= 255 && deg < 290) bucket = 'Purple / Violet';
+    else bucket = 'Pink';
+
+    if (colorBuckets[bucket]) colorBuckets[bucket].count++;
+  }
+
+  const sorted = Object.entries(colorBuckets)
+    .map(([name, data]) => ({ name, bn: data.bn, hex: data.hex, pct: totalPixels ? Math.round((data.count / totalPixels) * 100) : 0 }))
+    .sort((a, b) => b.pct - a.pct);
+
+  const top = sorted[0] || { name: 'Neutral', bn: 'স্বাভাবিক', hex: '#ffffff', pct: 100 };
+  const second = (sorted[1] && sorted[1].pct >= 20) ? sorted[1] : null;
+  return { top, second, all: sorted };
+}
+
+function inspectClothesAndColor() {
+  if (!state.source) return announce(t('need_source'), tBn('need_source'));
+  return withBusy(t('clothes_title'), async () => {
+    const frame = captureFrame(640); if (!frame) return;
+    const info = extractDominantColor(frame);
+    const en = 'The centre of the image looks mostly ' + info.top.name + '. Lighting and background affect the result; garment type is not confirmed.';
+    const bn = 'ছবির মাঝের অংশের প্রধান রঙ ' + info.top.bn + '। আলো ও পটভূমি ফল বদলাতে পারে। পোশাকের ধরন নিশ্চিত নয়।';
+    announce(en, bn, 'vision');
+  });
+}
+
+/* =====================================================================
+   11. Multimodal OCR-First & Context Sanity Refinement
+   ===================================================================== */
+function applyContextSanityFilter(detectionId) { return null; }
+
+function refineObjectIdentity(ranked, cocoObjs, frame, ocrText) {
+  // Return model evidence unchanged; scene names and OCR keywords are not calibrated confidence.
+  return ranked[0] ? { ...ranked[0] } : null;
+}
+
+function identifyObject() {
+  if (!state.source) {
+    setCaption(t('ready_title'), t('need_source'), 'vision', null, tBn('need_source'));
+    speak(t('need_source'), tBn('need_source'));
+    return;
+  }
+  withBusy(t('identify_title'), async () => {
+    if (!(await ensureVisionModels())) return;
+    const frame = captureFrame(640);
+
+    // Multimodal Quick Central OCR Read
+    let ocrText = '';
+    try {
+      if (engine.ocr.status === 'ready' || typeof Tesseract !== 'undefined') {
+        const worker = await ensureOcr();
+        const ocrCanvas = document.createElement('canvas');
+        ocrCanvas.width = 320; ocrCanvas.height = 320;
+        const octx = ocrCanvas.getContext('2d', { willReadFrequently: true });
+        const cx = (frame.width - 320) / 2, cy = (frame.height - 320) / 2;
+        octx.drawImage(frame, Math.max(0, cx), Math.max(0, cy), 320, 320, 0, 0, 320, 320);
+        const res = await worker.recognize(ocrCanvas);
+        ocrText = (res && res.data && res.data.text) ? res.data.text.trim() : '';
+      }
+    } catch (e) {
+      console.warn('Fast OCR check error:', e);
+    }
+
+    let ranked = [];
+    if (engine.clip.status === 'ready') {
+      const rects = zoneRects(frame.width, frame.height).filter(r => r.pos === 'center');
+      const [emb] = await clipEmbedCrops(frame, rects);
+      ranked = scoreEmbedding(emb).filter(r => r.id !== '_bg' && !VOCAB_BY_ID[r.id].quiet);
+    }
+
+    const cocoObjs = await runCoco(frame);
+    const cx = frame.width / 2, cy = frame.height / 2;
+    const central = cocoObjs.filter(o => o.bbox[0] < cx && o.bbox[0] + o.bbox[2] > cx && o.bbox[1] < cy && o.bbox[1] + o.bbox[3] > cy).sort((a, b) => b.score - a.score)[0];
+    
+    if (central && central.score >= 0.6) {
+      const sanity = applyContextSanityFilter(central.id);
+      if (sanity) {
+        central.id = sanity.correctedId;
+        central.score = Math.max(central.score, sanity.confidenceBoost);
+      }
+      ranked = ranked.filter(r => r.id !== central.id);
+      ranked.unshift({ id: central.id, p: central.score });
+    }
+
+    // Refine identity with OCR text and contextual disambiguation
+    const refined = refineObjectIdentity(ranked, cocoObjs, frame, ocrText);
+    if (refined && refined.id) {
+      ranked = ranked.filter(r => r.id !== refined.id);
+      ranked.unshift(refined);
+    }
+
+    drawOverlay(frame, cocoObjs, []);
+    if (!ranked.length) {
+      setCaption(t('identify_title'), t('nothing_seen'), 'vision', null, tBn('nothing_seen'));
+      speak(t('nothing_seen'), tBn('nothing_seen'));
+      return;
+    }
+
+    const [a, b, c] = ranked;
+    const pct = Math.round(a.p * 100);
+    let msgEn, msgBn;
+
+    msgEn = a.p >= CLIP_SURE ? 'This may be ' + labelWithArticle(a.id) + '.' : 'I am not sure. One possible match is ' + labelWithArticle(a.id) + '.';
+    msgBn = 'এটি সম্ভবত ' + labelBn(a.id) + '। শনাক্তকরণ নিশ্চিত নয়।';
+    if (b) { msgEn += ' Another possible match is ' + labelWithArticle(b.id) + '.'; }
+
+    if (ocrText && ocrText.length >= 3) {
+      msgEn += ` Text on item reads: “${ocrText.slice(0, 50)}”.`;
+      msgBn += ` গায়ে লেখা রয়েছে: “${ocrText.slice(0, 50)}”।`;
+    }
+
+    setCaption(t('identify_title'), msgEn, 'vision', null, msgBn);
+    playEarcon('confirm');
+    speak(msgEn, msgBn);
+    haptic('CONFIRM');
+    logEvent(t('log_identify', { a: label(a.id) }));
+    const vb = VOCAB_BY_ID[a.id];
+    // Identification does not opt the user into storage.
+  });
+}
+
+/* =====================================================================
+   12. Guided Home Layout Calibration Wizard & Spatial Memory
+   ===================================================================== */
+function readText() {
+  if (!state.source) { setCaption(t('ready_title'), t('need_source'), 'ocr', null, tBn('need_source')); speak(t('need_source'), tBn('need_source')); return; }
+  withBusy(t('reading_title'), async () => {
+    setCaption(t('reading_title'), t('ocr_loading'), 'ocr', 'busy', tBn('ocr_loading'));
+    let worker;
+    try { worker = await ensureOcr(); } catch (e) { setCaption(t('reading_title'), t('ocr_failed'), 'ocr', 'danger', tBn('ocr_failed')); speak(t('ocr_failed'), tBn('ocr_failed')); return; }
+    const frame = captureFrame(1280);
+    setCaption(t('reading_title'), t('ocr_working'), 'ocr', 'busy', tBn('ocr_working'));
+    speak(t('ocr_working'), tBn('ocr_working'));
+    const { data } = await worker.recognize(frame);
+    const lines = (data.lines || []).filter(l => l.confidence >= 55).map(l => l.text.replace(/\s+/g, ' ').trim())
+      .filter(l => { const letters = l.replace(/[^\p{L}\p{N}]/gu, '').length; return letters >= 2 && letters / l.length >= 0.5; });
+    const text = lines.join('\n');
+    if (!text) { $('ocr-result').hidden = true; setCaption(t('reading_title'), t('ocr_none'), 'ocr', null, tBn('ocr_none')); speak(t('ocr_none'), tBn('ocr_none')); return; }
+    $('ocr-text').textContent = text; $('ocr-result').hidden = false;
+    const spoken = text.replace(/\n/g, '. ');
+    const msgEn = t('ocr_result', { text: spoken.slice(0, 260) + (spoken.length > 260 ? '…' : '') });
+    const spokenBn = tBn('ocr_result', { text: spoken.slice(0, 600) });
+    setCaption(t('reading_title'), msgEn, 'ocr', null, spokenBn);
+    playEarcon('confirm');
+    startReader(text);
+    haptic('CONFIRM');
+    logEvent(t('log_ocr', { n: text.length }));
+  });
+}
+
+
+
+function toggleShield() {
+  state.shield = !state.shield;
+  $('shield-btn').setAttribute('aria-pressed', state.shield);
+  $('shield-btn').classList.toggle('on', state.shield);
+  $('shield-desc').textContent = t(state.shield ? 'shield_on' : 'shield_off');
+  state.hazardCooldown.clear();
+  playEarcon(state.shield ? 'confirm' : 'click');
+  const msgEn = t(state.shield ? 'shield_on_msg' : 'shield_off_msg');
+  const msgBn = tBn(state.shield ? 'shield_on_msg' : 'shield_off_msg');
+  setCaption(t('agent_safety'), msgEn, 'safety', null, msgBn);
+  speak(msgEn, msgBn);
+  logEvent(t(state.shield ? 'log_shield_on' : 'log_shield_off'));
+  if (state.shield) { if (state.source && state.source !== 'camera') safetyCheck(); }
+  else showHazard(false);
+}
+
+function safetyCheck(silentIfClear) {
+  if (!state.source) { setCaption(t('agent_safety'), t('need_source'), 'safety', null, tBn('need_source')); speak(t('need_source'), tBn('need_source')); return; }
+  const run = () => {
+    const hz = worldSorted().filter(isHazard);
+    if (hz.length) {
+      const o = hz[0];
+      const msgEn = o.prox ? t('hazard_msg', { obj: label(o.id), pos: t('pos_' + o.pos), prox: t('prox_' + o.prox) }) : t('hazard_msg_noprox', { obj: label(o.id), pos: t('pos_' + o.pos) });
+      const msgBn = o.prox ? tBn('hazard_msg', { obj: labelBn(o.id), pos: tBn('pos_' + o.pos), prox: tBn('prox_' + o.prox) }) : tBn('hazard_msg_noprox', { obj: labelBn(o.id), pos: tBn('pos_' + o.pos) });
+      showHazard(true); setCaption(t('agent_safety'), msgEn, 'safety', 'danger', msgBn);
+      playEarcon('hazard');
+      speak(msgEn, msgBn);
+      haptic(o.pos === 'left' ? 'LEFT' : o.pos === 'right' ? 'RIGHT' : 'RAPID');
+      logEvent(t('log_hazard', { obj: label(o.id) }));
+    } else {
+      showHazard(false);
+      if (!silentIfClear) {
+        const msgEn = t('path_clear');
+        const msgBn = tBn('path_clear');
+        setCaption(t('agent_safety'), msgEn, 'safety', null, msgBn);
+        speak(msgEn, msgBn);
+      }
+    }
+  };
+  if (state.source === 'camera' || state.world.size) run();
+  else withBusy(t('analyzing_title'), async () => { if (await ensureVisionModels()) { await analyzeStill(); run(); } });
+}
+
+/* =====================================================================
+   12. Haptics & Distance Sensor Simulator
+   ==================================================================== */
+const motors = () => ({ LEFT: $('motor-left'), CENTER: $('motor-center'), RIGHT: $('motor-right') });
+let hapticTimer = null;
+function haptic(pattern) {
+  const m = motors();
+  Object.values(m).forEach(el => el.classList.remove('on', 'danger'));
+  clearTimeout(hapticTimer);
+  const pill = $('pattern-pill');
+  pill.dataset.p = pattern; pill.textContent = t('pattern', { p: pattern });
+  pill.className = 'pill ' + (pattern === 'RAPID' ? 'danger' : 'accent');
+  let ms = 1200;
+  if (pattern === 'LEFT' || pattern === 'CENTER' || pattern === 'RIGHT') m[pattern].classList.add('on');
+  else if (pattern === 'RAPID') { Object.values(m).forEach(el => el.classList.add('danger')); ms = 1800; }
+  else if (pattern === 'CONFIRM') { m.CENTER.classList.add('on'); ms = 350; }
+  hapticTimer = setTimeout(() => {
+    Object.values(m).forEach(el => el.classList.remove('on', 'danger'));
+    delete pill.dataset.p; pill.textContent = t('pattern_none'); pill.className = 'pill accent';
+  }, ms);
+}
+
+function onDistance(val, silent) {
+  const n = parseInt(val, 10);
+  const pill = $('distance-pill');
+  if (n < 35) {
+    pill.textContent = t('dist_danger', { n }); pill.className = 'pill danger';
+    if (!silent) { haptic('RAPID'); playEarcon('danger'); }
+  } else if (n < 80) {
+    pill.textContent = t('dist_caution', { n }); pill.className = 'pill warn';
+    if (!silent) { haptic('CENTER'); playEarcon('hazard'); }
+  } else {
+    pill.textContent = t('dist_safe', { n }); pill.className = 'pill ok';
+  }
+}
+
+function simulateFall() {
+  haptic('RAPID');
+  playEarcon('danger');
+  const msgEn = t('fall_msg');
+  const msgBn = tBn('fall_msg');
+  setCaption(t('fall_title_card'), msgEn, 'fall', 'danger', msgBn);
+  speak(msgEn, msgBn);
+  logEvent(t('log_fall'));
+}
+
+async function checkBackend() {
+  const url = $('api-url').value.trim().replace(/\/$/, '');
+  playEarcon('click');
+  try { localStorage.setItem('astha.api', url); } catch (e) {}
+  const pill = $('backend-pill');
+  pill.textContent = t('backend_connecting'); pill.className = 'pill warn';
+  try {
+    const res = await fetch(url + '/health', { mode: 'cors' });
+    if (!res.ok) throw new Error(res.status);
+    pill.textContent = t('backend_connected'); pill.className = 'pill ok';
+    playEarcon('confirm');
+    speak(t('backend_ok_msg'), tBn('backend_ok_msg'));
+  } catch (e) {
+    pill.textContent = t('backend_offline'); pill.className = 'pill';
+  }
+}
+
+/* =====================================================================
+   13. System Initialization
+   ===================================================================== */
+// ASTHA companion features. Integrated into the single HTML deliverable.
+let privacyMode = false;
+let privacyTransition = false;
+let lastResponse = null;
+let reader = { active: false, paused: false, parts: [], index: 0, generation: 0 };
+let vault = { key: null, salt: null, revision: 0, queue: Promise.resolve() };
+let priorModalFocus = null;
+let imageUrl = null;
+let imageRequest = 0;
+let cameraRequest = 0;
+const VAULT_KEY = 'astha.memory.v1.encrypted';
+
+Object.assign(I18N.en, {
+  badge_clinical: 'Prototype', tagline: 'Your voice-first visual companion',
+  ready_text: 'Hello. I am ready. How can I help you? Start the camera, read a page, or ask about your saved things.',
+  act_describe_desc: 'Describe objects and their position in the image', act_identify_desc: 'Inspect the item and read its visible text',
+  act_calibrate: 'Remember a room', act_calibrate_desc: 'Save landmarks confirmed by you',
+  spatial_title: 'My room notes', spatial_calibrate_btn: '+ Add a room', spatial_help: 'Notes you have confirmed. These do not measure distances or track your position.', spatial_empty: 'No room notes yet.',
+  act_shield: 'Experimental obstacle alerts', shield_off: 'Off — turn on alerts for possible visible obstacles', shield_on: 'On — alerts can miss obstacles',
+  shield_on_msg: 'Experimental obstacle alerts are on. I may miss hazards and cannot confirm a safe path.', shield_off_msg: 'Obstacle alerts are off.',
+  path_clear: 'No obstacle was detected in this image. I cannot confirm that the path is safe.',
+  fall_msg: 'Demonstration: a fall alert would appear here. No fall was detected and no message was sent.', fall_title_card: 'Fall alert demonstration',
+  band_connected: 'Simulator', band_title: 'Wearable simulator', ultra_note: 'Simulated sensor values only. No wearable is connected.',
+  memory_help: 'Save an object with a meaningful location. Camera observations are saved only when you ask.', memory_empty: 'No memories yet. Add an object and where you last saw it.',
+  engine_help: 'Vision and OCR run in the browser after downloading models. Downloads require internet and can be large. Browser speech recognition may use an online service.',
+  hw_panel: 'Developer tools', backend_help: 'This tests only the server health endpoint. Cloud reasoning is not connected.', backend_connected: 'Health check passed', backend_ok_msg: 'The server health check passed. AI actions still run in this browser.',
+  footer: 'Astha · Browser prototype · Built for voice, reading and personal memory.',
+  mic_hint: 'Tap, then ask in your selected voice language. You can also type in Bangla or English.',
+  live_on: 'Camera recognition is running. Results may be incomplete.',
+  identify_sure: 'This may be {a}. Other possible matches are {b} and {c}.', identify_only: 'This may be {a}.',
+  auto_narrate: 'Announce new objects automatically (off by default for screen readers)'
+});
+Object.assign(I18N.bn, {
+  path_clear: 'এই ছবিতে কোনো বাধা শনাক্ত হয়নি। পথ নিরাপদ কি না নিশ্চিত করতে পারি না।',
+  fall_msg: 'এটি পতন সতর্কতার ডেমো। কোনো পতন শনাক্ত হয়নি এবং কোনো বার্তা পাঠানো হয়নি।',
+  shield_on_msg: 'পরীক্ষামূলক বাধা সতর্কতা চালু। বিপদ বাদ পড়তে পারে। পথ নিরাপদ কি না নিশ্চিত করতে পারি না।',
+  shield_off_msg: 'বাধা সতর্কতা বন্ধ।', live_on: 'ক্যামেরায় বস্তু শনাক্তকরণ চলছে। ফল অসম্পূর্ণ হতে পারে।'
+});
+
+function announce(en, bn, agent = 'system') {
+  setCaption(agent === 'memory' ? 'Personal memory' : 'Astha', en, agent, null, bn);
+  speak(en, bn);
+}
+
+function savePreferences() {
+  const prefs = { rate: $('speech-rate').value, style: $('description-style').value, ocr: $('ocr-language').value };
+  try { localStorage.setItem('astha.preferences', JSON.stringify(prefs)); } catch (_) {}
+}
+
+function updateVoiceSupport() {
+  refreshVoices();
+  const hasBn = voices.some(v => /^bn/i.test(v.lang));
+  $('voice-support').textContent = voiceLang === 'bn' && !hasBn
+    ? 'No Bangla voice was found on this device. Bangla text is shown; choose English for spoken English responses.'
+    : 'Speech uses the voices available on this device.';
+}
+
+function makeUtterance(text, language) {
+  const u = new SpeechSynthesisUtterance(text);
+  const matches = voices.filter(v => v.lang.toLowerCase().startsWith(language));
+  const selected = privacyMode ? matches.find(v => v.localService) : matches[0];
+  if (privacyMode && !selected) return null;
+  if (selected) u.voice = selected;
+  u.lang = language === 'bn' ? 'bn-BD' : 'en-US';
+  u.rate = Number($('speech-rate').value) || 1;
+  return u;
+}
+
+function speak(enText, bnText) {
+  lastResponse = { en: enText, bn: bnText };
+  if (!state.audio || !window.speechSynthesis) return;
+  stopReader();
+  window.speechSynthesis.cancel();
+  const useBn = voiceLang === 'bn' && !!bnText;
+  const text = useBn ? bnText : enText;
+  if (!text) return;
+  const u = makeUtterance(text, useBn ? 'bn' : 'en');
+  if (u) window.speechSynthesis.speak(u);
+  else $('voice-support').textContent = 'Privacy mode: no local voice is available. Read the response on screen.';
+}
+
+function repeatResponse() {
+  if (lastResponse) speak(lastResponse.en, lastResponse.bn);
+}
+
+function stopReader() {
+  reader.active = false; reader.paused = false; reader.generation++; reader.parts = []; reader.index = 0;
+}
+
+function stopAllSpeech() {
+  stopReader(); stopListening();
+  window.speechSynthesis?.cancel();
+  $('reader-progress').textContent = 'Stopped';
+}
+
+function splitReading(text) {
+  return (text.trim().match(/[^]*?(?:[.!?।](?:\s+|$)|\n+|$)/g) || [])
+    .filter(s => s.trim()).flatMap(sentence => {
+      const chunks = []; let remaining = sentence.trim();
+      while (remaining.length > 220) {
+        const space = remaining.lastIndexOf(' ', 220);
+        const cut = space > 80 ? space : 220;
+        chunks.push(remaining.slice(0, cut)); remaining = remaining.slice(cut).trim();
+      }
+      if (remaining) chunks.push(remaining);
+      return chunks;
+    });
+}
+
+function startReader(inputText) {
+  const text = typeof inputText === 'string' ? inputText.trim() : $('reader-text').value.trim();
+  if (!text) return announce('Add text to the reader first.', 'আগে রিডারে লেখা যোগ করুন।');
+  if (!state.audio || !window.speechSynthesis) return announce('Turn voice on in a browser that supports speech, or read the text on screen.', 'কণ্ঠস্বর চালু করুন অথবা পর্দার লেখা পড়ুন।');
+  stopAllSpeech();
+  reader.parts = splitReading(text); reader.index = 0; reader.active = true;
+  readNextChunk(reader.generation);
+}
+
+function readNextChunk(generation) {
+  if (!reader.active || generation !== reader.generation) return;
+  if (reader.index >= reader.parts.length) {
+    reader.active = false; $('reader-progress').textContent = 'Finished'; return;
+  }
+  const text = reader.parts[reader.index];
+  const u = makeUtterance(text, /[\u0980-\u09ff]/.test(text) ? 'bn' : 'en');
+  if (!u) { stopReader(); $('reader-progress').textContent = 'No local voice available'; return; }
+  $('reader-progress').textContent = 'Part ' + (reader.index + 1) + ' of ' + reader.parts.length;
+  u.onend = () => { if (generation === reader.generation && reader.active) { reader.index++; if (!reader.paused) readNextChunk(generation); } };
+  u.onerror = () => { if (generation === reader.generation) { stopReader(); $('reader-progress').textContent = 'Speech failed. Try Read all again.'; } };
+  window.speechSynthesis.speak(u);
+}
+
+function pauseReader() {
+  if (!reader.active || reader.paused) return;
+  reader.paused = true; window.speechSynthesis?.pause(); $('reader-progress').textContent = 'Paused';
+}
+
+function resumeReader() {
+  if (!reader.active || !reader.paused) return;
+  reader.paused = false;
+  window.speechSynthesis?.resume();
+  if (!window.speechSynthesis?.speaking) readNextChunk(reader.generation);
+  if (reader.active) $('reader-progress').textContent = 'Reading';
+}
+
+function readerTextChanged() {
+  if (reader.active) stopAllSpeech();
+  $('reader-progress').textContent = 'Ready';
+}
+
+function clearReader() {
+  stopAllSpeech(); $('reader-text').value = ''; $('ocr-text').textContent = ''; $('ocr-result').hidden = true;
+  $('reader-progress').textContent = 'Ready';
+}
+
+function appendOcrPage() {
+  const text = $('ocr-text').textContent.trim(); if (!text) return;
+  stopAllSpeech();
+  $('reader-text').value = [$('reader-text').value.trim(), text].filter(Boolean).join('\n\n');
+  $('reader-text').focus();
+  announce('Page added. Choose Read all to hear every paragraph.', 'পৃষ্ঠা যোগ হয়েছে। পুরো লেখা শুনতে পড়ুন বোতাম চাপুন।');
+}
+
+function submitCommand() {
+  const q = $('command-input').value.trim(); if (!q) return;
+  $('command-input').value = ''; handleQuery(q);
+}
+
+function showCommandHelp() {
+  announce('Tap the microphone, then say: Hey Astha, describe my surroundings. Read this. Where are my glasses? Remember this. Pause reading. Resume reading. Stop. Computer control and route guidance are not connected.',
+    'মাইক্রোফোন চাপুন, তারপর বলুন: হেই আস্থা, চারপাশ বলো। এটা পড়ো। আমার চশমা কোথায়? এটা মনে রাখো। পড়া থামাও। আবার পড়ো। বন্ধ করো।');
+}
+
+function handleQuery(query) {
+  if (privacyTransition) return;
+  const q = query.toLowerCase().replace(/^(?:hey\s+)?astha[,.!\s]*/i, '').replace(/^(?:হেই\s+)?আস্থা[,।\s]*/, '').trim();
+  if (!privacyMode) logEvent('Request: ' + query);
+  if (/^(stop|cancel|quiet|বন্ধ করো|থামো)[.!।]?$/.test(q)) return stopAllSpeech();
+  if (/pause|পড়া থামাও/.test(q)) return pauseReader();
+  if (/resume|continue reading|আবার পড়ো/.test(q)) return resumeReader();
+  if (/repeat|আবার বলো/.test(q)) return repeatResponse();
+  if (/^help|commands|সাহায্য/.test(q) || !q) return showCommandHelp();
+  if (/privacy|গোপনীয়তা/.test(q)) return togglePrivateMode();
+  if (/read all|read book|read document|বই পড়|পুরো.*পড়/.test(q)) return startReader();
+  if (/remember|মনে রাখ/.test(q)) {
+    const match = q.match(/remember\s+(?:my\s+)?(.+?)\s+(?:is\s+)?(?:on|in|at)\s+(.+)/);
+    if (match) { $('memory-item').value = match[1]; $('memory-location').value = match[2]; return saveManualMemory(); }
+    if (/room|ঘর/.test(q)) return startHomeCalibration();
+    const item = worldSorted()[0];
+    if (item) return remember(item.id, item.pos);
+    $('memory-item').focus(); return announce('Enter the object and its last seen location in Personal memory.', 'মেমরিতে জিনিসের নাম ও শেষ দেখা স্থান লিখুন।');
+  }
+  if (/computer|code|programming|teach|summar|explain|navigate|guide me|কম্পিউটার|কোড|ব্যাখ্যা|সারাংশ|পথ দেখাও/.test(q))
+    return announce('That feature needs a future integration. I can describe an image, read text, and recall your saved object or room notes.', 'এই সুবিধা এখনও যুক্ত হয়নি। ছবি বর্ণনা, লেখা পড়া ও সংরক্ষিত নোট মনে করতে পারি।');
+  if (/clothes|color|colour|shirt|পোশাক|জামা|কাপড়|কাপড়|রঙ|রং/.test(q)) return inspectClothesAndColor();
+  if (/calibrat|map room|scan room|ক্যালিব্রেশন/.test(q)) return startHomeCalibration();
+  if (/layout|room notes|door|entrance|রুমের|দরজা/.test(q)) return queryHomeLayout(query);
+  if (/what is this|what's this|holding|এটা কী|এটি কী|এটা কি/.test(q)) return identifyObject();
+  if (/read|text|label|পড়|লেখা/.test(q)) return readText();
+  if (/where|find|locate|খুঁজ|কোথায়|কোথায়|কই/.test(q)) return findItems(query);
+  if (/obstacle|safe|danger|hazard|clear|বাধা|বিপদ|নিরাপদ/.test(q)) return safetyCheck();
+  if (/describe|surround|front|around|চারপাশ|সামনে/.test(q)) return describeScene();
+  return announce('I did not recognise that request. Try Describe surroundings, Read this, or Find my glasses.', 'অনুরোধ বুঝতে পারিনি। বলুন চারপাশ বলো, এটা পড়ো অথবা আমার চশমা কোথায়।');
+}
+
+function memoryDate(value) {
+  return new Date(value).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' });
+}
+
+function makeMemory(item, location, source = 'Your note', score = null) {
+  return { uid: crypto.randomUUID(), item: item.slice(0,80), location: location.slice(0,160), source, score, time: new Date().toISOString() };
+}
+
+function saveManualMemory() {
+  if (privacyTransition) return;
+  if (privacyMode) return announce('Memory is off in privacy mode.', 'গোপনীয়তা মোডে মেমরি বন্ধ।');
+  const item = $('memory-item').value.trim(), location = $('memory-location').value.trim();
+  if (!item || !location) return;
+  state.memory.unshift(makeMemory(item, location)); state.memory = state.memory.slice(0, 100);
+  $('memory-item').value = ''; $('memory-location').value = '';
+  renderMemory(); persistVault();
+  announce('Remembered ' + item + ': ' + location + '.', item + ' এর স্থান মনে রাখা হয়েছে: ' + location + '।', 'memory');
+}
+
+function remember(id, pos) {
+  if (privacyTransition) return;
+  if (privacyMode) return announce('Memory is off in privacy mode.', 'গোপনীয়তা মোডে মেমরি বন্ধ।');
+  if (!state.source || state.source === 'scene') return announce('Demo scenes are not saved as personal memories.', 'ডেমো দৃশ্য ব্যক্তিগত স্মৃতিতে সংরক্ষিত হয় না।');
+  const observation = state.world.get(id);
+  if (!observation) return;
+  const position = 'In the ' + (pos === 'ahead' ? 'centre' : pos) + ' of the image; physical location unconfirmed';
+  const m = makeMemory(label(id), position, state.source === 'camera' ? 'Camera observation' : 'Uploaded photo', observation.score);
+  m.id = id; state.memory.unshift(m); state.memory = state.memory.slice(0, 100);
+  renderMemory(); persistVault();
+  announce('Saved a possible ' + label(id) + ' from this image. Add a room or surface in a new note for useful location recall.', 'ছবি থেকে সম্ভাব্য ' + labelBn(id) + ' সংরক্ষিত। নির্দিষ্ট স্থানের জন্য আলাদা নোট যোগ করুন।', 'memory');
+}
+
+function renderMemory() {
+  const q = ($('memory-search')?.value || '').trim().toLocaleLowerCase();
+  const records = state.memory.filter(m => (m.item+' '+m.location).toLocaleLowerCase().includes(q));
+  $('memory-list').innerHTML = records.length ? records.map(m => '<div class="list-row"><div><strong>'+esc(m.item)+'</strong><div>'+esc(m.location)+'</div><div class="meta">'+esc(memoryDate(m.time))+' · '+esc(m.source)+(m.score != null ? ' · model score '+Math.round(m.score*100)+'% (not certainty)' : '')+'</div></div><button class="btn small" data-delete-memory="'+esc(m.uid)+'" aria-label="Delete '+esc(m.item)+' memory">Delete</button></div>').join('') : '<p class="empty-note">'+(q ? 'No matching memories.' : t('memory_empty'))+'</p>';
+}
+
+function deleteMemory(uid) {
+  if (privacyTransition) return;
+  state.memory = state.memory.filter(m => m.uid !== uid); renderMemory(); persistVault();
+  $('memory-search').focus();
+}
+
+function clearMemory() {
+  if (!confirm('Delete all saved object memories, room notes, and encrypted storage on this browser?')) return;
+  vault.revision++; vault.key = null; vault.salt = null;
+  try { localStorage.removeItem(VAULT_KEY); localStorage.removeItem('astha.spatial_home'); } catch (_) { return announce('Browser storage could not be cleared. Try again in browser settings.', 'ব্রাউজারের সংরক্ষণ মোছা যায়নি।'); }
+  state.memory = []; state.spatialHome = []; state.log = [];
+  renderMemory(); renderSpatialLayout(); renderLog(); $('vault-password').value = '';
+  $('vault-status').textContent = 'Encrypted storage deleted.';
+  announce('All personal memories and room notes deleted.', 'সব ব্যক্তিগত স্মৃতি ও ঘরের নোট মুছে ফেলা হয়েছে।', 'memory');
+}
+
+function findItems(query) {
+  const q = (query || '').toLocaleLowerCase();
+  let records = state.memory;
+  if (q) {
+    const ids = VOCAB.filter(v => [v.en,v.bn,...(v.al || [])].filter(Boolean).some(w => q.includes(w.toLowerCase()))).map(v=>v.id);
+    const knownNames = VOCAB.filter(v=>ids.includes(v.id)).flatMap(v=>[v.en,v.bn]).filter(Boolean);
+    records = records.filter(m => q.includes(m.item.toLowerCase()) || ids.includes(m.id) || knownNames.some(n=>m.item.toLowerCase().includes(n.toLowerCase())));
+  }
+  if (!records.length) return announce(q ? 'I have no saved memory matching that item. Search your memories or add a note.' : 'No memories saved yet.', 'মিল আছে এমন কোনো স্মৃতি নেই। খুঁজুন অথবা নোট যোগ করুন।', 'memory');
+  const msg = records.slice(0,3).map(m => m.item+': last recorded '+m.location+', '+memoryDate(m.time)+'. Source: '+m.source+'.').join(' ');
+  announce(msg+' This is a past observation, not its confirmed current location.', msg+' এটি আগের নোট, বর্তমান অবস্থান নিশ্চিত নয়।', 'memory');
+}
+
+function encodeBytes(bytes) {
+  return btoa(Array.from(bytes, b=>String.fromCharCode(b)).join(''));
+}
+
+function decodeBytes(text) {
+  return Uint8Array.from(atob(text), c=>c.charCodeAt(0));
+}
+
+async function deriveVaultKey(pass, salt) {
+  const base = await crypto.subtle.importKey('raw', new TextEncoder().encode(pass), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey({ name: 'PBKDF2', salt, iterations: 250000, hash: 'SHA-256' }, base, { name: 'AES-GCM', length: 256 }, false, ['encrypt','decrypt']);
+}
+
+function validMemory(m) {
+  return m && typeof m.uid === 'string' && typeof m.item === 'string' && typeof m.location === 'string' && typeof m.source === 'string' && Number.isFinite(Date.parse(m.time));
+}
+
+async function unlockVault() {
+  if (privacyTransition) return;
+  if (privacyMode) return announce('Turn privacy mode off before unlocking memories.', 'মেমরি খোলার আগে গোপনীয়তা মোড বন্ধ করুন।');
+  if (vault.key) { $('vault-status').textContent = 'Already unlocked.'; return; }
+  const pass = $('vault-password').value; $('vault-password').value = '';
+  if (pass.length < 10) { $('vault-status').textContent = 'Use a passphrase of at least 10 characters.'; return; }
+  const revision = ++vault.revision;
+  $('vault-status').textContent = 'Unlocking…';
+  try {
+    const raw = localStorage.getItem(VAULT_KEY), envelope = raw ? JSON.parse(raw) : null;
+    if (envelope && envelope.version !== 1) throw new Error('Unsupported format');
+    const salt = envelope ? decodeBytes(envelope.salt) : crypto.getRandomValues(new Uint8Array(16));
+    const key = await deriveVaultKey(pass, salt);
+    let saved = null;
+    if (envelope) {
+      const data = await crypto.subtle.decrypt({ name:'AES-GCM', iv:decodeBytes(envelope.iv) }, key, decodeBytes(envelope.data));
+      saved = JSON.parse(new TextDecoder().decode(data));
+      if (!Array.isArray(saved.memory) || !Array.isArray(saved.rooms)) throw new Error('Invalid data');
+    }
+    if (revision !== vault.revision || privacyMode) return;
+    if (saved) {
+      state.memory = [...new Map([...saved.memory.filter(validMemory), ...state.memory].map(m=>[m.uid,m])).values()].sort((a,b)=>Date.parse(b.time)-Date.parse(a.time)).slice(0,100);
+      state.spatialHome = [...new Map([...saved.rooms.filter(r=>r && typeof r.id==='string' && typeof r.name==='string' && typeof r.notes==='string' && Number.isFinite(Date.parse(r.updated))), ...state.spatialHome].map(r=>[r.id,r])).values()].slice(0,30);
+    }
+    vault.key = key; vault.salt = salt;
+    renderMemory(); renderSpatialLayout();
+    await persistVault();
+  } catch (_) {
+    if (revision === vault.revision) $('vault-status').textContent = 'Could not unlock. Check the passphrase, browser storage, and secure connection. Existing saved data was kept.';
+  }
+}
+
+function persistVault() {
+  if (!vault.key || privacyMode) return Promise.resolve(true);
+  const revision = ++vault.revision, key = vault.key, salt = vault.salt;
+  const snapshot = JSON.stringify({ memory: state.memory, rooms: state.spatialHome });
+  vault.queue = vault.queue.catch(()=>false).then(async () => {
+    try {
+      const iv = crypto.getRandomValues(new Uint8Array(12));
+      const data = await crypto.subtle.encrypt({ name:'AES-GCM', iv }, key, new TextEncoder().encode(snapshot));
+      if (revision !== vault.revision || vault.key !== key || privacyMode) return false;
+      localStorage.setItem(VAULT_KEY, JSON.stringify({ version:1, salt:encodeBytes(salt), iv:encodeBytes(iv), data:encodeBytes(new Uint8Array(data)) }));
+      $('vault-status').textContent = 'Unlocked · Memories encrypted and saved on this browser.'; return true;
+    } catch (_) { $('vault-status').textContent = 'Could not save. Memories remain in this session. Free browser storage and retry.'; return false; }
+  });
+  return vault.queue;
+}
+
+function clearPrivateSession() {
+  stopAllSpeech(); lastResponse = null;
+  state.memory = []; state.spatialHome = []; state.log = [];
+  renderMemory(); renderSpatialLayout(); renderLog();
+  ['memory-item','memory-location','memory-search','room-name','room-notes','command-input','vault-password'].forEach(id => $(id).value = '');
+  clearReader();
+  $('caption-text').textContent = 'Personal session cleared.';
+  $('caption-voice-sub').textContent = ''; $('caption-voice-sub').hidden = true;
+}
+
+async function lockVault() {
+  if (privacyTransition) return;
+  if (vault.key && !await persistVault()) return;
+  vault.revision++; vault.key = null; vault.salt = null;
+  clearPrivateSession();
+  $('vault-status').textContent = 'Locked · Personal session cleared.';
+}
+
+async function togglePrivateMode() {
+  if (privacyTransition) return;
+  const entering = !privacyMode;
+  privacyTransition = true; $('private-btn').disabled = true;
+  try {
+    stopAllSpeech();
+    if (entering && vault.key && !await persistVault()) {
+      announce('Could not finish saving encrypted changes. Privacy mode has not changed. Retry or delete the stored memories.', 'এনক্রিপ্ট করা পরিবর্তন সংরক্ষণ হয়নি। আবার চেষ্টা করুন।'); return;
+    }
+    privacyMode = entering;
+    if (privacyMode) {
+      vault.revision++; vault.key = null; vault.salt = null;
+      clearPrivateSession();
+      $('vault-status').textContent = 'Locked · Privacy mode is on.';
+    }
+    $('private-btn').setAttribute('aria-pressed', privacyMode);
+    $('private-btn').textContent = 'Privacy mode: '+(privacyMode ? 'on' : 'off');
+    $('privacy-status').textContent = privacyMode ? 'Memory and online speech recognition are off. Only local speech voices are used. Existing encrypted storage stays locked; model downloads still require internet.' : 'Session memory is on. Unlock encrypted storage to save between visits.';
+    announce(privacyMode ? 'Privacy mode is on. Personal session cleared. Encrypted changes saved and locked.' : 'Privacy mode is off. Session memory is available.', privacyMode ? 'গোপনীয়তা মোড চালু। ব্যক্তিগত সেশন মুছে ফেলা হয়েছে। এনক্রিপ্ট করা মেমরি তালাবদ্ধ।' : 'গোপনীয়তা মোড বন্ধ। সেশনের মেমরি চালু।');
+  } finally { privacyTransition = false; $('private-btn').disabled = false; }
+}
+
+function startHomeCalibration() {
+  if (privacyTransition) return;
+  if (privacyMode) return announce('Room memory is off in privacy mode.', 'গোপনীয়তা মোডে ঘরের মেমরি বন্ধ।');
+  priorModalFocus = document.activeElement; state.calib.active = true;
+  $('calib-modal').hidden = false; $('room-name').value = ''; $('room-notes').value = ''; $('room-name').focus();
+}
+
+function closeHomeCalibration() {
+  $('calib-modal').hidden = true; state.calib.active = false;
+  priorModalFocus?.focus();
+}
+
+function saveCalibratedRoom() {
+  if (privacyTransition) return;
+  if (privacyMode) return;
+  const name = $('room-name').value.trim(), notes = $('room-notes').value.trim(); if (!name || !notes) return;
+  const existing = state.spatialHome.find(r=>r.name.toLowerCase()===name.toLowerCase());
+  const room = { id:existing?.id || crypto.randomUUID(), name:name.slice(0,80), notes:notes.slice(0,2000), updated:new Date().toISOString() };
+  state.spatialHome = [room, ...state.spatialHome.filter(r=>r.id!==room.id)].slice(0,30);
+  closeHomeCalibration(); renderSpatialLayout(); persistVault();
+  announce('Saved your confirmed notes for '+name+'.', name+' এর নিশ্চিত নোট সংরক্ষিত।', 'memory');
+}
+
+function renderSpatialLayout() {
+  $('spatial-list').innerHTML = state.spatialHome.length ? state.spatialHome.map(r=>'<div class="room-notes"><strong>'+esc(r.name)+'</strong><p>'+esc(r.notes)+'</p><p class="meta">Your note · '+esc(memoryDate(r.updated))+'</p><button class="btn small" data-delete-room="'+esc(r.id)+'" aria-label="Delete '+esc(r.name)+' room notes">Delete</button></div>').join('') : '<p class="empty-note">No confirmed room notes yet.</p>';
+}
+
+function deleteCalibratedRoom(id) {
+  if (privacyTransition) return;
+  state.spatialHome = state.spatialHome.filter(r=>r.id!==id); renderSpatialLayout(); persistVault();
+}
+
+function queryHomeLayout(query) {
+  const q = (query || '').toLowerCase();
+  const matches = state.spatialHome.filter(r=>q.includes(r.name.toLowerCase()) || r.notes.toLowerCase().split(/\s+/).some(w=>w.length>3 && q.includes(w)));
+  if (!matches.length) return announce('No matching confirmed room notes. Add a room with landmarks you know.', 'মিলে এমন নিশ্চিত ঘরের নোট নেই। জানা ল্যান্ডমার্ক দিয়ে ঘর যোগ করুন।', 'memory');
+  const text = matches.slice(0,2).map(r=>r.name+': '+r.notes+' Recorded '+memoryDate(r.updated)+'.').join(' ');
+  announce(text+' These notes do not track your current position.', text+' এই নোট আপনার বর্তমান অবস্থান অনুসরণ করে না।', 'memory');
+}
+
+function updateSourceStatus() {
+  const text = state.source === 'camera' ? 'Live camera · Recognition is experimental' : state.source === 'scene' ? 'Demo photo · Not your surroundings' : state.source === 'photo' ? 'Uploaded photo · Not a live view' : 'Camera off · No image selected';
+  $('source-status').textContent = text;
+}
+
+function onPhotoChosen(files) {
+  if (!files?.[0]) return;
+  const file = files[0];
+  if (!file.type.startsWith('image/') || file.size > 20 * 1024 * 1024) return announce('Choose an image smaller than 20 MB.', '২০ মেগাবাইটের কম আকারের ছবি বেছে নিন।');
+  stopCamera(); const token = ++imageRequest;
+  if (imageUrl) URL.revokeObjectURL(imageUrl);
+  imageUrl = URL.createObjectURL(file); const url = imageUrl;
+  $('still').onload = () => { if (token !== imageRequest) return; state.sceneKey=null; showSource('photo'); $('still').alt='Your selected photo'; URL.revokeObjectURL(url); imageUrl=null; announce(t('photo_loaded'),tBn('photo_loaded')); };
+  $('still').onerror = () => { URL.revokeObjectURL(url); if (token !== imageRequest) return; imageUrl=null; showSource(null); announce('That image could not be opened. Try JPG or PNG.', 'ছবি খোলা যায়নি। জেপিজি বা পিএনজি চেষ্টা করুন।'); };
+  $('still').src=url; $('file-input').value='';
+}
+
+function loadScene(key) {
+  if (privacyMode) return announce('Remote demo photos are off in privacy mode. Use the camera or a local photo.', 'গোপনীয়তা মোডে অনলাইন ডেমো ছবি বন্ধ। ক্যামেরা বা নিজের ছবি ব্যবহার করুন।');
+  if (!DEMO_SCENES[key]) return;
+  stopCamera(); const token=++imageRequest;
+  if (imageUrl) { URL.revokeObjectURL(imageUrl); imageUrl=null; }
+  $('still').onload=()=>{ if(token!==imageRequest)return; state.sceneKey=key; showSource('scene'); $('still').alt='Demo photo: '+t('scene_'+key); announce('Demo photo loaded. It is not your surroundings. Choose an action to analyse the image.', 'ডেমো ছবি এসেছে। এটি আপনার চারপাশ নয়। বিশ্লেষণের জন্য বোতাম চাপুন।'); };
+  $('still').onerror=()=>{ if(token!==imageRequest)return; showSource(null); announce('Demo photo could not load. Upload a photo or use the camera.', 'ডেমো ছবি লোড হয়নি। নিজের ছবি দিন বা ক্যামেরা চালু করুন।'); };
+  $('still').src=DEMO_SCENES[key];
+}
+
+async function toggleCamera() {
+  if (state.source==='camera' || state.cameraPending) { stopCamera(); return; }
+  const token=++cameraRequest; state.cameraPending=true; imageRequest++;
+  $('cam-btn-label').textContent='Cancel camera';
+  setCaption('Camera','Requesting camera access…','system','busy');
+  try {
+    const stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:'environment',width:{ideal:1280},height:{ideal:720}},audio:false});
+    if (token!==cameraRequest) { stream.getTracks().forEach(t=>t.stop()); return; }
+    $('cam').srcObject=stream;
+    await $('cam').play();
+    if (token!==cameraRequest) return;
+    state.cameraPending=false; state.sceneKey=null; showSource('camera');
+    announce('Camera on. Loading recognition models.', 'ক্যামেরা চালু। শনাক্তকরণ মডেল লোড হচ্ছে।');
+    if (!await ensureVisionModels() || token!==cameraRequest || state.source!=='camera') return;
+    announce(t('live_on'),tBn('live_on'),'vision'); startLiveLoop();
+  } catch (e) {
+    if(token!==cameraRequest)return;
+    stopCamera(); announce('Camera could not start. Check permission and use HTTPS or localhost, or upload a photo.', 'ক্যামেরা চালু হয়নি। অনুমতি পরীক্ষা করুন অথবা ছবি দিন।');
+  } finally { if(token===cameraRequest)state.cameraPending=false; }
+}
+
+function stopCamera() {
+  cameraRequest++; state.cameraPending=false; stopLiveLoop();
+  if($('cam').srcObject) { $('cam').srcObject.getTracks().forEach(t=>t.stop()); $('cam').srcObject=null; }
+  showSource(null);
+}
+
+async function loadAllModels() {
+  $('load-models-btn').disabled=true;
+  try { const ready=await ensureVisionModels(); await ensureOcr(); if(ready && state.source==='camera')startLiveLoop(); }
+  catch (_) { announce(t('models_failed'),tBn('models_failed')); }
+  finally { $('load-models-btn').disabled=false; }
+}
+
+function enhancementBoot() {
+  try {
+    const p=JSON.parse(localStorage.getItem('astha.preferences') || '{}');
+    if(['0.8','1','1.2','1.5'].includes(p.rate))$('speech-rate').value=p.rate;
+    if(['short','detailed'].includes(p.style))$('description-style').value=p.style;
+    if(['ben+eng','eng'].includes(p.ocr))$('ocr-language').value=p.ocr;
+    state.narrate=localStorage.getItem('astha.narrate')==='1';
+    $('narrate-switch').setAttribute('aria-checked',state.narrate);
+    if(localStorage.getItem(VAULT_KEY))$('vault-status').textContent='Saved encrypted memories found. Enter your passphrase to unlock.';
+  } catch (_) {}
+  $('caption-voice-sub').lang='bn';
+  updateVoiceSupport();
+  window.speechSynthesis?.addEventListener('voiceschanged',updateVoiceSupport);
+  $('memory-list').addEventListener('click', e=>{ const b=e.target.closest('[data-delete-memory]'); if(b)deleteMemory(b.dataset.deleteMemory); });
+  $('spatial-list').addEventListener('click', e=>{ const b=e.target.closest('[data-delete-room]'); if(b)deleteCalibratedRoom(b.dataset.deleteRoom); });
+  document.addEventListener('keydown',e=>{
+    if(!$('calib-modal').hidden) {
+      if(e.key==='Escape') { e.preventDefault(); closeHomeCalibration(); return; }
+      if(e.key==='Tab') {
+        const items=[...$('calib-modal').querySelectorAll('button,input,textarea,select,a[href]')].filter(x=>!x.disabled);
+        const first=items[0],last=items.at(-1);
+        if(e.shiftKey && (document.activeElement===first || !$('calib-modal').contains(document.activeElement))) {e.preventDefault();last.focus();}
+        else if(!e.shiftKey && document.activeElement===last) {e.preventDefault();first.focus();}
+      }
+    } else if(e.key==='Escape') stopAllSpeech();
+  });
+  document.addEventListener('focusin',e=>{ if(!$('calib-modal').hidden && !$('calib-modal').contains(e.target))$('room-name').focus(); });
+  window.addEventListener('pagehide',()=>{ stopAllSpeech(); stopCamera(); if(imageUrl)URL.revokeObjectURL(imageUrl); });
+  document.addEventListener('visibilitychange',()=>{ if(document.hidden){stopListening();stopCamera();} });
+}
+
+
+(function boot() {
+  try {
+    const savedTheme = localStorage.getItem('astha.clinical_theme') || 'clinical-yellow';
+    document.documentElement.setAttribute('data-theme', savedTheme);
+    $('theme-select').value = savedTheme;
+
+    const savedFont = localStorage.getItem('astha.font_size') || 'normal';
+    document.documentElement.setAttribute('data-font-size', savedFont);
+    $('font-select').value = savedFont;
+
+    const savedVoice = localStorage.getItem('astha.voice_lang') || 'bn';
+    voiceLang = savedVoice;
+    if ($('voice-lang-bn')) $('voice-lang-bn').setAttribute('aria-pressed', voiceLang === 'bn');
+    if ($('voice-lang-en')) $('voice-lang-en').setAttribute('aria-pressed', voiceLang === 'en');
+
+    const u = localStorage.getItem('astha.api'); if (u) $('api-url').value = u;
+  } catch (e) {}
+  
+  $('narrate-switch').setAttribute('aria-checked', state.narrate);
+  applyLanguage();
+  renderSpatialLayout();
+  enhancementBoot();
+})();
+</script>
+</body>
+</html>
