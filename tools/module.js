@@ -1042,7 +1042,7 @@ function sttLang() {
 const INTENTS = [
   // Keywords cover English, Bangla script, and romanised Bangla ("amar phone kothay").
   { id: 'read', run: () => readText(), kw: ['read', 'reading', 'book', 'page', 'letter', 'label', 'text', 'পড়', 'পড়ো', 'লেখা', 'বই', 'রিড', 'বুক', 'পেজ', 'পৃষ্ঠা', 'poro', 'pore', 'boi', 'lekha', 'porhe', 'shonao'] },
-  { id: 'identify', run: () => identifyObject(), kw: ['what is this', "what's this", 'what am i holding', 'identify', 'which brand', 'what phone', 'which phone', 'এটা কী', 'এটি কী', 'কী এটা', 'এটা কি', 'হোয়াট ইজ দিস', 'আইডেন্টিফাই', 'কোন ফোন', 'eta ki', 'eita ki', 'ki eta', 'kon phone'] },
+  { id: 'identify', run: () => identifyObject(), kw: ['what is this', "what's this", 'what is it', "what's it", 'what is that', "what's that", 'what am i looking at', 'what am i seeing', 'what am i holding', 'what do i have', 'what do i hold', 'what is in my hand', "what's in my hand", "what's this called", 'what is this called', 'tell me what this is', 'tell me what it is', 'tell me what that is', 'what object is this', 'what object is it', 'what do you call this', 'identify', 'which brand', 'what phone', 'which phone', 'কী এটা', 'এটা কী', 'এটি কী', 'এটা কি', 'কী দেখছি', 'আমি কী দেখছি', 'কী দেখতে পাচ্ছ', 'আমার হাতে কী', 'আমার হাতে কি', 'কী জিনিস', 'এটা কী জিনিস', 'এটা কি জিনিস', 'হোয়াট ইজ দিস', 'আইডেন্টিফাই', 'কোন ফোন', 'eta ki', 'eita ki', 'ki eta', 'ki dekhchi', 'ki dekhsi', 'hate ki', 'amar hate ki', 'kon phone'] },
   { id: 'describe', run: () => describeScene(), kw: ['describe', 'what do you see', 'what can you see', 'what is in front', "what's in front", 'whats in front', 'what is around', 'whats around', 'surroundings', 'look around', 'scene', 'tell me what', 'what is there', 'চারপাশ', 'সামনে কী', 'কী দেখছ', 'কী দেখছো', 'কী আছে', 'দেখো', 'ডেসক্রাইব', 'বর্ণনা', 'samne ki', 'ki dekhcho', 'ki dekhso', 'charpash', 'ki ache', 'dekho'] },
   { id: 'find', run: q => findItems(q), kw: ['where is my', 'where are my', 'where did i', 'find my', 'locate my', 'আমার.*কোথায়', 'খুঁজ', 'কই', 'ফাইন্ড', 'kothay', 'kothai', 'koi', 'khuje', 'khuj'] },
   { id: 'clothes', run: () => inspectClothesAndColor(), kw: ['wearing', 'clothes', 'cloth', 'dress', 'shirt', 'colour', 'color', 'পরেছি', 'পোশাক', 'জামা', 'কাপড়', 'রঙ', 'রং', 'ক্লথ', 'কালার', 'porechi', 'poreci', 'jama', 'kapor', 'poshak', 'rong', 'rang'] },
@@ -1092,6 +1092,11 @@ async function handleVisualQA(query) {
   if (privacyTransition) return;
   const qClean = (query || '').trim();
   if (!qClean) return;
+
+  // If query is an identification question, immediately delegate to identifyObject()
+  if (/\b(what('s| is) (it|this|that|in my hand|this called)|what am i (looking at|seeing|holding)|what do i (have|hold)|what object is (this|it|that)|tell me what (it|this|that) is|কী এটা|এটা কী|এটি কী|এটা কি|কী জিনিস|এটা কী জিনিস|কী দেখছি|আমি কী দেখছি|আমার হাতে কী|আমার হাতে কি|eta ki|eita ki|ki eta|ki dekhchi|ki dekhsi|hate ki|amar hate ki)\b/i.test(qClean)) {
+    return identifyObject();
+  }
 
   if (withCamera(() => handleVisualQA(query))) return;
   recordConversationTurn('user', qClean);
@@ -1213,20 +1218,31 @@ async function handleOnDeviceVisualQA(query) {
     }
 
     // C. General or negative response
-    const cleanNounMatch = query.replace(/^(can you see|do you see|is there|where is|what is|can you find|আমার|তুমি কি|দেখতে পাচ্ছো|দেখছ)\s*/i, '').replace(/[?!.,।]/g, '').trim();
+    let cleanNounMatch = query.replace(/^(can you see|do you see|is there|where is|what is|what are|can you find|আমার|তুমি কি|দেখতে পাচ্ছো|দেখছ)\s*/i, '').replace(/[?!.,।]/g, '').trim();
+    if (/^(it|this|that|what|what is it|what is this|what is that|something|anything|item|things|stuff)$/i.test(cleanNounMatch)) {
+      cleanNounMatch = '';
+    }
     if (cocoObjs.length > 0) {
       const topObj = cocoObjs[0];
       const objName = label(topObj.id);
       const objNameBn = labelBn(topObj.id);
       const cx = (topObj.bbox[0] + topObj.bbox[2] / 2) / frame.width;
       const pos = cx < 0.38 ? 'on your left' : cx > 0.62 ? 'on your right' : 'ahead of you';
-      const enMsg = `I do not clearly see a ${cleanNounMatch || 'matching item'}, but I see ${article(objName)} ${objName} ${pos} on the ${surfaceName}.`;
-      const bnMsg = `${cleanNounMatch || 'জিনিসটি'} স্পষ্ট দেখছি না, তবে ${pos === 'ahead of you' ? 'সামনে' : pos} ${surfaceNameBn}-এ একটি ${objNameBn} দেখতে পাচ্ছি।`;
+      const enMsg = cleanNounMatch
+        ? `I do not clearly see a ${cleanNounMatch}, but I see ${article(objName)} ${objName} ${pos} on the ${surfaceName}.`
+        : `I see ${article(objName)} ${objName} ${pos} on the ${surfaceName}.`;
+      const bnMsg = cleanNounMatch
+        ? `${cleanNounMatch} স্পষ্ট দেখছি না, তবে ${pos === 'ahead of you' ? 'সামনে' : pos} ${surfaceNameBn}-এ একটি ${objNameBn} দেখতে পাচ্ছি।`
+        : `${pos === 'ahead of you' ? 'সামনে' : pos} ${surfaceNameBn}-এ একটি ${objNameBn} দেখতে পাচ্ছি।`;
       announce(enMsg, bnMsg, 'vision');
       recordConversationTurn('assistant', enMsg);
     } else {
-      const enMsg = `I am looking at what is in front of the camera, but I cannot see ${cleanNounMatch || 'that item'} right now. Try holding it closer or tilting the camera down.`;
-      const bnMsg = `ক্যামেরার সামনে দেখছি, কিন্তু এই মুহূর্তে ${cleanNounMatch || 'সেটি'} দেখতে পাচ্ছি না। ক্যামেরা আরেকটু কাছে ধরুন।`;
+      const enMsg = cleanNounMatch
+        ? `I am looking at what is in front of the camera, but I cannot see ${cleanNounMatch} right now. Try holding it closer or tilting the camera down.`
+        : `I am looking in front of the camera, but cannot clearly distinguish an object right now. Try holding it closer or tilting the camera down.`;
+      const bnMsg = cleanNounMatch
+        ? `ক্যামেরার সামনে দেখছি, কিন্তু এই মুহূর্তে ${cleanNounMatch} দেখতে পাচ্ছি না। ক্যামেরা আরেকটু কাছে ধরুন।`
+        : `ক্যামেরার সামনে দেখছি, কিন্তু এই মুহূর্তে কোনো জিনিস স্পষ্ট দেখতে পাচ্ছি না। ক্যামেরা আরেকটু কাছে ধরুন।`;
       announce(enMsg, bnMsg, 'vision');
       recordConversationTurn('assistant', enMsg);
     }
@@ -1829,57 +1845,221 @@ function closeHomeCalibration() {
   priorModalFocus?.focus();
 }
 
-// ---- Furniture-Aware Item Placement Tracking ---------------------------------
-// Detects when user places items (powerbank, phone, charger, glasses, keys) on calibrated furniture
+// ---- Furniture-Aware Item Placement Tracking (Passive Background Detector) ---
+// Detects when user places items (wallet, id card, phone charger, laptop charger, power bank, keys, glasses, lipstick) on calibrated furniture
 let lastPlacementRecordAt = 0;
-function trackItemPlacementOnFurniture(frame, cocoObjs) {
-  if (privacyMode || !cocoObjs || !cocoObjs.length) return;
+let isTrackingPlacement = false;
+const lastItemPlacementAnnounce = new Map(); // key -> timestamp
+
+// Helper to determine the best matching calibrated room and furniture surface
+function resolveRoomAndSurface(cocoObjs) {
+  let surface = 'table';
+  let surfaceBn = 'টেবিল';
+  const curRoom = state.currentRoom || (state.spatialHome.length ? state.spatialHome[0].name : 'Reading Room');
+  const roomRecord = state.spatialHome.find(r => r.name.toLowerCase() === curRoom.toLowerCase()) || state.spatialHome[0];
+
+  const hasBed = cocoObjs.some(o => o.id === 'bed');
+  const hasCouch = cocoObjs.some(o => o.id === 'couch');
+  const hasTable = cocoObjs.some(o => ['dining table', 'desk'].includes(o.id));
+
+  if (hasBed) {
+    surface = 'bed';
+    surfaceBn = 'বিছানা';
+  } else if (hasCouch) {
+    surface = 'sofa';
+    surfaceBn = 'সোফা';
+  } else if (roomRecord && roomRecord.notes && /dressing table/i.test(roomRecord.notes)) {
+    surface = 'dressing table';
+    surfaceBn = 'ড্রেসিং টেবিল';
+  } else if (roomRecord && roomRecord.notes && /reading table/i.test(roomRecord.notes)) {
+    surface = 'reading table';
+    surfaceBn = 'পড়ার টেবিল';
+  } else if (hasTable) {
+    surface = 'table';
+    surfaceBn = 'টেবিল';
+  }
+
+  // Also check if another calibrated room has a better landmark match
+  let matchedRoom = curRoom;
+  for (const r of state.spatialHome) {
+    const notesLower = (r.notes || '').toLowerCase();
+    if (hasBed && (notesLower.includes('bed') || r.name.toLowerCase().includes('bed'))) {
+      matchedRoom = r.name;
+      break;
+    }
+    if (surface === 'dressing table' && notesLower.includes('dressing')) {
+      matchedRoom = r.name;
+      break;
+    }
+  }
+
+  return { room: matchedRoom, surface, surfaceBn };
+}
+
+async function trackItemPlacementOnFurniture(frame, cocoObjs) {
+  if (privacyMode || privacyTransition || !frame || !cocoObjs || !cocoObjs.length) return;
+  if (isTrackingPlacement) return;
+
   const now = Date.now();
-  if (now - lastPlacementRecordAt < 8000) return; // Debounce 8s
+  if (now - lastPlacementRecordAt < 4000) return; // Debounce 4s between evaluation cycles
 
   const surfaces = cocoObjs.filter(o => ['dining table', 'desk', 'bed', 'couch'].includes(o.id));
-  if (!surfaces.length) return;
+  const smallItems = cocoObjs.filter(o => ['cell phone', 'bottle', 'cup', 'book', 'mouse', 'scissors', 'handbag', 'remote'].includes(o.id));
 
-  const smallItems = cocoObjs.filter(o => ['cell phone', 'bottle', 'cup', 'book', 'mouse'].includes(o.id));
-  if (!smallItems.length) return;
+  // If no surfaces detected and no calibrated rooms exist, skip
+  if (!surfaces.length && !state.spatialHome.length) return;
 
-  for (const item of smallItems) {
-    for (const surf of surfaces) {
-      // Check spatial overlap: is the item inside or resting on top of the surface box?
+  isTrackingPlacement = true;
+  try {
+    const { room, surface, surfaceBn } = resolveRoomAndSurface(cocoObjs);
+    const roomsSummary = state.spatialHome.map(r => r.name + ' (' + r.notes + ')').join(' | ');
+
+    // 1. If Cloud (Gemini) is available, use cloudRecordPassivePlacement with debouncing
+    if (typeof cloudReady === 'function' && cloudReady() && typeof cloudRecordPassivePlacement === 'function') {
+      const r = await cloudRecordPassivePlacement(frame, roomsSummary);
+      if (r && r.found && r.item && r.surface) {
+        const itemKey = `${r.item.toLowerCase()}_${r.surface.toLowerCase()}_${(r.room || room).toLowerCase()}`;
+        if (now - (lastItemPlacementAnnounce.get(itemKey) || 0) > 45000) {
+          lastItemPlacementAnnounce.set(itemKey, now);
+          lastPlacementRecordAt = now;
+
+          const recRoom = r.room || room;
+          const locStr = `on the ${r.surface} in the ${recRoom}`;
+          autoRecordMemory({
+            item: r.item,
+            location: locStr,
+            room: recRoom,
+            furniture: r.surface,
+            source: 'Auto placement observation',
+            score: 0.96
+          });
+
+          if (r.en || r.bn) {
+            announce(r.en, r.bn, 'memory');
+            playEarcon('confirm');
+            haptic('CONFIRM');
+            heartFlash({ x: 0.5, y: 0.5, mode: 'lock', label: r.item });
+          }
+          return;
+        }
+      }
+    }
+
+    // 2. On-Device Fallback (Offline or when cloud did not trigger)
+    if (!smallItems.length) return;
+
+    for (const item of smallItems) {
+      // Find matching surface or assume resting on room surface
+      const surf = surfaces.find(s => {
+        const ix = item.bbox[0] + item.bbox[2] / 2;
+        const iy = item.bbox[1] + item.bbox[3] / 2;
+        const sx = s.bbox[0], sy = s.bbox[1], sw = s.bbox[2], sh = s.bbox[3];
+        return (ix >= sx - 35 && ix <= sx + sw + 35 && iy >= sy - 45 && iy <= sy + sh + 35);
+      }) || surfaces[0];
+
+      if (!surf && !state.spatialHome.length) continue;
+
       const ix = item.bbox[0] + item.bbox[2] / 2;
       const iy = item.bbox[1] + item.bbox[3] / 2;
-      const sx = surf.bbox[0], sy = surf.bbox[1], sw = surf.bbox[2], sh = surf.bbox[3];
 
-      const overlaps = (ix >= sx - 25 && ix <= sx + sw + 25 && iy >= sy - 35 && iy <= sy + sh + 25);
-      if (overlaps) {
-        lastPlacementRecordAt = now;
-        // Determine item name
-        let itemName = label(item.id);
-        if (item.id === 'cell phone') itemName = 'powerbank or phone';
+      // Crop the item box for on-device recognition (CLIP + OCR)
+      const cropRect = {
+        x: Math.max(0, item.bbox[0] - 10),
+        y: Math.max(0, item.bbox[1] - 10),
+        w: Math.min(frame.width - item.bbox[0], item.bbox[2] + 20),
+        h: Math.min(frame.height - item.bbox[1], item.bbox[3] + 20)
+      };
 
-        // Determine furniture type from calibrated room or surface
-        let furniture = 'table';
-        const curRoom = state.currentRoom || (state.spatialHome.length ? state.spatialHome[0].name : 'Reading Room');
-        const roomRecord = state.spatialHome.find(r => r.name.toLowerCase() === curRoom.toLowerCase());
-        if (roomRecord && roomRecord.notes && /dressing table/i.test(roomRecord.notes)) {
-          furniture = 'dressing table';
-        } else if (surf.id === 'bed') {
-          furniture = 'bed';
-        } else {
-          furniture = 'reading table';
+      let detectedItemName = null;
+      let detectedItemBn = null;
+
+      // Check with CLIP if available
+      if (typeof engine !== 'undefined' && engine.clip && engine.clip.status === 'ready' && typeof clipEmbedCrops === 'function') {
+        try {
+          const [emb] = await clipEmbedCrops(frame, [cropRect]);
+          if (emb) {
+            const ranked = scoreEmbedding(emb).filter(r => r.id !== '_bg' && !VOCAB_BY_ID[r.id].quiet);
+            const targetIds = ['wallet', 'id card', 'phone charger', 'laptop charger', 'power bank', 'keys', 'eyeglasses', 'lipstick', 'cell phone'];
+            const hit = ranked.find(r => targetIds.includes(r.id) && r.p >= 0.18);
+            if (hit) {
+              detectedItemName = label(hit.id);
+              detectedItemBn = labelBn(hit.id);
+              if (hit.id === 'eyeglasses') { detectedItemName = 'glasses'; detectedItemBn = 'চশমা'; }
+            }
+          }
+        } catch (e) {
+          console.warn('Passive placement CLIP check:', e);
         }
+      }
 
+      // Check with OCR if it might be an ID card
+      if (!detectedItemName && (item.id === 'book' || item.id === 'cell phone')) {
+        try {
+          const worker = await ensureOcr();
+          const ocrRes = await worker.recognize(cropToCanvas(frame, cropRect));
+          const text = (ocrRes.data.lines || []).map(l => l.text).join(' ');
+          if (text.length >= 6 && /\b(id|card|republic|bangladesh|name|student|identity|কার্ড|আইডি)\b/i.test(text)) {
+            detectedItemName = 'id card';
+            detectedItemBn = 'আইডি কার্ড';
+          }
+        } catch (e) {}
+      }
+
+      // Heuristic fallback based on COCO class & dimensions
+      if (!detectedItemName) {
+        if (item.id === 'handbag') {
+          detectedItemName = 'wallet';
+          detectedItemBn = 'মানিব্যাগ';
+        } else if (item.id === 'scissors') {
+          detectedItemName = 'keys';
+          detectedItemBn = 'চাবি';
+        } else if (item.id === 'cell phone') {
+          detectedItemName = 'power bank or phone';
+          detectedItemBn = 'পাওয়ার ব্যাংক বা ফোন';
+        } else if (item.id === 'mouse') {
+          detectedItemName = 'charger';
+          detectedItemBn = 'চার্জার';
+        } else if (item.id === 'bottle' && item.bbox[2] * item.bbox[3] < 12000) {
+          detectedItemName = 'lipstick or cosmetic tube';
+          detectedItemBn = 'লিপস্টিক বা টিউব';
+        } else if (item.id === 'book' && item.bbox[2] * item.bbox[3] < 15000) {
+          detectedItemName = 'wallet or card';
+          detectedItemBn = 'মানিব্যাগ বা কার্ড';
+        } else {
+          detectedItemName = label(item.id);
+          detectedItemBn = labelBn(item.id);
+        }
+      }
+
+      if (detectedItemName) {
+        const itemKey = `${detectedItemName.toLowerCase()}_${surface.toLowerCase()}_${room.toLowerCase()}`;
+        if (now - (lastItemPlacementAnnounce.get(itemKey) || 0) < 45000) {
+          continue; // Already recorded recently
+        }
+        lastItemPlacementAnnounce.set(itemKey, now);
+        lastPlacementRecordAt = now;
+
+        const locStr = `on the ${surface} in the ${room}`;
         autoRecordMemory({
-          item: itemName,
-          location: `on the ${furniture} in the ${curRoom}`,
-          room: curRoom,
-          furniture,
-          source: 'Item placed on surface',
-          score: item.score
+          item: detectedItemName,
+          location: locStr,
+          room,
+          furniture: surface,
+          source: 'Auto placement observation',
+          score: item.score || 0.88
         });
+
+        const enMsg = `Noted: your ${detectedItemName} is on the ${surface} in the ${room}.`;
+        const bnMsg = `${room}-এর ${surfaceBn}-এ আপনার ${detectedItemBn} মনে রাখা হলো।`;
+        announce(enMsg, bnMsg, 'memory');
+        playEarcon('confirm');
+        haptic('CONFIRM');
+        heartFlash({ x: ix / frame.width, y: iy / frame.height, mode: 'lock', label: detectedItemName });
         break;
       }
     }
+  } finally {
+    isTrackingPlacement = false;
   }
 }
 async function deleteCalibratedRoom(id) {

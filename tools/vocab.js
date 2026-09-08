@@ -81,8 +81,9 @@ v('hair drier', 'hair dryer', 'হেয়ার ড্রায়ার', { c
 v('toothbrush', 'toothbrush', 'টুথব্রাশ', { coco: 'toothbrush', personal: true, al: ['toothbrush', 'ব্রাশ', 'টুথব্রাশ'] });
 
 // --- Everyday objects COCO cannot see (CLIP only) ---
-v('laptop charger', 'laptop charger', 'ল্যাপটপ চার্জার', { personal: true, p: ['a laptop charger', 'a laptop power adapter with a cable', 'a black power brick'], al: ['laptop charger', 'adapter', 'power brick', 'ল্যাপটপ চার্জার', 'অ্যাডাপ্টার'] });
-v('phone charger', 'phone charger', 'ফোন চার্জার', { personal: true, p: ['a phone charger', 'a usb charger plug'], al: ['charger', 'phone charger', 'চার্জার'] });
+v('laptop charger', 'laptop charger', 'ল্যাপটপ চার্জার', { personal: true, p: ['a laptop charger', 'a laptop power adapter with a cable', 'a black power brick'], al: ['laptop charger', 'adapter', 'power brick', 'charger', 'ল্যাপটপ চার্জার', 'অ্যাডাপ্টার'] });
+v('phone charger', 'phone charger', 'ফোন চার্জার', { personal: true, p: ['a phone charger', 'a usb charger plug', 'a mobile charger'], al: ['charger', 'phone charger', 'mobile charger', 'usb charger', 'চার্জার', 'ফোন চার্জার'] });
+v('power bank', 'power bank', 'পাওয়ার ব্যাংক', { personal: true, p: ['a power bank portable charger', 'a portable battery pack', 'a rectangular power bank with usb ports', 'a powerbank'], al: ['power bank', 'powerbank', 'battery pack', 'পাওয়ার ব্যাংক', 'পাওয়ারব্যাংক'] });
 v('cable', 'charging cable', 'চার্জিং কেবল', { personal: true, hz: 'close', p: ['a charging cable', 'a usb cable', 'a white cable', 'a coiled cable'], al: ['cable', 'cord', 'কেবল', 'ক্যাবল'] });
 v('wire', 'electric wire', 'বৈদ্যুতিক তার', { hz: 'close', p: ['an electric wire', 'wires on the floor', 'tangled black wires'], al: ['wire', 'wires', 'তার'] });
 v('power strip', 'power strip', 'এক্সটেনশন কর্ড', { hz: 'close', p: ['a power strip', 'an extension cord with sockets', 'a multiplug'], al: ['power strip', 'extension', 'multiplug', 'এক্সটেনশন', 'মাল্টিপ্লাগ'] });
@@ -90,15 +91,16 @@ v('wall socket', 'wall socket', 'ওয়াল সকেট', { p: ['a wall po
 v('light switch', 'light switch', 'লাইট সুইচ', { p: ['a light switch on a wall'], al: ['switch', 'সুইচ'] });
 v('earphones', 'earphones', 'ইয়ারফোন', { personal: true, pl: true, p: ['earphones', 'wireless earbuds', 'a pair of earbuds in a case'], al: ['earphones', 'earbuds', 'airpods', 'ইয়ারফোন', 'ইয়ারবাড'] });
 v('headphones', 'headphones', 'হেডফোন', { personal: true, pl: true, p: ['headphones', 'over-ear headphones'], al: ['headphones', 'headset', 'হেডফোন'] });
-v('wallet', 'wallet', 'মানিব্যাগ', { personal: true, p: ['a leather wallet', 'a wallet'], al: ['wallet', 'মানিব্যাগ', 'ওয়ালেট'] });
-v('keys', 'keys', 'চাবি', { personal: true, pl: true, p: ['keys', 'a bunch of keys on a keyring', 'a door key'], al: ['key', 'keys', 'চাবি'] });
-v('eyeglasses', 'eyeglasses', 'চশমা', { personal: true, pl: true, p: ['eyeglasses', 'a pair of spectacles', 'sunglasses'], al: ['glasses', 'spectacles', 'sunglasses', 'চশমা'] });
+v('wallet', 'wallet', 'মানিব্যাগ', { personal: true, p: ['a leather wallet', 'a wallet', 'a folded moneybag', 'a pocket wallet'], al: ['wallet', 'moneybag', 'purse', 'billfold', 'মানিব্যাগ', 'ওয়ালেট'] });
+v('keys', 'keys', 'চাবি', { personal: true, pl: true, p: ['keys', 'a bunch of keys on a keyring', 'a door key', 'a keychain'], al: ['key', 'keys', 'keychain', 'চাবি'] });
+v('eyeglasses', 'eyeglasses', 'চশমা', { personal: true, pl: true, p: ['eyeglasses', 'a pair of spectacles', 'sunglasses', 'reading glasses'], al: ['glasses', 'spectacles', 'sunglasses', 'eyeglasses', 'specs', 'চশমা'] });
+v('lipstick', 'lipstick', 'লিপস্টিক', { personal: true, p: ['a tube of lipstick', 'a cosmetic lipstick tube', 'a lip balm or chapstick cylinder'], al: ['lipstick', 'lip balm', 'chapstick', 'লিপস্টিক', 'লিপবাম'] });
 v('watch', 'wristwatch', 'হাতঘড়ি', { personal: true, p: ['a wristwatch', 'a smartwatch'], al: ['watch', 'হাতঘড়ি'] });
 v('medicine strip', 'medicine strip', 'ওষুধের পাতা', { personal: true, p: ['a blister pack of tablets', 'a strip of medicine pills', 'a medicine packet'], al: ['medicine', 'tablet', 'pills', 'ওষুধ', 'ট্যাবলেট'] });
 v('pill bottle', 'medicine bottle', 'ওষুধের বোতল', { personal: true, p: ['a medicine bottle', 'a bottle of syrup', 'a pill bottle'], al: ['syrup', 'medicine bottle', 'সিরাপ'] });
 v('banknote', 'banknote', 'টাকার নোট', { personal: true, p: ['a paper banknote', 'paper money', 'a Bangladeshi taka note'], al: ['money', 'note', 'cash', 'taka', 'টাকা', 'নোট'] });
 v('coin', 'coin', 'কয়েন', { p: ['a coin', 'metal coins'], al: ['coin', 'কয়েন', 'পয়সা'] });
-v('id card', 'ID card', 'আইডি কার্ড', { personal: true, p: ['an id card with a photo', 'a plastic identity card', 'a national ID card held in a hand', 'a bank card'], al: ['card', 'id', 'nid', 'কার্ড', 'আইডি'] });
+v('id card', 'ID card', 'আইডি কার্ড', { personal: true, p: ['an id card with a photo', 'a plastic identity card', 'a national ID card held in a hand', 'a student ID card', 'an office ID card'], al: ['card', 'id', 'id card', 'identity card', 'nid', 'student id', 'office id', 'কার্ড', 'আইডি', 'আইডি কার্ড'] });
 v('pen', 'pen', 'কলম', { personal: true, p: ['a pen', 'a ballpoint pen', 'a pencil'], al: ['pen', 'pencil', 'কলম', 'পেন্সিল'] });
 v('notebook', 'notebook', 'খাতা', { personal: true, p: ['a paper notebook', 'a diary'], al: ['notebook', 'diary', 'খাতা', 'ডায়েরি'] });
 v('paper', 'paper document', 'কাগজ', { p: ['a printed paper document', 'a sheet of paper with text'], al: ['paper', 'document', 'sheet', 'page', 'কাগজ'] });
