@@ -376,8 +376,6 @@ rep("    const partsEn = fresh.slice(0, 3).map(o => `${labelWithArticle(o.id)} $
     "    const keep = fresh.find(o => (VOCAB_BY_ID[o.id] || {}).personal && o.score >= 0.7 && now - (state.lastRememberOffer || 0) > 45000);\n"
     "    if (keep && !privacyMode) { state.lastRememberOffer = now; state.rememberCandidate = keep.id; msgEn += ` Say “remember this” to save where your ${objLabel(keep)} is.`; msgBn += ` আপনার ${objLabelBn(keep)} কোথায় আছে মনে রাখতে বলুন “এটা মনে রাখো”।`; }")
 
-rep("    const item = worldSorted()[0];\n    if (item) return remember(item.id, item.pos);",
-    "    const item = (state.rememberCandidate && state.world.get(state.rememberCandidate)) || worldSorted().find(o => (VOCAB_BY_ID[o.id] || {}).personal) || worldSorted()[0];\n    state.rememberCandidate = null;\n    if (item) return remember(item.id, item.pos);")
 
 
 # ---- Cloud reasoning, modes, owner ID, secure-connection banner ----

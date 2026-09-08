@@ -55,6 +55,7 @@ const CLOUD_PROMPTS = {
   mirror: 'Is this image the user\'s own reflection in a mirror (a person holding up a phone toward a mirror)? Return JSON: {"mirror": boolean, "en": one sentence describing what the person is wearing if mirror is true else "", "bn": same in Bangla}.',
   vqa: (query, history) => `The visually impaired user asks: "${query}". Prior conversation context: ${history || 'none'}. Look closely at the image. Directly, accurately and concisely answer the user's specific question (e.g. if they ask if their ID card, pen, phone, powerbank, or medication is visible, check carefully). If visible, state its position (left, ahead, right) and details (text, color, brand, or what surface it is on). If not visible, say clearly that it is not visible. Return JSON: {"en": string, "bn": string, "found": boolean, "item": string, "surface": string, "room_hint": string}.`,
   calibrate_video: (roomName) => `The user is holding the camera while walking through or showing a room called "${roomName || 'unnamed room'}". Analyze this video frame for home layout calibration. Identify any detected furniture or landmark structures (e.g. dressing table, reading table, desk, bed, bookshelf, chair, sofa, wardrobe, door, window, mirror, counter). Note their relative positions (left, ahead, right, near, far). Return JSON: {"room": string, "furniture": [string], "landmarks": [string], "en_feedback": string, "bn_feedback": string}. "en_feedback" should be 1 short sentence announcing newly seen furniture (e.g. "I see a dressing table ahead and a chair on your left").`,
+  placement: (query, rooms) => `The visually impaired user says: "${query}". They are holding up an object or keeping/placing it on a surface in their home (e.g. moneybag, wallet, powerbank, keys, glasses, medicine, watch, phone, charger). Look closely at the camera frame. Identify the exact object (prefer the name the user said if it matches the object, e.g. "moneybag" or "wallet"). Identify which furniture surface it is resting on or held over (e.g. dressing table, reading table, desk, bed, bookshelf, chair, counter). Identify which room this matches from their calibrated rooms: ${rooms || 'Reading Room'}. Return JSON: {"item": string, "surface": string, "room": string, "en": string, "bn": string}. "en" must be a reassuring confirmation sentence like "Got it. I see your moneybag. Remembered: keeping your moneybag on the dressing table in the reading room." "bn" must be the natural spoken Bangla equivalent.`,
 };
 // `task` here is the fully-resolved prompt text (CLOUD_PROMPTS.describe, etc). Astha's own
 // server holds the real Gemini key and is tried first; a personal key pasted into Your
@@ -221,6 +222,42 @@ async function cloudCalibrateVideoFrame(frame, roomName) {
     cloudFail(e);
     return null;
   }
+}
+
+// Voice-First Visual Item Placement & Memory Storage
+async function cloudRecordPlacement(query, frame, rooms) {
+  return withBusy('Remembering…', async () => {
+    const f = frame || captureFrame(896);
+    if (!f) return null;
+    heartSet({ x: 0.5, y: 0.5, mode: 'seek', label: 'Seeing item…' });
+    try {
+      const prompt = typeof CLOUD_PROMPTS.placement === 'function' ? CLOUD_PROMPTS.placement(query, rooms) : CLOUD_PROMPTS.placement;
+      const r = await gemini(prompt, f, { maxTokens: 600 });
+      if (r && (r.en || r.bn)) {
+        announce(r.en, r.bn, 'memory');
+        playEarcon('confirm');
+        haptic('CONFIRM');
+        heartFlash({ x: 0.5, y: 0.5, mode: 'lock', label: r.item || 'Item' });
+        logEvent('Remembered: ' + (r.item || 'item') + ' on ' + (r.surface || 'surface'));
+        if (typeof autoRecordMemory === 'function' && r.item) {
+          const locStr = `on the ${r.surface || 'table'} in the ${r.room || 'reading room'}`;
+          autoRecordMemory({
+            item: r.item,
+            location: locStr,
+            room: r.room || null,
+            furniture: r.surface || null,
+            source: 'Voice placement observation',
+            score: 0.98
+          });
+        }
+        return r;
+      }
+      return null;
+    } catch (e) {
+      cloudFail(e);
+      throw e;
+    }
+  });
 }
 
 // ---- Modes: auto (busy area) vs quiet (only when asked) ----------------------

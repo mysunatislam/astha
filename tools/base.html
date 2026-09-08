@@ -2388,14 +2388,13 @@ function handleQuery(query) {
   if (/^help|commands|সাহায্য/.test(q) || !q) return showCommandHelp();
   if (/privacy|গোপনীয়তা/.test(q)) return togglePrivateMode();
   if (/read all|read book|read document|বই পড়|পুরো.*পড়/.test(q)) return startReader();
-  if (/remember|মনে রাখ/.test(q)) {
-    const match = q.match(/remember\s+(?:my\s+)?(.+?)\s+(?:is\s+)?(?:on|in|at)\s+(.+)/);
-    if (match) { $('memory-item').value = match[1]; $('memory-location').value = match[2]; return saveManualMemory(); }
-    if (/room|ঘর/.test(q)) return startHomeCalibration();
-    const item = worldSorted()[0];
-    if (item) return remember(item.id, item.pos);
-    $('memory-item').focus(); return announce('Enter the object and its last seen location in Personal memory.', 'মেমরিতে জিনিসের নাম ও শেষ দেখা স্থান লিখুন।');
+  // Voice-First Placement & Keeping Memory ("I am keeping my moneybag here", "putting my wallet on table", "remember this", etc.)
+  if (/\b(keeping|putting|placing|leaving|kept|put|placed|left|রাখছি|রাখলাম|রেখেছি)\b/i.test(q) || (/remember|মনে রাখ/.test(q) && !/room|ঘর|face|voice|lock/.test(q))) {
+    if (typeof handleItemPlacementVoice === 'function') {
+      return handleItemPlacementVoice(query);
+    }
   }
+  if (/remember\s+(?:my\s+)?room|ঘর ক্যালিব্রেট|ক্যালিব্রেশন/.test(q)) return startHomeCalibration();
   if (/computer|code|programming|teach|summar|explain|navigate|guide me|কম্পিউটার|কোড|ব্যাখ্যা|সারাংশ|পথ দেখাও/.test(q))
     return announce('That feature needs a future integration. I can describe an image, read text, and recall your saved object or room notes.', 'এই সুবিধা এখনও যুক্ত হয়নি। ছবি বর্ণনা, লেখা পড়া ও সংরক্ষিত নোট মনে করতে পারি।');
   if (/clothes|color|colour|shirt|পোশাক|জামা|কাপড়|কাপড়|রঙ|রং/.test(q)) return inspectClothesAndColor();
@@ -2465,11 +2464,24 @@ function clearMemory() {
 }
 
 function findItems(query) {
-  const q = (query || '').toLocaleLowerCase().replace(/^(where('s| is| are)?( my| the)?|where did i (put|leave|keep)( my| the)?|find( my| the)?|locate( my| the)?|আমার|কোথায়|কোথাই|কই)\s*/i, '').trim();
+  const rawQ = (query || '').toLocaleLowerCase();
+  const q = rawQ.replace(/^(where('s| is| are)?( my| the)?|where did i (put|leave|keep)( my| the)?|find( my| the)?|locate( my| the)?|আমার|কোথায়|কোথাই|কই)\s*/i, '').trim();
   let records = state.memory;
   if (q) {
     const cleanQ = q.replace(/[?!.,।]/g, '').trim();
-    const terms = cleanQ.split(/\s+/).filter(w => w.length >= 2);
+    let terms = cleanQ.split(/\s+/).filter(w => w.length >= 2);
+    if (cleanQ.includes('moneybag') || cleanQ.includes('wallet') || cleanQ.includes('purse') || cleanQ.includes('মানিব্যাগ')) {
+      terms.push('moneybag', 'wallet', 'purse', 'money', 'bag', 'মানিব্যাগ');
+    }
+    if (cleanQ.includes('powerbank') || cleanQ.includes('charger') || cleanQ.includes('পাওয়ার ব্যাংক')) {
+      terms.push('powerbank', 'power bank', 'charger', 'পাওয়ার ব্যাংক');
+    }
+    if (cleanQ.includes('phone') || cleanQ.includes('mobile') || cleanQ.includes('ফোন')) {
+      terms.push('phone', 'mobile', 'cell', 'ফোন');
+    }
+    if (cleanQ.includes('card') || cleanQ.includes('id') || cleanQ.includes('কার্ড')) {
+      terms.push('card', 'id', 'identity', 'কার্ড');
+    }
     records = records.filter(m => {
       const target = (m.item + ' ' + m.location).toLowerCase();
       return target.includes(cleanQ) || terms.some(t => target.includes(t));
@@ -2484,9 +2496,22 @@ function findItems(query) {
   }
   const top = records[0];
   const timeStr = memoryDate(top.time);
-  const locStr = top.location.startsWith('on ') || top.location.startsWith('in ') ? top.location : 'at ' + top.location;
+  let locStr = top.location.startsWith('on ') || top.location.startsWith('in ') || top.location.startsWith('at ') ? top.location : 'at ' + top.location;
+  let locBn = top.location
+    .replace(/\bon the\b/gi, '')
+    .replace(/\bin the\b/gi, '')
+    .replace(/\bat\b/gi, '')
+    .replace(/dressing table/gi, 'ড্রেসিং টেবিলে')
+    .replace(/reading table/gi, 'পড়ার টেবিলে')
+    .replace(/table/gi, 'টেবিলে')
+    .replace(/bed/gi, 'বিছানায়')
+    .replace(/reading room/gi, 'রিডিং রুমে')
+    .replace(/bedroom/gi, 'শোবার ঘরে')
+    .replace(/living room/gi, 'বসার ঘরে')
+    .trim();
+
   const msgEn = `I saw your ${top.item} ${locStr} at ${timeStr}.`;
-  const msgBn = `আপনার ${top.item} ${timeStr}-এ ${locStr}-এ দেখা হয়েছিল।`;
+  const msgBn = `আপনার ${top.item} ${timeStr}-এ ${locBn}-এ দেখা হয়েছিল।`;
   announce(msgEn, msgBn, 'memory');
   playEarcon('confirm');
 }

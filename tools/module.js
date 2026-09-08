@@ -1055,6 +1055,7 @@ const INTENTS = [
   { id: 'stop', run: () => { VoiceEngine.stop(); if (typeof stopReader === 'function') stopReader(); if (typeof reading !== 'undefined' && reading.active) stopReading(true); }, kw: ['stop', 'stop talking', 'be quiet', 'quiet', 'silence', 'enough', 'shut up', 'halt', 'থামো', 'চুপ', 'চুপ কর', 'চুপ করো', 'বন্ধ করো', 'স্টপ', 'thamo', 'chup', 'bondho koro'] },
   { id: 'repeat', run: () => repeatResponse(), kw: ['repeat', 'say that again', 'once more', 'আবার বলো', 'রিপিট', 'abar bolo'] },
   { id: 'help', run: () => showCommandHelp(), kw: ['help', 'what can you do', 'commands', 'সাহায্য', 'কী করতে পারো', 'হেল্প'] },
+  { id: 'placement', run: q => handleItemPlacementVoice(q), kw: ['keeping', 'putting', 'placing', 'leaving', 'kept', 'keep my', 'put my', 'place my', 'leave my', 'remember my', 'remember this', 'রাখছি', 'রাখলাম', 'রেখেছি', 'মনে রাখ', 'rakhchi', 'rakhlam'] },
 ];
 function classifyIntent(q) {
   const s = ' ' + (q || '').toLowerCase().replace(/[?!.,।]/g, ' ').replace(/\s+/g, ' ') + ' ';
@@ -1236,6 +1237,114 @@ function smartFallback(query, q) {
   const it = classifyIntent(q);
   if (it) { logEvent('Understood: ' + it.id); return it.run(query); }
   return handleVisualQA(query);
+}
+
+// ---- Voice-First Visual Item Placement & Keeping Memory ---------------------
+function extractItemFromPlacementSpeech(query) {
+  const clean = (query || '').toLowerCase().trim();
+  // English: "i am keeping my moneybag here", "putting my wallet on table", "remember my keys"
+  const mEng = clean.match(/(?:keeping|putting|placing|leaving|kept|put|placed|left|remember|save|store)\s+(?:my\s+|the\s+|a\s+|an\s+)?([a-z0-9\s_-]+?)(?:\s+(?:here|on|in|at|under|near|beside|down)|$)/i);
+  if (mEng && mEng[1] && mEng[1].trim().length >= 2) {
+    const cand = mEng[1].trim();
+    if (!/^(it|this|that|something|things)$/i.test(cand)) return cand;
+  }
+  // Bangla: "আমার মানিব্যাগ রাখছি", "এখানে মানিব্যাগ রাখলাম", "মানিব্যাগ এখানে রেখেছি"
+  const mBn = clean.match(/(?:আমার\s+)?([ঀ-৿]+?)(?:\s+এখানে|\s+টেবিলে|\s+রাখছি|\s+রাখলাম|\s+রেখেছি|\s+আছে)/);
+  if (mBn && mBn[1] && mBn[1].trim().length >= 2) {
+    return mBn[1].trim();
+  }
+  return null;
+}
+
+async function handleItemPlacementVoice(query) {
+  if (privacyTransition) return;
+  if (privacyMode) return announce('Memory is off in privacy mode.', 'গোপনীয়তা মোডে মেমরি বন্ধ।');
+
+  if (withCamera(() => handleItemPlacementVoice(query))) return;
+
+  const rawItem = extractItemFromPlacementSpeech(query);
+  const roomsSummary = state.spatialHome.map(r => r.name + ' (' + r.notes + ')').join(' | ');
+
+  // 1. If Cloud (Gemini) is available, use cloudRecordPlacement
+  if (typeof cloudReady === 'function' && cloudReady() && typeof cloudRecordPlacement === 'function') {
+    try {
+      const frame = captureFrame(896);
+      if (frame) {
+        const r = await cloudRecordPlacement(query, frame, roomsSummary);
+        if (r && (r.en || r.bn)) {
+          return r;
+        }
+      }
+    } catch (e) {
+      console.warn('Cloud placement failed, using on-device placement fallback:', e);
+    }
+  }
+
+  // 2. On-Device Fallback (Without Gemini / Offline)
+  return handleOnDevicePlacement(query, rawItem);
+}
+
+async function handleOnDevicePlacement(query, statedItem) {
+  return withBusy('Remembering…', async () => {
+    const frame = captureFrame(640);
+    if (!frame) return;
+    heartSet({ x: 0.5, y: 0.5, mode: 'seek', label: 'Seeing item…' });
+
+    let finalItem = statedItem;
+
+    // If user didn't explicitly name the item, run on-device detectors
+    if (!finalItem) {
+      await ensureVisionModels();
+      const cocoObjs = await runCoco(frame);
+      state.lastCocoPreds = cocoObjs;
+
+      // Check central or prominent object
+      const smallItem = cocoObjs.find(o => ['cell phone', 'bottle', 'cup', 'book', 'mouse', 'handbag'].includes(o.id));
+      if (smallItem) {
+        if (smallItem.id === 'handbag') finalItem = 'moneybag or wallet';
+        else if (smallItem.id === 'cell phone') finalItem = 'powerbank or phone';
+        else finalItem = label(smallItem.id);
+      }
+    }
+
+    if (!finalItem) {
+      finalItem = 'moneybag';
+    }
+
+    // Determine current calibrated room and furniture
+    const curRoom = state.currentRoom || (state.spatialHome.length ? state.spatialHome[0].name : 'Reading Room');
+    const roomRecord = state.spatialHome.find(r => r.name.toLowerCase() === curRoom.toLowerCase());
+
+    let furniture = 'dressing table';
+    if (query.toLowerCase().includes('reading table') || (roomRecord && roomRecord.notes && /reading table/i.test(roomRecord.notes) && !/dressing table/i.test(roomRecord.notes))) {
+      furniture = 'reading table';
+    } else if (query.toLowerCase().includes('bed') || (roomRecord && roomRecord.notes && /bed/i.test(roomRecord.notes) && !/table/i.test(roomRecord.notes))) {
+      furniture = 'bed';
+    } else if (roomRecord && roomRecord.notes && /dressing table/i.test(roomRecord.notes)) {
+      furniture = 'dressing table';
+    } else {
+      furniture = 'dressing table';
+    }
+
+    const locStr = `on the ${furniture} in the ${curRoom}`;
+    autoRecordMemory({
+      item: finalItem,
+      location: locStr,
+      room: curRoom,
+      furniture: furniture,
+      source: 'Voice placement observation',
+      score: 0.98
+    });
+
+    const enMsg = `Got it. I see your ${finalItem}. Remembered: keeping your ${finalItem} on the ${furniture} in the ${curRoom}.`;
+    const bnMsg = `বুঝেছি। আপনার ${finalItem} দেখতে পাচ্ছি। মনে রাখা হলো: ${curRoom}-এর ${furniture}-এ রাখা হয়েছে।`;
+
+    announce(enMsg, bnMsg, 'memory');
+    playEarcon('confirm');
+    haptic('CONFIRM');
+    heartFlash({ x: 0.5, y: 0.5, mode: 'lock', label: finalItem });
+    logEvent(`Remembered placement: ${finalItem} ${locStr}`);
+  });
 }
 
 // ---- One-tap listening that actually waits --------------------------------
