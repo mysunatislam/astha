@@ -380,7 +380,7 @@ rep("    const item = worldSorted()[0];\n    if (item) return remember(item.id, 
 # ---- Cloud reasoning, modes, owner ID, secure-connection banner ----
 cloud_js = (HERE / "cloud.js").read_text(encoding="utf-8")
 rep('<p class="prototype-note">Browser prototype · Camera recognition and reading are experimental. Use your usual mobility aid; Astha cannot confirm a safe path.</p>',
-    '<p class="prototype-note">Browser prototype · Recognition and reading run on this device (or through Gemini when you add a key) and are still experimental. Keep using your usual mobility aid.</p>\n'
+    '<p class="prototype-note"><strong>Astha AI Companion</strong> · Voice-activated visual assistant. Speak naturally or ask questions anytime.</p>\n'
     '      <p class="prototype-note" id="secure-banner" hidden style="border-color:var(--danger)"><strong>This page is open on an insecure address.</strong> Chrome will ask for the microphone and camera every time and may block them. Open it as <code>http://localhost:8765</code> or over HTTPS. On Android, use Chrome\'s port forwarding (chrome://inspect on the computer) so the phone sees localhost, or a Cloudflare tunnel.</p>')
 rep('        <button class="chip-btn" id="hf-btn" onclick="toggleHandsFree()" aria-pressed="false" title="Keep listening for “Astha, …”">🎧 <span id="hf-label">Hands-free: off</span></button>\n      </div>',
     '        <button class="chip-btn" id="hf-btn" onclick="toggleHandsFree()" aria-pressed="false" title="Keep listening for “Astha, …”">🎧 <span id="hf-label">Hands-free: off</span></button>\n'

@@ -13,17 +13,71 @@
 // no-op.
 function apiUrl(path) { return (window.ASTHA_API_BASE || '') + path; }
 
+const VoiceEchoFilter = {
+  recentUtterances: [], // array of { text, words, time }
+  recordMachineSpeech(text) {
+    if (!text) return;
+    const clean = String(text).toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ').trim();
+    if (!clean) return;
+    const words = clean.split(/\s+/).filter(w => w.length > 1);
+    const now = Date.now();
+    this.recentUtterances.push({ text: clean, words, time: now });
+    if (this.recentUtterances.length > 20) this.recentUtterances.shift();
+    this.recentUtterances = this.recentUtterances.filter(u => now - u.time < 60000);
+  },
+  isMachineEcho(transcript) {
+    if (!transcript) return false;
+    const clean = String(transcript).toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ').trim();
+    if (!clean) return true;
+    const tWords = clean.split(/\s+/).filter(w => w.length > 1);
+    if (tWords.length === 0) return true;
+
+    const now = Date.now();
+    for (const u of this.recentUtterances) {
+      if (now - u.time > 40000) continue;
+      if (u.text.includes(clean) || clean.includes(u.text)) return true;
+      let matches = 0;
+      for (const w of tWords) {
+        if (u.words.includes(w)) matches++;
+      }
+      if (matches >= 2 && matches / tWords.length >= 0.5) return true;
+      if (tWords.length === 1 && matches === 1 && u.words.includes(tWords[0])) {
+        if (now - u.time < 5000) return true;
+      }
+    }
+    return false;
+  }
+};
+
 const VoiceEngine = {
   mode: null,       // 'audio' | 'synth' | null
   audioEl: null,
+  lastSpokeAt: 0,
+  _currentResolve: null,
   get speaking() {
     if (this.mode === 'audio') return !!this.audioEl && !this.audioEl.paused && !this.audioEl.ended;
     if (this.mode === 'synth') return !!(window.speechSynthesis && window.speechSynthesis.speaking);
     return false;
   },
   stop() {
-    if (this.audioEl) { try { this.audioEl.pause(); if (this.audioEl.src) URL.revokeObjectURL(this.audioEl.src); this.audioEl.src = ''; } catch (e) {} this.audioEl = null; }
-    if (window.speechSynthesis) window.speechSynthesis.cancel();
+    this.lastSpokeAt = Date.now();
+    if (this._currentResolve) {
+      const res = this._currentResolve;
+      this._currentResolve = null;
+      res(false);
+    }
+    if (this.audioEl) {
+      try {
+        this.audioEl.pause();
+        this.audioEl.currentTime = 0;
+        if (this.audioEl.src) URL.revokeObjectURL(this.audioEl.src);
+        this.audioEl.src = '';
+      } catch (e) {}
+      this.audioEl = null;
+    }
+    if (window.speechSynthesis) {
+      try { window.speechSynthesis.cancel(); } catch (e) {}
+    }
     this.mode = null;
   },
   pause() {
@@ -39,6 +93,8 @@ const VoiceEngine = {
   async speak(text, lang) {
     this.stop();
     if (!state.audio || !text) return false;
+    VoiceEchoFilter.recordMachineSpeech(text);
+    this.lastSpokeAt = Date.now();
     const voiceKey = lang === 'bn' ? 'bn-female' : 'en-female';
     try {
       const res = await fetch(apiUrl('/api/speak?text=' + encodeURIComponent(text) + '&voice=' + voiceKey), { credentials: 'include' });
@@ -49,11 +105,14 @@ const VoiceEngine = {
         audio.playbackRate = rate;
         this.mode = 'audio'; this.audioEl = audio;
         const ok = await new Promise(resolve => {
-          audio.onended = () => resolve(true);
-          audio.onerror = () => resolve(false);
+          this._currentResolve = resolve;
+          audio.onended = () => { this.lastSpokeAt = Date.now(); resolve(true); };
+          audio.onerror = () => { this.lastSpokeAt = Date.now(); resolve(false); };
           audio.play().catch(() => resolve(false));
         });
+        this._currentResolve = null;
         if (this.audioEl === audio) { this.mode = null; this.audioEl = null; }
+        this.lastSpokeAt = Date.now();
         if (ok) return true;
         // fall through to the browser voice if playback itself failed
       }
@@ -63,11 +122,14 @@ const VoiceEngine = {
     if (!u) return false;
     this.mode = 'synth';
     const ok = await new Promise(resolve => {
-      u.onend = () => resolve(true);
-      u.onerror = () => resolve(false);
+      this._currentResolve = resolve;
+      u.onend = () => { this.lastSpokeAt = Date.now(); resolve(true); };
+      u.onerror = () => { this.lastSpokeAt = Date.now(); resolve(false); };
       window.speechSynthesis.speak(u);
     });
+    this._currentResolve = null;
     if (this.mode === 'synth') this.mode = null;
+    this.lastSpokeAt = Date.now();
     return ok;
   },
 };
@@ -718,67 +780,201 @@ async function ocrPage() {
   finally { reading.ocrBusy = false; }
 }
 
-// ---- Hands-free ("Astha, …") ---------------------------------------------
-const hf = { on: false, rec: null, poll: null, lastCommandAt: 0, starting: false, lastSpeakingAt: 0 };
-const WAKE_RE = /(^|[\s,.!?])(astha|asta|ashtha|aastha|astar|আস্থা|আসথা|আস্তা)(?=$|[\s,.!?])/i;
-function toggleHandsFree() { hf.on ? stopHandsFree() : startHandsFree(); }
-function startHandsFree() {
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR) return announce(t('voice_unavailable'), tBn('voice_unavailable'), 'voice');
-  if (privacyMode) return announce('Hands-free listening is off in privacy mode.', 'গোপনীয়তা মোডে হ্যান্ডস-ফ্রি বন্ধ।', 'voice');
-  hf.on = true; hf.lastCommandAt = Date.now();
-  $('hf-btn').setAttribute('aria-pressed', 'true'); $('hf-label').textContent = 'Hands-free: on';
-  playEarcon('confirm');
-  announce('Hands-free mode is on. Say “Astha”, then what you need. For example: Astha, read this. Say “Astha, sleep” to stop.',
-    'হ্যান্ডস-ফ্রি মোড চালু। বলুন “আস্থা”, তারপর কী চাই বলুন। যেমন: আস্থা, এটা পড়ো। বন্ধ করতে বলুন “আস্থা, ঘুমাও”।', 'voice');
-  logEvent('Hands-free on');
-  if (state.source !== 'camera' && !state.cameraPending) toggleCamera();
-  hf.poll = setInterval(hfPoll, 300);
-}
-function stopHandsFree(silent) {
-  hf.on = false; clearInterval(hf.poll); hf.poll = null;
-  if (hf.rec) { try { hf.rec.abort(); } catch (e) {} hf.rec = null; }
-  $('hf-btn').setAttribute('aria-pressed', 'false'); $('hf-label').textContent = 'Hands-free: off';
-  if (!state.listening) { $('mic').classList.remove('listening'); $('mic-label').textContent = t('mic_idle'); }
-  if (!silent) { announce('Hands-free mode is off. Tap the microphone when you need me.', 'হ্যান্ডস-ফ্রি মোড বন্ধ। দরকার হলে মাইক্রোফোন চাপুন।', 'voice'); logEvent('Hands-free off'); }
-}
-function hfPoll() {
-  if (!hf.on) return;
-  const now = Date.now();
-  const speaking = !!(window.speechSynthesis && window.speechSynthesis.speaking);
-  if (speaking) hf.lastSpeakingAt = now;
-  // Do not listen to our own voice: pause recognition while Astha speaks, and during a one-tap query.
-  if (speaking || state.listening) { if (hf.rec) { try { hf.rec.abort(); } catch (e) {} hf.rec = null; } return; }
-  if (!hf.rec && !hf.starting && now - hf.lastSpeakingAt > 700) hfStart();
-}
-function hfStart() {
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  hf.starting = true;
-  try {
-    const rec = new SR();
-    rec.lang = sttLang(); rec.continuous = true; rec.interimResults = false; rec.maxAlternatives = 1;
-    rec.onresult = e => { for (let i = e.resultIndex; i < e.results.length; i++) if (e.results[i].isFinal) hfHandle(e.results[i][0].transcript); };
-    rec.onerror = ev => {
-      if (ev.error === 'not-allowed' || ev.error === 'service-not-allowed') { stopHandsFree(true); announce('Microphone access was denied, so hands-free mode is off.', 'মাইক্রোফোনের অনুমতি নেই, তাই হ্যান্ডস-ফ্রি বন্ধ।', 'voice'); }
-    };
-    rec.onend = () => { if (hf.rec === rec) hf.rec = null; };
-    rec.start(); hf.rec = rec;
-    $('mic').classList.add('listening'); $('mic-label').textContent = 'Hands-free · say “Astha…”';
-  } catch (e) { console.warn('hands-free start', e); }
-  finally { setTimeout(() => { hf.starting = false; }, 600); }
-}
-function hfHandle(text) {
-  const q = (text || '').trim(); if (!q) return;
-  const hasWake = WAKE_RE.test(q);
-  const followUp = Date.now() - hf.lastCommandAt < 10000;
-  if (!hasWake && !followUp) return;
-  const cmd = hasWake ? q.replace(/^[\s\S]*?(astha|asta|ashtha|aastha|astar|আস্থা|আসথা|আস্তা)[,.!?\s]*/i, '') : q;
-  hf.lastCommandAt = Date.now();
-  playEarcon('click');
-  if (/^(sleep|go to sleep|stop listening|hands.?free off|ঘুমাও|শোনা বন্ধ)/i.test(cmd.trim())) return stopHandsFree();
-  if (!cmd.trim()) return announce('Yes? I am listening.', 'বলুন, শুনছি।', 'voice');
-  handleQuery(cmd);
-}
+// ---- Voice-Led Siri Engine (Always Listening, Acoustic Echo Filter, Instant Stop) ---
+const STOP_TALKING_REGEX = /\b(stop|stop talking|shut up|be quiet|quiet|silence|pause|enough|halt|don't speak|dont speak|stop reading|থামো|চুপ|চুপ কর|চুপ করো|থামুন|কথা বন্ধ|পড়া বন্ধ|বন্ধ করো|স্টপ|thamo|chup|bondho koro|bondho kor)\b/i;
+const WAKE_RE = /(^|[\s,.!?])(astha|asta|ashtha|aastha|astar|হে আস্থা|আস্থা|আসথা|আস্তা)(?=$|[\s,.!?])/i;
+
+const SiriVoice = {
+  enabled: true,
+  active: false,
+  rec: null,
+  restartTimer: null,
+  lastCommandAt: 0,
+  lastBargeInAt: 0,
+  starting: false,
+
+  get on() { return this.active; },
+  set on(v) { if (v) this.start(); else this.stop(); },
+
+  start() {
+    this.enabled = true;
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) return;
+    if (privacyMode) return;
+    if (this.active && this.rec) return;
+    this.active = true;
+    this.lastCommandAt = Date.now();
+    const btn = $('hf-btn');
+    if (btn) btn.setAttribute('aria-pressed', 'true');
+    const lbl = $('hf-label');
+    if (lbl) lbl.textContent = 'Voice: Siri-Active';
+    $('mic')?.classList.add('listening');
+    $('mic-label') && ($('mic-label').textContent = 'Listening (Voice active)…');
+    this._listen();
+  },
+
+  stop(silent) {
+    this.active = false;
+    clearTimeout(this.restartTimer);
+    if (this.rec) {
+      try { this.rec.abort(); } catch (e) {}
+      this.rec = null;
+    }
+    const btn = $('hf-btn');
+    if (btn) btn.setAttribute('aria-pressed', 'false');
+    const lbl = $('hf-label');
+    if (lbl) lbl.textContent = 'Voice: Paused';
+    if (!state.listening) {
+      $('mic')?.classList.remove('listening');
+      $('mic-label') && ($('mic-label').textContent = t('mic_idle') || 'Microphone idle');
+    }
+    if (!silent) logEvent('Voice listening paused');
+  },
+
+  toggle() {
+    if (this.active) {
+      this.enabled = false;
+      this.stop();
+    } else {
+      this.start();
+    }
+  },
+
+  _listen() {
+    if (!this.active || !this.enabled) return;
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) return;
+    if (this.rec) {
+      try { this.rec.abort(); } catch (e) {}
+      this.rec = null;
+    }
+
+    try {
+      const rec = new SR();
+      rec.lang = sttLang();
+      rec.continuous = true;
+      rec.interimResults = true;
+      rec.maxAlternatives = 1;
+
+      rec.onresult = (e) => {
+        let interimText = '';
+        let finalText = '';
+
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          const res = e.results[i];
+          const transcript = res[0] ? res[0].transcript : '';
+          if (res.isFinal) finalText += ' ' + transcript;
+          else interimText += ' ' + transcript;
+        }
+
+        const currentSpeech = (finalText || interimText).trim();
+        if (!currentSpeech) return;
+
+        // 1. INSTANT STOP / BARGE-IN CHECK (Evaluated on BOTH interim and final for <50ms response)
+        if (STOP_TALKING_REGEX.test(currentSpeech)) {
+          if (VoiceEngine.speaking || (typeof reader !== 'undefined' && reader.active) || (typeof reading !== 'undefined' && reading.active)) {
+            VoiceEngine.stop();
+            if (typeof stopReader === 'function') stopReader();
+            if (typeof reading !== 'undefined' && reading.active) stopReading(true);
+            this.lastBargeInAt = Date.now();
+            setCaption(t('agent_voice') || 'Astha', 'Stopped speech.', 'voice', null, 'কথা থামানো হয়েছে।');
+            playEarcon('click');
+            return;
+          }
+        }
+
+        // If we recently barged in (< 1200ms ago), ignore residual fragments of the stop utterance
+        if (Date.now() - this.lastBargeInAt < 1200) return;
+
+        // 2. ACOUSTIC ECHO & MACHINE VOICE FILTER
+        // If the machine is actively outputting sound or just spoke within 800ms:
+        const machineSpeaking = VoiceEngine.speaking || (Date.now() - VoiceEngine.lastSpokeAt < 800);
+        if (machineSpeaking) {
+          // If the mic picks up what the TTS engine just generated, drop it immediately
+          if (VoiceEchoFilter.isMachineEcho(currentSpeech)) return;
+          // While machine is actively speaking, drop all ambient loopback unless user explicitly said "stop"
+          if (VoiceEngine.speaking) return;
+        }
+
+        // Drop any delayed echo of recent machine utterances
+        if (VoiceEchoFilter.isMachineEcho(currentSpeech)) return;
+
+        // 3. HUMAN VOICE COMMAND DISPATCH (on final utterance)
+        if (finalText.trim()) {
+          this.handleVoiceInput(finalText.trim());
+        }
+      };
+
+      rec.onerror = (ev) => {
+        if (ev.error === 'no-speech') return;
+        if (ev.error === 'not-allowed' || ev.error === 'service-not-allowed') {
+          console.warn('Microphone permission blocked or service not allowed');
+          this.stop(true);
+          return;
+        }
+      };
+
+      rec.onend = () => {
+        this.rec = null;
+        if (this.active && this.enabled && !state.listening) {
+          clearTimeout(this.restartTimer);
+          this.restartTimer = setTimeout(() => {
+            if (this.active && this.enabled && !state.listening) this._listen();
+          }, 300);
+        }
+      };
+
+      rec.start();
+      this.rec = rec;
+      $('mic')?.classList.add('listening');
+      $('mic-label') && ($('mic-label').textContent = 'Listening (Voice active)…');
+    } catch (err) {
+      console.warn('SiriVoice start error:', err);
+      clearTimeout(this.restartTimer);
+      this.restartTimer = setTimeout(() => {
+        if (this.active && this.enabled && !state.listening) this._listen();
+      }, 1000);
+    }
+  },
+
+  handleVoiceInput(rawText) {
+    const q = (rawText || '').trim();
+    if (!q) return;
+    if (VoiceEchoFilter.isMachineEcho(q)) return;
+
+    const hasWake = WAKE_RE.test(q);
+    const timeSinceLastCmd = Date.now() - this.lastCommandAt;
+    const isFollowUp = timeSinceLastCmd < 15000;
+    const recognizedIntent = classifyIntent(q);
+
+    // If wake word present, or within conversation window, or direct known intent:
+    if (hasWake || isFollowUp || recognizedIntent) {
+      let cmd = q;
+      if (hasWake) {
+        cmd = q.replace(/^[\s\S]*?(astha|asta|ashtha|aastha|astar|হে আস্থা|আস্থা|আসথা|আস্তা)[,.!?\s]*/i, '').trim();
+      }
+      this.lastCommandAt = Date.now();
+      playEarcon('click');
+
+      if (/^(sleep|go to sleep|stop listening|hands.?free off|voice off|ঘুমাও|শোনা বন্ধ)/i.test(cmd)) {
+        this.enabled = false;
+        this.stop();
+        return announce('Astha voice listening paused. Say “Astha” or tap the microphone when you need me.', 'ভয়েস লিসেনিং সাময়িক বন্ধ। দরকার হলে বলুন বা মাইক্রোফোন চাপুন।', 'voice');
+      }
+
+      if (!cmd) {
+        return announce('Yes, I am listening. How can I help you?', 'বলুন, শুনছি। কীভাবে সাহায্য করতে পারি?', 'voice');
+      }
+
+      handleQuery(cmd);
+    }
+  }
+};
+
+function toggleHandsFree() { SiriVoice.toggle(); }
+function startHandsFree() { SiriVoice.start(); }
+function stopHandsFree(silent) { SiriVoice.stop(silent); }
+const hf = SiriVoice;
 
 // ---- "How do I look?" ---------------------------------------------------
 function howDoILook() {
@@ -838,9 +1034,11 @@ const INTENTS = [
   { id: 'clothes', run: () => inspectClothesAndColor(), kw: ['wearing', 'clothes', 'cloth', 'dress', 'shirt', 'colour', 'color', 'পরেছি', 'পোশাক', 'জামা', 'কাপড়', 'রঙ', 'রং', 'ক্লথ', 'কালার', 'porechi', 'poreci', 'jama', 'kapor', 'poshak', 'rong', 'rang'] },
   { id: 'mirror', run: () => howDoILook(), kw: ['how do i look', 'how am i looking', 'mirror', 'looking good', 'কেমন লাগছে', 'আয়না', 'kemon lagche', 'kemon lagse', 'ayna'] },
   { id: 'safety', run: () => safetyCheck(), kw: ['obstacle', 'is it safe', 'danger', 'path clear', 'stairs', 'বাধা', 'বিপদ', 'নিরাপদ', 'সিঁড়ি', 'badha', 'bipod', 'nirapod', 'siri'] },
+  { id: 'camera_start', run: () => { if (!state.source) toggleCamera(); announce('Camera started.', 'ক্যামেরা চালু হয়েছে।', 'system'); }, kw: ['start camera', 'open camera', 'turn on camera', 'camera on', 'start video', 'start seeing', 'ক্যামেরা চালু করো', 'ক্যামেরা খোলো', 'ক্যামেরা অন', 'camera start', 'camera open'] },
+  { id: 'camera_stop', run: () => { if (state.source === 'camera') stopCamera(); announce('Camera stopped.', 'ক্যামেরা বন্ধ করা হয়েছে।', 'system'); }, kw: ['stop camera', 'close camera', 'turn off camera', 'camera off', 'ক্যামেরা বন্ধ করো', 'ক্যামেরা অফ', 'camera stop', 'stop video'] },
   { id: 'screen', run: () => eyeWhatsOnScreen(), kw: ['on my screen', 'my screen', 'which app', 'which tab', 'which window', 'where am i', 'স্ক্রিন', 'কোন অ্যাপ', 'কোন ট্যাব', 'কোথায় আছি'] },
   { id: 'error', run: () => eyeReadError(), kw: ['error', 'terminal output', 'went wrong', 'এরর', 'ভুলটা', 'ভুল কী'] },
-  { id: 'stop', run: () => { if (reading.active) stopReading(); else stopAllSpeech(); }, kw: ['stop', 'be quiet', 'silence', 'enough', 'থামো', 'চুপ', 'বন্ধ করো', 'স্টপ', 'thamo', 'chup', 'bondho koro'] },
+  { id: 'stop', run: () => { VoiceEngine.stop(); if (typeof stopReader === 'function') stopReader(); if (typeof reading !== 'undefined' && reading.active) stopReading(true); }, kw: ['stop', 'stop talking', 'be quiet', 'quiet', 'silence', 'enough', 'shut up', 'halt', 'থামো', 'চুপ', 'চুপ কর', 'চুপ করো', 'বন্ধ করো', 'স্টপ', 'thamo', 'chup', 'bondho koro'] },
   { id: 'repeat', run: () => repeatResponse(), kw: ['repeat', 'say that again', 'once more', 'আবার বলো', 'রিপিট', 'abar bolo'] },
   { id: 'help', run: () => showCommandHelp(), kw: ['help', 'what can you do', 'commands', 'সাহায্য', 'কী করতে পারো', 'হেল্প'] },
 ];
@@ -877,6 +1075,7 @@ function toggleListening() {
   if (!SR) { setCaption(t('agent_voice'), t('voice_unavailable'), 'voice'); speak(t('voice_unavailable'), tBn('voice_unavailable')); return; }
   if (privacyMode || privacyTransition) return announce('Voice recognition is off in privacy mode. Type your request.', 'গোপনীয়তা মোডে অনলাইন কণ্ঠ শনাক্তকরণ বন্ধ। অনুরোধ লিখুন।');
   if (reader.active) pauseReader(); else VoiceEngine.stop();
+  if (typeof SiriVoice !== 'undefined' && SiriVoice.active) SiriVoice.stop(true);
   state.listening = true;
   $('mic').setAttribute('aria-label', 'Stop listening'); $('mic').setAttribute('aria-pressed', 'true'); $('mic').classList.add('listening');
   $('mic-label').textContent = t('mic_listening');
@@ -913,11 +1112,37 @@ function toggleListening() {
   } catch (e) { console.warn(e); stopListening(); }
 }
 
+function stopListening() {
+  state.listening = false;
+  clearTimeout(listenTimer);
+  if (recognizer) { try { recognizer.abort(); } catch (e) {} recognizer = null; }
+  $('mic')?.setAttribute('aria-label', 'Astha listening');
+  $('mic')?.setAttribute('aria-pressed', 'false');
+  $('mic')?.classList.remove('listening');
+  $('mic-label') && ($('mic-label').textContent = t('mic_idle') || 'Microphone idle');
+  if (typeof SiriVoice !== 'undefined' && SiriVoice.enabled) {
+    setTimeout(() => { SiriVoice.start(); }, 200);
+  }
+}
+
 function companionBoot() {
   state.relabel = {};
   populateVoices();
   window.speechSynthesis?.addEventListener('voiceschanged', populateVoices);
-  window.addEventListener('pagehide', () => { if (hf.on) stopHandsFree(true); });
+  window.addEventListener('pagehide', () => { if (typeof SiriVoice !== 'undefined') SiriVoice.stop(true); });
+
+  // Voice-first activation: start Siri voice recognition on startup
+  setTimeout(() => {
+    if (typeof SiriVoice !== 'undefined') SiriVoice.start();
+  }, 400);
+
+  const unlockAudioAndVoice = () => {
+    if (typeof SiriVoice !== 'undefined' && !SiriVoice.active && SiriVoice.enabled) {
+      SiriVoice.start();
+    }
+  };
+  window.addEventListener('pointerdown', unlockAudioAndVoice, { once: true });
+  window.addEventListener('keydown', unlockAudioAndVoice, { once: true });
 }
 
 /* =====================================================================

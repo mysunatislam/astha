@@ -815,11 +815,11 @@
       </div>
     </div>
 
-  <div class="card"><details><summary>What this prototype can do</summary><p>Camera object recognition, Bangla and English OCR, spoken responses, document reading, and personal object notes.</p><p>Android background voice activation, verified mobility guidance, computer control, face recognition, custom voices, and emergency delivery are future integrations.</p></details></div></aside>
+  <div class="card"><details><summary>Voice Commands & Assistant Guide</summary><p>Always-listening Siri mode: Say “Astha” or ask directly: “What is in front of me?”, “Read this”, “Check clothes”, “Where are my keys?”. Say “Stop talking” to silence instantly.</p></details></div></aside>
 </main>
 
 <footer>
-  <span data-i18n="footer">Astha Vision · Accessible Companion Prototype · Real In-Browser Inference.</span>
+  <span data-i18n="footer">Astha — Voice-Led AI Visual Companion.</span>
 </footer>
 
 <!-- TensorFlow.js + COCO-SSD -->
@@ -834,7 +834,7 @@
    ===================================================================== */
 const I18N = {
   en: {
-    brand: 'Astha Vision', badge_clinical: 'Prototype',
+    brand: 'Astha', badge_clinical: 'AI Visual Companion',
     tagline: 'Real-time AI visual companion for blind and low-vision users',
     voice_on: 'Voice on', voice_off: 'Voice off', hw_panel: 'Hardware panel',
     viewport_empty: 'Start the camera, upload a photo, or pick a demo scene.',
@@ -924,7 +924,7 @@ const I18N = {
     and: 'and',
   },
   bn: {
-    brand: 'আস্থা ভিশন', badge_clinical: 'ক্লিনিকাল গ্রেড',
+    brand: 'আস্থা', badge_clinical: 'এআই সঙ্গী',
     tagline: 'দৃষ্টিহীন ও স্বল্পদৃষ্টি মানুষের জন্য রিয়েল-টাইম এআই সঙ্গী',
     voice_on: 'কণ্ঠস্বর চালু', voice_off: 'কণ্ঠস্বর বন্ধ', hw_panel: 'হার্ডওয়্যার প্যানেল',
     viewport_empty: 'ক্যামেরা চালু করুন, ছবি আপলোড করুন, অথবা একটি ডেমো দৃশ্য বেছে নিন।',
@@ -970,7 +970,7 @@ const I18N = {
     fall_title: 'পতন সিমুলেট', fall_sub: 'MPU6050 · ২.২ g-এর বেশি আঘাত', battery_title: 'ব্যাটারি', battery_sub: 'LiPo 3.7 V · প্রায় ১২ ঘণ্টা স্ট্যান্ডবাই',
     backend_title: 'ব্যাকএন্ড সংযোগ', backend_standalone: 'স্বতন্ত্র', backend_help: 'এই ওয়েব সংস্করণ নিজে নিজেই সম্পূর্ণ কাজ করে। আপনার ব্যাকএন্ড চালু থাকলে ক্লাউড রিজনিংয়ের জন্য এখানে যুক্ত করুন।',
     backend_test: 'পরীক্ষা', backend_connecting: 'সংযোগ হচ্ছে…', backend_connected: 'সংযুক্ত', backend_offline: 'অফলাইন · স্বতন্ত্র মোড',
-    footer: 'আস্থা ভিশন · ক্লিনিকাল অ্যাক্সেসিবিলিটি ইন্টারফেস · রিয়েল অন-ডিভাইস ইনফারেন্স।',
+    footer: 'আস্থা — কণ্ঠচালিত এআই ভিজ্যুয়াল সঙ্গী।',
     agent_vision: 'ভিশন এজেন্ট', agent_ocr: 'পাঠ এজেন্ট', agent_memory: 'স্মৃতি এজেন্ট', agent_safety: 'নিরাপত্তা এজেন্ট', agent_voice: 'কণ্ঠ', agent_system: 'সিস্টেম', agent_fall: 'পতন সেন্সর',
     lang_selected: 'বাংলা নির্বাচিত হয়েছে।',
     cam_starting: 'ক্যামেরা চালু হচ্ছে…', cam_on: 'ক্যামেরা চালু। ভিশন মডেল লোড হচ্ছে…',
@@ -1425,14 +1425,14 @@ function showSource(kind) {
 
 
 async function ensureVisionModels() {
+  if (typeof cloudReady === 'function' && cloudReady()) return true;
+  if (engine.coco.status === 'ready') return true;
   const jobs = [];
   if (engine.coco.status !== 'ready') jobs.push(loadCoco());
-  if (engine.clip.status !== 'ready') jobs.push(loadClip());
   if (!jobs.length) return true;
-  const results = await Promise.allSettled(jobs);
-  const ok = engine.coco.status === 'ready' || engine.clip.status === 'ready';
-  if (engine.coco.status === 'ready' && engine.clip.status === 'ready') logEvent(t('log_models'));
-  if (!ok) { setCaption(t('agent_system'), t('models_failed'), 'system', 'danger', tBn('models_failed')); speak(t('models_failed'), tBn('models_failed')); }
+  await Promise.allSettled(jobs);
+  const ok = engine.coco.status === 'ready';
+  if (ok) logEvent(t('log_models'));
   return ok;
 }
 
@@ -2335,7 +2335,18 @@ function handleQuery(query) {
   if (privacyTransition) return;
   const q = query.toLowerCase().replace(/^(?:hey\s+)?astha[,.!\s]*/i, '').replace(/^(?:হেই\s+)?আস্থা[,।\s]*/, '').trim();
   if (!privacyMode) logEvent('Request: ' + query);
-  if (/^(stop|cancel|quiet|বন্ধ করো|থামো)[.!।]?$/.test(q)) return stopAllSpeech();
+  if (/\b(stop|stop talking|cancel|quiet|be quiet|shut up|silence|pause|enough|halt|বন্ধ করো|থামো|চুপ|চুপ কর|চুপ করো|থামুন|কথা বন্ধ|পড়া বন্ধ|স্টপ|thamo|chup|bondho koro)\b/i.test(q)) {
+    if (typeof reading !== 'undefined' && reading.active) return stopReading(true);
+    return stopAllSpeech();
+  }
+  if (/\b(start camera|open camera|turn on camera|camera on|start video|start seeing|ক্যামেরা চালু করো|ক্যামেরা খোলো|ক্যামেরা অন|camera start|camera open)\b/i.test(q)) {
+    if (!state.source) toggleCamera();
+    return announce('Camera started.', 'ক্যামেরা চালু হয়েছে।', 'system');
+  }
+  if (/\b(stop camera|close camera|turn off camera|camera off|ক্যামেরা বন্ধ করো|ক্যামেরা অফ|camera stop|stop video)\b/i.test(q)) {
+    if (state.source === 'camera') stopCamera();
+    return announce('Camera stopped.', 'ক্যামেরা বন্ধ করা হয়েছে।', 'system');
+  }
   if (/pause|পড়া থামাও/.test(q)) return pauseReader();
   if (/resume|continue reading|আবার পড়ো/.test(q)) return resumeReader();
   if (/repeat|আবার বলো/.test(q)) return repeatResponse();

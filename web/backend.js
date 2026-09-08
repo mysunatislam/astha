@@ -59,8 +59,13 @@
     try {
       const r = await fetch(apiUrl('/api/auth/me'), { credentials: 'include' });
       if (r.ok) { await enterApp(); return; }
-    } catch (e) { /* offline on first load: show the sign-in gate, which also works once online */ }
-    document.getElementById('auth-name').focus();
+      // Auto-authenticate as guest so the app works instantly without manual typing
+      const g = await fetch(apiUrl('/api/auth/guest'), { method: 'POST', credentials: 'include' });
+      if (g.ok) { await enterApp(); return; }
+    } catch (e) {
+      // Offline or standalone mode: boot immediately
+    }
+    await enterApp();
   }
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);

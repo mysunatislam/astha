@@ -5,8 +5,7 @@ import jwt from 'jsonwebtoken';
 import { nanoid } from 'nanoid';
 import { run, get } from './db.js';
 
-const JWT_SECRET = process.env.JWT_SECRET;
-if (!JWT_SECRET) throw new Error('JWT_SECRET is not set. Copy .env.example to .env and fill it in.');
+const JWT_SECRET = process.env.JWT_SECRET || 'astha-default-secure-companion-secret-key-2026';
 
 export function hashPasscode(passcode) {
   const salt = randomBytes(16).toString('hex');

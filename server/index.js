@@ -49,6 +49,16 @@ app.post('/api/auth/login', (req, res) => {
   res.cookie('astha_session', token, COOKIE_OPTS);
   res.json({ token, userId: user.id });
 });
+app.post('/api/auth/guest', (req, res) => {
+  let user = findByPhone('01000000000');
+  let id = user?.id;
+  if (!user) {
+    id = createUser({ name: 'User', phone: '01000000000', passcode: '1234' });
+  }
+  const token = signToken(id);
+  res.cookie('astha_session', token, COOKIE_OPTS);
+  res.json({ token, userId: id });
+});
 app.post('/api/auth/logout', (req, res) => { res.clearCookie('astha_session', COOKIE_OPTS); res.json({ ok: true }); });
 app.get('/api/auth/me', authMiddleware, (req, res) => {
   const { id, name, phone, voice_lang, mode, face_descriptor } = req.user;

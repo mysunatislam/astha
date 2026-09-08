@@ -2,8 +2,7 @@
 // client, so the phone app never needs to know or store it. Mirrors the prompt contract the
 // frontend already expects (see web/cloud-client.js): {en, bn, ...task-specific fields}.
 // 'gemini-flash-latest' auto-resolves to Google's current flash model, so this list keeps
-// working as models are retired -- pin exact versions only as an explicit fallback.
-const MODELS = ['gemini-flash-latest', 'gemini-3.5-flash', 'gemini-3-flash-preview'];
+const MODELS = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-flash-latest', 'gemini-3.5-flash', 'gemini-3-flash-preview'];
 const SYSTEM = 'You are Astha, a warm and precise visual companion for a blind user in Bangladesh. Speak as "I". Be concrete: colours, materials, printed text, positions (left, ahead, right) and rough distance. Never invent anything you cannot actually see; if unsure, say you are not sure. Do not describe people as animals or objects; say "a person" when a human is visible. Keep spoken answers to one to three short sentences unless transcribing. Return only the requested JSON. "bn" must be natural spoken Bangla with the same meaning as "en".';
 
 export const PROMPTS = {
