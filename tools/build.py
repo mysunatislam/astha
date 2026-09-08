@@ -90,8 +90,9 @@ rep("        const { hits } = await runClipZones(frame);\n        if (!loop.acti
     "        const { hits, center } = await runClipZones(frame);\n        if (!loop.active || state.liveLoop !== loop) return;\n        const at = Date.now();\n        state.lastClipHits = hits.map(h => Object.assign(h, { at }));\n        state.lastCenter = center;\n        ingest(hits);\n        afterLiveUpdate();\n        await liveRefineAndMirror(frame);")
 rep("    setCaption(t('new_title'), msgEn, 'vision', null, msgBn);\n    speak(msgEn, msgBn);\n  }\n}\nfunction showHazard",
     "    setCaption(t('new_title'), msgEn, 'vision', null, msgBn);\n    speak(msgEn, msgBn);\n    heartPointAt(fresh[0]);\n  }\n}\nfunction showHazard")
-rep("finally { state.busy=false; $('companion-main').setAttribute('aria-busy','false'); if(state.source==='camera')startLiveLoop(); }",
-    "finally { state.busy=false; $('companion-main').setAttribute('aria-busy','false'); if(state.source==='camera' && !reading.active)startLiveLoop(); }")
+old_busy = "finally { state.busy=false; $('companion-main').setAttribute('aria-busy','false'); if(state.source==='camera')startLiveLoop(); }"
+if old_busy in html:
+    rep(old_busy, "finally { state.busy=false; $('companion-main').setAttribute('aria-busy','false'); if(state.source==='camera' && !reading.active)startLiveLoop(); }")
 
 # ---- describe: refinement, mirror, brand-aware labels, heart ----
 rep("    const objs = worldSorted();\n    const now = Date.now(); objs.forEach(o => state.announced.set(o.id, now));\n    if (!objs.length) { setCaption(t('describe_title'), t('nothing_seen'), 'vision', null, tBn('nothing_seen'));",

@@ -189,34 +189,35 @@ async function cloudScreen(frame) { return gemini(CLOUD_PROMPTS.screen, frame, {
 
 // Conversational Visual Question Answering (VQA)
 async function cloudVisualQA(query, frame, history = '') {
-  return withBusy('Answering…', async () => {
-    const f = frame || captureFrame(896);
-    if (!f) return null;
-    heartSet({ x: 0.5, y: 0.5, mode: 'seek', label: 'Looking…' });
-    try {
-      const prompt = typeof CLOUD_PROMPTS.vqa === 'function' ? CLOUD_PROMPTS.vqa(query, history) : CLOUD_PROMPTS.vqa;
-      const r = await gemini(prompt, f, { maxTokens: 900 });
-      if (r && (r.en || r.bn)) {
-        announce(r.en, r.bn, 'vision');
-        playEarcon('confirm');
-        heartFlash({ x: 0.5, y: 0.5, mode: 'lock', label: r.item || 'Answer' });
-        logEvent('Answered: ' + (r.en || '').slice(0, 50));
-        if (typeof autoRecordMemory === 'function' && r.found && r.item) {
-          autoRecordMemory({
-            item: r.item,
-            location: (r.surface ? 'On ' + r.surface : '') + (r.room_hint ? ' in ' + r.room_hint : (r.surface ? '' : 'In front of you')),
-            source: 'Visual question answer',
-            score: 0.95
-          });
-        }
-        return r;
+  const f = frame || captureFrame(896);
+  if (!f) return null;
+  heartSet({ x: 0.5, y: 0.5, mode: 'seek', label: 'Looking…' });
+  try {
+    const prompt = typeof CLOUD_PROMPTS.vqa === 'function' ? CLOUD_PROMPTS.vqa(query, history) : CLOUD_PROMPTS.vqa;
+    const r = await Promise.race([
+      gemini(prompt, f, { maxTokens: 600 }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Cloud VQA timeout')), 3500))
+    ]);
+    if (r && (r.en || r.bn)) {
+      announce(r.en, r.bn, 'vision');
+      playEarcon('confirm');
+      heartFlash({ x: 0.5, y: 0.5, mode: 'lock', label: r.item || 'Answer' });
+      logEvent('Answered: ' + (r.en || '').slice(0, 50));
+      if (typeof autoRecordMemory === 'function' && r.found && r.item) {
+        autoRecordMemory({
+          item: r.item,
+          location: (r.surface ? 'On ' + r.surface : '') + (r.room_hint ? ' in ' + r.room_hint : (r.surface ? '' : 'In front of you')),
+          source: 'Visual question answer',
+          score: 0.95
+        });
       }
-      return null;
-    } catch (e) {
-      cloudFail(e);
-      throw e;
+      return r;
     }
-  });
+    return null;
+  } catch (e) {
+    // Return null silently on cloud failure or timeout so on-device fallback runs without delay
+    return null;
+  }
 }
 
 // Live Video Walkthrough Room Calibration Frame Analyzer
@@ -275,7 +276,10 @@ async function cloudRecordPassivePlacement(frame, rooms) {
   if (!f) return null;
   try {
     const prompt = typeof CLOUD_PROMPTS.passive_placement === 'function' ? CLOUD_PROMPTS.passive_placement(rooms) : CLOUD_PROMPTS.passive_placement;
-    const r = await gemini(prompt, f, { maxTokens: 400 });
+    const r = await Promise.race([
+      gemini(prompt, f, { maxTokens: 400 }),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Passive placement timeout')), 2500))
+    ]);
     if (r && r.found && r.item && r.surface) {
       return r;
     }

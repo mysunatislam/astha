@@ -958,11 +958,12 @@ const SiriVoice = {
 
     const hasWake = WAKE_RE.test(q);
     const timeSinceLastCmd = Date.now() - this.lastCommandAt;
-    const isFollowUp = timeSinceLastCmd < 15000;
+    const isFollowUp = timeSinceLastCmd < 20000;
     const recognizedIntent = classifyIntent(q);
+    const isDirectQuestion = /^(can you|do you|did you|is there|is my|are my|what('s| is)|where('s| is| are)|find|locate|read|describe|who is|how do|check|আমার|তুমি কি|দেখতে পাচ্ছ|কী|কোথায়|কই|পড়|খুঁজ)/i.test(q);
 
-    // If wake word present, or within conversation window, or direct known intent:
-    if (hasWake || isFollowUp || recognizedIntent) {
+    // If wake word present, or within conversation window, or direct known intent, or direct question:
+    if (hasWake || isFollowUp || recognizedIntent || isDirectQuestion) {
       let cmd = q;
       if (hasWake) {
         cmd = q.replace(/^[\s\S]*?(astha|asta|ashtha|aastha|astar|হে আস্থা|আস্থা|আসথা|আস্তা)[,.!?\s]*/i, '').trim();
@@ -1044,6 +1045,7 @@ const INTENTS = [
   { id: 'read', run: () => readText(), kw: ['read', 'reading', 'book', 'page', 'letter', 'label', 'text', 'পড়', 'পড়ো', 'লেখা', 'বই', 'রিড', 'বুক', 'পেজ', 'পৃষ্ঠা', 'poro', 'pore', 'boi', 'lekha', 'porhe', 'shonao'] },
   { id: 'identify', run: () => identifyObject(), kw: ['what is this', "what's this", 'what is it', "what's it", 'what is that', "what's that", 'what am i looking at', 'what am i seeing', 'what am i holding', 'what do i have', 'what do i hold', 'what is in my hand', "what's in my hand", "what's this called", 'what is this called', 'tell me what this is', 'tell me what it is', 'tell me what that is', 'what object is this', 'what object is it', 'what do you call this', 'identify', 'which brand', 'what phone', 'which phone', 'কী এটা', 'এটা কী', 'এটি কী', 'এটা কি', 'কী দেখছি', 'আমি কী দেখছি', 'কী দেখতে পাচ্ছ', 'আমার হাতে কী', 'আমার হাতে কি', 'কী জিনিস', 'এটা কী জিনিস', 'এটা কি জিনিস', 'হোয়াট ইজ দিস', 'আইডেন্টিফাই', 'কোন ফোন', 'eta ki', 'eita ki', 'ki eta', 'ki dekhchi', 'ki dekhsi', 'hate ki', 'amar hate ki', 'kon phone'] },
   { id: 'describe', run: () => describeScene(), kw: ['describe', 'what do you see', 'what can you see', 'what is in front', "what's in front", 'whats in front', 'what is around', 'whats around', 'surroundings', 'look around', 'scene', 'tell me what', 'what is there', 'চারপাশ', 'সামনে কী', 'কী দেখছ', 'কী দেখছো', 'কী আছে', 'দেখো', 'ডেসক্রাইব', 'বর্ণনা', 'samne ki', 'ki dekhcho', 'ki dekhso', 'charpash', 'ki ache', 'dekho'] },
+  { id: 'visual_qa', run: q => handleVisualQA(q), kw: ['can you see', 'can you seem', 'do you see', 'did you see', 'can you find', 'is there a', 'is there an', 'is there', 'is my', 'are my', 'check for', 'look for', 'দেখতে পাচ্ছ', 'দেখতে পাচ্ছো', 'দেখছ', 'দেখছো', 'তুমি কি', 'খুঁজে পাচ্ছ', 'খুঁজে পাচ্ছো', 'dekhcho', 'dekhso', 'dekhchi'] },
   { id: 'find', run: q => findItems(q), kw: ['where is my', 'where are my', 'where did i', 'find my', 'locate my', 'আমার.*কোথায়', 'খুঁজ', 'কই', 'ফাইন্ড', 'kothay', 'kothai', 'koi', 'khuje', 'khuj'] },
   { id: 'clothes', run: () => inspectClothesAndColor(), kw: ['wearing', 'clothes', 'cloth', 'dress', 'shirt', 'colour', 'color', 'পরেছি', 'পোশাক', 'জামা', 'কাপড়', 'রঙ', 'রং', 'ক্লথ', 'কালার', 'porechi', 'poreci', 'jama', 'kapor', 'poshak', 'rong', 'rang'] },
   { id: 'mirror', run: () => howDoILook(), kw: ['how do i look', 'how am i looking', 'mirror', 'looking good', 'কেমন লাগছে', 'আয়না', 'kemon lagche', 'kemon lagse', 'ayna'] },
@@ -1122,130 +1124,201 @@ async function handleVisualQA(query) {
   return handleOnDeviceVisualQA(qClean);
 }
 
+function extractTargetItemFromQuery(query) {
+  let q = (query || '').toLowerCase().trim();
+  // Strip question / search prefixes
+  q = q.replace(/^(can you\s+(?:seem|see|find|locate|tell)|do you\s+(?:see|find)|did you\s+(?:see|find)|is there\s+(?:a|an|any)?|is\s+(?:my|the|a|an)?|are\s+(?:my|the|any)?|check for|look for|where is\s+(?:my|the)?|where are\s+(?:my|the)?|find\s+(?:my|the)?|আমার|তুমি কি|দেখতে পাচ্ছো?|দেখছ|খুঁজে পাচ্ছো?|খুঁজ)\s*/i, '');
+  // Strip leading articles and possessives
+  q = q.replace(/^(my|the|a|an|any|this|that|these|those|our|his|her|আমার)\s+/i, '');
+  // Strip trailing question phrases & locations
+  q = q.replace(/\s+(on the table|on table|in front of the camera|in front of me|here|there|on the desk|on the bed|in my room)\b/i, '');
+  q = q.replace(/(?:\s+|^)(দেখতে পাচ্ছো|দেখতে পাচ্ছ|দেখছ|দেখছো|খুঁজে পাচ্ছো|কোথায়|কোথায়|কই|আছে)$/, '');
+  q = q.replace(/[?!.,।]/g, '').trim();
+  if (!q || /^(it|this|that|what|something|anything|item|things|stuff|everything|what is it|what is this)$/i.test(q)) {
+    return null;
+  }
+  return q;
+}
+
+function findVocabMatch(targetNoun) {
+  if (!targetNoun) return null;
+  const tn = targetNoun.toLowerCase().trim();
+  // 1. Exact ID match
+  if (typeof VOCAB_BY_ID !== 'undefined' && VOCAB_BY_ID[tn]) return VOCAB_BY_ID[tn];
+  // 2. Exact label / alias match
+  if (typeof VOCAB !== 'undefined') {
+    for (const item of VOCAB) {
+      if (item.id.toLowerCase() === tn || item.en.toLowerCase() === tn || item.bn === tn) return item;
+      if (item.al && item.al.some(a => a.toLowerCase() === tn)) return item;
+    }
+    // 3. Plural / normalized alias match
+    for (const item of VOCAB) {
+      if (item.al && item.al.some(a => {
+        const al = a.toLowerCase();
+        return (al.length >= 4 && tn === al + 'es') || (al.length >= 4 && tn === al + 's') || (tn.length >= 4 && al === tn + 's') || (tn.length >= 4 && al === tn + 'es');
+      })) return item;
+    }
+  }
+  return null;
+}
+
 async function handleOnDeviceVisualQA(query) {
-  return withBusy('Answering…', async () => {
+  return withBusy('Looking…', async () => {
     const frame = captureFrame(640);
     if (!frame) return;
     heartSet({ x: 0.5, y: 0.5, mode: 'seek', label: 'Looking…' });
 
-    const qLower = query.toLowerCase();
+    const targetNoun = extractTargetItemFromQuery(query);
+    const vocabMatch = findVocabMatch(targetNoun);
 
-    // A. Check for document / ID card / text queries via OCR
-    let ocrText = '';
-    const askingForIdOrText = /\b(id|card|idcard|identity|name|written|label|text|read|আইডি|কার্ড|নাম|লেখা)\b/i.test(qLower);
-    try {
-      const worker = await ensureOcr();
-      const ocrRes = await worker.recognize(cropToCanvas(frame, centerRect(frame, 0.75)));
-      ocrText = (ocrRes.data.lines || [])
-        .filter(l => l.confidence >= 50)
-        .map(l => l.text.replace(/\s+/g, ' ').trim())
-        .filter(l => l.replace(/[^\p{L}\p{N}]/gu, '').length >= 3)
-        .join(' ').trim();
-    } catch (e) {
-      console.warn('VQA OCR check:', e);
-    }
-
-    if (askingForIdOrText && ocrText.length >= 4) {
-      const snippet = ocrText.slice(0, 90);
-      const enMsg = `Yes, I see your ID card in front of the camera. The text on it reads: “${snippet}”.`;
-      const bnMsg = `হ্যাঁ, ক্যামেরার সামনে আপনার আইডি কার্ড দেখতে পাচ্ছি। এতে লেখা: “${snippet}”।`;
-      announce(enMsg, bnMsg, 'vision');
-      playEarcon('confirm');
-      haptic('CONFIRM');
-      heartFlash({ x: 0.5, y: 0.5, mode: 'lock', label: 'ID Card' });
-      recordConversationTurn('assistant', enMsg);
-      if (typeof autoRecordMemory === 'function') {
-        autoRecordMemory({ item: 'ID card', location: 'Held in front of camera', source: 'On-device OCR check', score: 0.95 });
-      }
-      return;
-    }
-
-    // B. Check object detection (COCO SSD)
+    // 1. Fast Vision Models (COCO SSD + Surface)
     await ensureVisionModels();
     const cocoObjs = await runCoco(frame);
     state.lastCocoPreds = cocoObjs;
 
-    // Detect surface (e.g. table, desk, bed)
+    // Detect surface
     const tableObj = cocoObjs.find(o => ['dining table', 'desk'].includes(o.id));
     const bedObj = cocoObjs.find(o => o.id === 'bed');
-    const surfaceName = tableObj ? 'table' : (bedObj ? 'bed' : 'surface');
-    const surfaceNameBn = tableObj ? 'টেবিল' : (bedObj ? 'বিছানা' : 'স্থান');
+    const curRoom = state.currentRoom || (state.spatialHome.length ? state.spatialHome[0].name : 'Reading Room');
+    const roomRecord = state.spatialHome.find(r => r.name.toLowerCase() === curRoom.toLowerCase());
+    let surfaceName = tableObj ? 'table' : (bedObj ? 'bed' : 'surface');
+    let surfaceNameBn = tableObj ? 'টেবিল' : (bedObj ? 'বিছানা' : 'স্থান');
+    if (roomRecord && roomRecord.notes && /dressing table/i.test(roomRecord.notes)) {
+      surfaceName = 'dressing table';
+      surfaceNameBn = 'ড্রেসিং টেবিল';
+    } else if (roomRecord && roomRecord.notes && /reading table/i.test(roomRecord.notes)) {
+      surfaceName = 'reading table';
+      surfaceNameBn = 'পড়ার টেবিল';
+    }
 
-    // Keyword mapping to detectable COCO classes or descriptors
-    const targetMap = [
-      { terms: ['id card', 'id', 'card', 'identity card', 'আইডি'], label: 'ID card', labelBn: 'আইডি কার্ড', match: o => o.id === 'book' || o.id === 'cell phone' || ocrText.length > 5 },
-      { terms: ['powerbank', 'power bank', 'charger', 'পাওয়ার ব্যাংক', 'চার্জার'], label: 'powerbank', labelBn: 'পাওয়ার ব্যাংক', match: o => o.id === 'cell phone' || o.id === 'mouse' },
-      { terms: ['phone', 'mobile', 'cell phone', 'ফোন', 'মোবাইল'], label: 'phone', labelBn: 'ফোন', match: o => o.id === 'cell phone' },
-      { terms: ['bottle', 'glue', 'tube', 'glue tube', 'বোতল', 'আঠা'], label: 'bottle or tube', labelBn: 'বোতল বা টিউব', match: o => o.id === 'bottle' },
-      { terms: ['cup', 'mug', 'glass', 'কাপ', 'মগ'], label: 'cup', labelBn: 'কাপ', match: o => o.id === 'cup' },
-      { terms: ['laptop', 'computer', 'pc', 'ল্যাপটপ', 'কম্পিউটার'], label: 'laptop', labelBn: 'ল্যাপটপ', match: o => o.id === 'laptop' || o.id === 'tv' },
-      { terms: ['book', 'paper', 'notebook', 'বই', 'কাগজ', 'নোটবুক'], label: 'book or notebook', labelBn: 'বই বা নোটবুক', match: o => o.id === 'book' },
-      { terms: ['pen', 'pencil', 'কলম'], label: 'pen', labelBn: 'কলম', match: o => ocrText.length > 0 || o.id === 'toothbrush' },
-      { terms: ['keys', 'key', 'চাবি'], label: 'keys', labelBn: 'চাবি', match: o => o.score > 0.4 }
-    ];
-
-    let matchedTarget = null;
-    let foundObj = null;
-
-    for (const t of targetMap) {
-      if (t.terms.some(kw => qLower.includes(kw))) {
-        matchedTarget = t;
-        foundObj = cocoObjs.find(t.match);
-        break;
+    // 2. OCR check ONLY if query specifically asks for ID card or text
+    const askingForIdOrText = /\b(id\s*card|identity|idcard|written|label|read\s+text|আইডি\s*কার্ড|কার্ডের লেখা)\b/i.test(query);
+    if (askingForIdOrText) {
+      try {
+        const worker = await ensureOcr();
+        const ocrRes = await worker.recognize(cropToCanvas(frame, centerRect(frame, 0.75)));
+        const ocrText = (ocrRes.data.lines || [])
+          .filter(l => l.confidence >= 50)
+          .map(l => l.text.replace(/\s+/g, ' ').trim())
+          .filter(l => l.replace(/[^\p{L}\p{N}]/gu, '').length >= 3)
+          .join(' ').trim();
+        if (ocrText.length >= 4) {
+          const snippet = ocrText.slice(0, 90);
+          const enMsg = `Yes, I see your ID card in front of the camera. The text on it reads: “${snippet}”.`;
+          const bnMsg = `হ্যাঁ, ক্যামেরার সামনে আপনার আইডি কার্ড দেখতে পাচ্ছি। এতে লেখা: “${snippet}”।`;
+          announce(enMsg, bnMsg, 'vision');
+          playEarcon('confirm');
+          haptic('CONFIRM');
+          heartFlash({ x: 0.5, y: 0.5, mode: 'lock', label: 'ID Card' });
+          recordConversationTurn('assistant', enMsg);
+          if (typeof autoRecordMemory === 'function') {
+            autoRecordMemory({ item: 'ID card', location: `on the ${surfaceName} in the ${curRoom}`, room: curRoom, furniture: surfaceName, source: 'On-device OCR check', score: 0.95 });
+          }
+          return;
+        }
+      } catch (e) {
+        console.warn('VQA OCR check:', e);
       }
     }
 
-    if (matchedTarget && foundObj) {
-      const cx = (foundObj.bbox[0] + foundObj.bbox[2] / 2) / frame.width;
-      const pos = cx < 0.38 ? 'on your left' : cx > 0.62 ? 'on your right' : 'directly ahead of you';
-      const posBn = cx < 0.38 ? 'বামে' : cx > 0.62 ? 'ডানে' : 'সামনে';
-      const enMsg = `Yes, I can see a ${matchedTarget.label} ${pos} on the ${surfaceName}.`;
-      const bnMsg = `হ্যাঁ, আপনার ${posBn} ${surfaceNameBn}-এর ওপর ${matchedTarget.labelBn} দেখতে পাচ্ছি।`;
-      announce(enMsg, bnMsg, 'vision');
-      playEarcon('confirm');
-      haptic('CONFIRM');
-      heartFlash({ x: cx, y: 0.5, mode: 'lock', label: matchedTarget.label });
-      recordConversationTurn('assistant', enMsg);
-      if (typeof autoRecordMemory === 'function') {
-        autoRecordMemory({
-          item: matchedTarget.label,
-          location: `On the ${surfaceName} ${pos}`,
-          source: 'On-device Visual Q&A',
-          score: foundObj.score
-        });
+    // 3. Fast open-vocabulary CLIP check (runs in ~80ms)
+    let ranked = [];
+    if (typeof engine !== 'undefined' && engine.clip && engine.clip.status === 'ready' && typeof clipEmbedCrops === 'function') {
+      try {
+        const [emb] = await clipEmbedCrops(frame, [centerRect(frame, 0.65)]);
+        if (emb) {
+          ranked = scoreEmbedding(emb).filter(r => r.id !== '_bg' && !VOCAB_BY_ID[r.id]?.quiet);
+        }
+      } catch (e) {
+        console.warn('VQA CLIP embed:', e);
       }
+    }
+
+    // 4. If user asked for a specific item, check if it was found
+    if (vocabMatch) {
+      const matchId = vocabMatch.id;
+      const clipHit = ranked.slice(0, 4).find(r => r.id === matchId && r.p >= 0.12);
+      const cocoHit = cocoObjs.find(o => {
+        if (o.id === matchId) return true;
+        if (matchId === 'cell phone' && o.id === 'cell phone') return true;
+        if (matchId === 'wallet' && (o.id === 'handbag' || (o.id === 'book' && o.bbox[2] * o.bbox[3] < 22000))) return true;
+        if (matchId === 'keys' && (o.id === 'scissors' || o.id === 'mouse')) return true;
+        if (matchId === 'power bank' && (o.id === 'cell phone' || o.id === 'mouse')) return true;
+        if (matchId === 'phone charger' && o.id === 'mouse') return true;
+        if (matchId === 'laptop charger' && o.id === 'mouse') return true;
+        if (matchId === 'lipstick' && o.id === 'bottle' && o.bbox[2] * o.bbox[3] < 12000) return true;
+        if (matchId === 'id card' && (o.id === 'book' || o.id === 'cell phone')) return true;
+        return false;
+      });
+
+      if (clipHit || cocoHit) {
+        const cx = cocoHit ? (cocoHit.bbox[0] + cocoHit.bbox[2] / 2) / frame.width : 0.5;
+        const cy = cocoHit ? (cocoHit.bbox[1] + cocoHit.bbox[3] / 2) / frame.height : 0.5;
+        const pos = cx < 0.38 ? 'on your left' : cx > 0.62 ? 'on your right' : 'directly ahead of you';
+        const posBn = cx < 0.38 ? 'বামে' : cx > 0.62 ? 'ডানে' : 'সামনে';
+        const labelEn = label(matchId);
+        const labelBnStr = labelBn(matchId);
+
+        const enMsg = `Yes, I can see your ${labelEn} ${pos} on the ${surfaceName}.`;
+        const bnMsg = `হ্যাঁ, আপনার ${posBn} ${surfaceNameBn}-এর ওপর আপনার ${labelBnStr} দেখতে পাচ্ছি।`;
+        announce(enMsg, bnMsg, 'vision');
+        playEarcon('confirm');
+        haptic('CONFIRM');
+        heartFlash({ x: cx, y: cy, mode: 'lock', label: labelEn });
+        recordConversationTurn('assistant', enMsg);
+        if (typeof autoRecordMemory === 'function') {
+          autoRecordMemory({
+            item: labelEn,
+            location: `on the ${surfaceName} in the ${curRoom}`,
+            room: curRoom,
+            furniture: surfaceName,
+            source: 'Visual Q&A',
+            score: clipHit ? clipHit.p : (cocoHit ? cocoHit.score : 0.9)
+          });
+        }
+        return;
+      }
+
+      // Not found: Give clear, specific, courteous response
+      const labelEn = label(matchId);
+      const labelBnStr = labelBn(matchId);
+      const enMsg = `I am looking at what is in front of the camera, but I cannot see your ${labelEn} right now. Try tilting the camera down or holding it closer.`;
+      const bnMsg = `ক্যামেরার সামনে দেখছি, কিন্তু এই মুহূর্তে আপনার ${labelBnStr} দেখতে পাচ্ছি না। ক্যামেরা আরেকটু কাছে ধরুন।`;
+      announce(enMsg, bnMsg, 'vision');
+      recordConversationTurn('assistant', enMsg);
       return;
     }
 
-    // C. General or negative response
-    let cleanNounMatch = query.replace(/^(can you see|do you see|is there|where is|what is|what are|can you find|আমার|তুমি কি|দেখতে পাচ্ছো|দেখছ)\s*/i, '').replace(/[?!.,।]/g, '').trim();
-    if (/^(it|this|that|what|what is it|what is this|what is that|something|anything|item|things|stuff)$/i.test(cleanNounMatch)) {
-      cleanNounMatch = '';
+    // 5. If general visual query ("what do you see", "what is on the table"):
+    if (ranked.length > 0 && ranked[0].p >= 0.18) {
+      const top = ranked[0];
+      const name = label(top.id);
+      const nameBn = labelBn(top.id);
+      const enMsg = `I see a ${name} in front of the camera on the ${surfaceName}.`;
+      const bnMsg = `ক্যামেরার সামনে ${surfaceNameBn}-এ একটি ${nameBn} দেখতে পাচ্ছি।`;
+      announce(enMsg, bnMsg, 'vision');
+      heartFlash({ x: 0.5, y: 0.5, mode: 'lock', label: name });
+      recordConversationTurn('assistant', enMsg);
+      return;
     }
+
     if (cocoObjs.length > 0) {
       const topObj = cocoObjs[0];
       const objName = label(topObj.id);
       const objNameBn = labelBn(topObj.id);
       const cx = (topObj.bbox[0] + topObj.bbox[2] / 2) / frame.width;
       const pos = cx < 0.38 ? 'on your left' : cx > 0.62 ? 'on your right' : 'ahead of you';
-      const enMsg = cleanNounMatch
-        ? `I do not clearly see a ${cleanNounMatch}, but I see ${article(objName)} ${objName} ${pos} on the ${surfaceName}.`
-        : `I see ${article(objName)} ${objName} ${pos} on the ${surfaceName}.`;
-      const bnMsg = cleanNounMatch
-        ? `${cleanNounMatch} স্পষ্ট দেখছি না, তবে ${pos === 'ahead of you' ? 'সামনে' : pos} ${surfaceNameBn}-এ একটি ${objNameBn} দেখতে পাচ্ছি।`
-        : `${pos === 'ahead of you' ? 'সামনে' : pos} ${surfaceNameBn}-এ একটি ${objNameBn} দেখতে পাচ্ছি।`;
+      const enMsg = `I see ${article(objName)} ${objName} ${pos} on the ${surfaceName}.`;
+      const bnMsg = `${pos === 'ahead of you' ? 'সামনে' : pos} ${surfaceNameBn}-এ একটি ${objNameBn} দেখতে পাচ্ছি।`;
       announce(enMsg, bnMsg, 'vision');
       recordConversationTurn('assistant', enMsg);
-    } else {
-      const enMsg = cleanNounMatch
-        ? `I am looking at what is in front of the camera, but I cannot see ${cleanNounMatch} right now. Try holding it closer or tilting the camera down.`
-        : `I am looking in front of the camera, but cannot clearly distinguish an object right now. Try holding it closer or tilting the camera down.`;
-      const bnMsg = cleanNounMatch
-        ? `ক্যামেরার সামনে দেখছি, কিন্তু এই মুহূর্তে ${cleanNounMatch} দেখতে পাচ্ছি না। ক্যামেরা আরেকটু কাছে ধরুন।`
-        : `ক্যামেরার সামনে দেখছি, কিন্তু এই মুহূর্তে কোনো জিনিস স্পষ্ট দেখতে পাচ্ছি না। ক্যামেরা আরেকটু কাছে ধরুন।`;
-      announce(enMsg, bnMsg, 'vision');
-      recordConversationTurn('assistant', enMsg);
+      return;
     }
+
+    const enMsg = `I am looking in front of the camera, but cannot clearly distinguish an object right now. Try holding it closer or tilting the camera down.`;
+    const bnMsg = `ক্যামেরার সামনে দেখছি, কিন্তু এই মুহূর্তে কোনো জিনিস স্পষ্ট দেখতে পাচ্ছি না। ক্যামেরা আরেকটু কাছে ধরুন।`;
+    announce(enMsg, bnMsg, 'vision');
+    recordConversationTurn('assistant', enMsg);
   });
 }
 
@@ -1898,10 +1971,14 @@ function resolveRoomAndSurface(cocoObjs) {
 
 async function trackItemPlacementOnFurniture(frame, cocoObjs) {
   if (privacyMode || privacyTransition || !frame || !cocoObjs || !cocoObjs.length) return;
-  if (isTrackingPlacement) return;
+  if (isTrackingPlacement || state.busy) return;
+  if ((window.speechSynthesis && window.speechSynthesis.speaking) ||
+      (typeof VoiceEngine !== 'undefined' && VoiceEngine.speaking) ||
+      (typeof SiriVoice !== 'undefined' && SiriVoice.isListening) ||
+      state.listening) return;
 
   const now = Date.now();
-  if (now - lastPlacementRecordAt < 4000) return; // Debounce 4s between evaluation cycles
+  if (now - lastPlacementRecordAt < 8000) return; // Debounce 8s between evaluation cycles
 
   const surfaces = cocoObjs.filter(o => ['dining table', 'desk', 'bed', 'couch'].includes(o.id));
   const smallItems = cocoObjs.filter(o => ['cell phone', 'bottle', 'cup', 'book', 'mouse', 'scissors', 'handbag', 'remote'].includes(o.id));
@@ -1962,7 +2039,7 @@ async function trackItemPlacementOnFurniture(frame, cocoObjs) {
       const ix = item.bbox[0] + item.bbox[2] / 2;
       const iy = item.bbox[1] + item.bbox[3] / 2;
 
-      // Crop the item box for on-device recognition (CLIP + OCR)
+      // Crop the item box for on-device recognition (CLIP)
       const cropRect = {
         x: Math.max(0, item.bbox[0] - 10),
         y: Math.max(0, item.bbox[1] - 10),
@@ -1973,12 +2050,12 @@ async function trackItemPlacementOnFurniture(frame, cocoObjs) {
       let detectedItemName = null;
       let detectedItemBn = null;
 
-      // Check with CLIP if available
+      // Fast check with CLIP if available (~50ms)
       if (typeof engine !== 'undefined' && engine.clip && engine.clip.status === 'ready' && typeof clipEmbedCrops === 'function') {
         try {
           const [emb] = await clipEmbedCrops(frame, [cropRect]);
           if (emb) {
-            const ranked = scoreEmbedding(emb).filter(r => r.id !== '_bg' && !VOCAB_BY_ID[r.id].quiet);
+            const ranked = scoreEmbedding(emb).filter(r => r.id !== '_bg' && !VOCAB_BY_ID[r.id]?.quiet);
             const targetIds = ['wallet', 'id card', 'phone charger', 'laptop charger', 'power bank', 'keys', 'eyeglasses', 'lipstick', 'cell phone'];
             const hit = ranked.find(r => targetIds.includes(r.id) && r.p >= 0.18);
             if (hit) {
@@ -1992,20 +2069,7 @@ async function trackItemPlacementOnFurniture(frame, cocoObjs) {
         }
       }
 
-      // Check with OCR if it might be an ID card
-      if (!detectedItemName && (item.id === 'book' || item.id === 'cell phone')) {
-        try {
-          const worker = await ensureOcr();
-          const ocrRes = await worker.recognize(cropToCanvas(frame, cropRect));
-          const text = (ocrRes.data.lines || []).map(l => l.text).join(' ');
-          if (text.length >= 6 && /\b(id|card|republic|bangladesh|name|student|identity|কার্ড|আইডি)\b/i.test(text)) {
-            detectedItemName = 'id card';
-            detectedItemBn = 'আইডি কার্ড';
-          }
-        } catch (e) {}
-      }
-
-      // Heuristic fallback based on COCO class & dimensions
+      // Fast heuristic fallback based on COCO class & dimensions
       if (!detectedItemName) {
         if (item.id === 'handbag') {
           detectedItemName = 'wallet';
@@ -2020,10 +2084,10 @@ async function trackItemPlacementOnFurniture(frame, cocoObjs) {
           detectedItemName = 'charger';
           detectedItemBn = 'চার্জার';
         } else if (item.id === 'bottle' && item.bbox[2] * item.bbox[3] < 12000) {
-          detectedItemName = 'lipstick or cosmetic tube';
-          detectedItemBn = 'লিপস্টিক বা টিউব';
+          detectedItemName = 'lipstick';
+          detectedItemBn = 'লিপস্টিক';
         } else if (item.id === 'book' && item.bbox[2] * item.bbox[3] < 15000) {
-          detectedItemName = 'wallet or card';
+          detectedItemName = 'wallet or id card';
           detectedItemBn = 'মানিব্যাগ বা কার্ড';
         } else {
           detectedItemName = label(item.id);

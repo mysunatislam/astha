@@ -1801,13 +1801,32 @@ function showHazard(on) { $('hazard').hidden = !on; }
    11. Core Actions (Describe, Identify, OCR, Find, Shield)
    ===================================================================== */
 async function withBusy(title, fn) {
-  if(state.busy)return;
-  state.busy=true; stopLiveLoop();
-  $('companion-main').setAttribute('aria-busy','true');
-  setCaption(title,t('looking'),'vision','busy');
-  try { await fn(); }
-  catch(e){ console.error(e); announce(t('models_failed'),tBn('models_failed')); }
-  finally { state.busy=false; $('companion-main').setAttribute('aria-busy','false'); if(state.source==='camera')startLiveLoop(); }
+  if (state.busy) {
+    if (Date.now() - (state.busyStartedAt || 0) > 6000) {
+      console.warn('Force releasing stale busy lock');
+      state.busy = false;
+    } else {
+      return;
+    }
+  }
+  state.busy = true;
+  state.busyStartedAt = Date.now();
+  stopLiveLoop();
+  $('companion-main').setAttribute('aria-busy', 'true');
+  setCaption(title, t('looking'), 'vision', 'busy');
+  try {
+    await Promise.race([
+      fn(),
+      new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 7000))
+    ]);
+  } catch (e) {
+    console.error(e);
+    if (e.message !== 'timeout') announce(t('models_failed'), tBn('models_failed'));
+  } finally {
+    state.busy = false;
+    $('companion-main').setAttribute('aria-busy', 'false');
+    if (state.source === 'camera' && (!window.reading || !reading.active)) startLiveLoop();
+  }
 }
 
 async function analyzeStill(opts = {}) {
@@ -2402,6 +2421,9 @@ function handleQuery(query) {
   if (/layout|room notes|door|entrance|রুমের|দরজা/.test(q)) return queryHomeLayout(query);
   if (/what('s| is) (it|this|that|in my hand|this called)|what am i (looking at|seeing|holding)|what do i (have|hold)|what object is (this|it|that)|tell me what (it|this|that) is|কী এটা|এটা কী|এটি কী|এটা কি|কী জিনিস|এটা কী জিনিস|কী দেখছি|আমি কী দেখছি|আমার হাতে কী|আমার হাতে কি|eta ki|eita ki|ki eta|ki dekhchi|ki dekhsi|hate ki|amar hate ki|holding/.test(q)) return identifyObject();
   if (/read|text|label|পড়|লেখা/.test(q)) return readText();
+  if (/^(can you\s+(?:seem|see|find|locate)|do you\s+(?:see|find)|did you\s+(?:see|find)|is there|is my|are my|check for|look for|তুমি কি|দেখতে পাচ্ছ|দেখছ)/i.test(q)) {
+    if (typeof handleVisualQA === 'function') return handleVisualQA(query);
+  }
   if (/where|find|locate|খুঁজ|কোথায়|কোথায়|কই/.test(q)) return findItems(query);
   if (/obstacle|safe|danger|hazard|clear|বাধা|বিপদ|নিরাপদ/.test(q)) return safetyCheck();
   if (/describe|surround|front|around|চারপাশ|সামনে/.test(q)) return describeScene();
