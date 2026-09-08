@@ -53,6 +53,8 @@ const CLOUD_PROMPTS = {
   screen: 'This is a screenshot of the user\'s computer. Return JSON: {"app": name of the foreground app or website, "content": exact transcription of the main editor, document, chat or page text (skip menus, toolbars and sidebars; keep code indentation and line breaks), "dialog": {"present": boolean, "button": text of the safest dismiss button or "", "location": one of "top-left","top","top-right","left","center","right","bottom-left","bottom","bottom-right"}, "error": {"present": boolean, "line": exact error text or "", "fix": one short sentence or ""}, "en": one-sentence spoken summary of where the user is and what is on screen, "bn": the same in Bangla}.',
   verify: (names) => `The on-device detector thinks it sees: ${names}. Look at the frame: say in one short sentence what is really there that matters to a blind person (hazards first, then people and objects with position). If the detector was wrong, do not repeat its mistake. If nothing notable, set "none" true. Return JSON: {"en": string, "bn": string, "none": boolean, "mirror": boolean}.`,
   mirror: 'Is this image the user\'s own reflection in a mirror (a person holding up a phone toward a mirror)? Return JSON: {"mirror": boolean, "en": one sentence describing what the person is wearing if mirror is true else "", "bn": same in Bangla}.',
+  vqa: (query, history) => `The visually impaired user asks: "${query}". Prior conversation context: ${history || 'none'}. Look closely at the image. Directly, accurately and concisely answer the user's specific question (e.g. if they ask if their ID card, pen, phone, powerbank, or medication is visible, check carefully). If visible, state its position (left, ahead, right) and details (text, color, brand, or what surface it is on). If not visible, say clearly that it is not visible. Return JSON: {"en": string, "bn": string, "found": boolean, "item": string, "surface": string, "room_hint": string}.`,
+  calibrate_video: (roomName) => `The user is holding the camera while walking through or showing a room called "${roomName || 'unnamed room'}". Analyze this video frame for home layout calibration. Identify any detected furniture or landmark structures (e.g. dressing table, reading table, desk, bed, bookshelf, chair, sofa, wardrobe, door, window, mirror, counter). Note their relative positions (left, ahead, right, near, far). Return JSON: {"room": string, "furniture": [string], "landmarks": [string], "en_feedback": string, "bn_feedback": string}. "en_feedback" should be 1 short sentence announcing newly seen furniture (e.g. "I see a dressing table ahead and a chair on your left").`,
 };
 // `task` here is the fully-resolved prompt text (CLOUD_PROMPTS.describe, etc). Astha's own
 // server holds the real Gemini key and is tried first; a personal key pasted into Your
@@ -113,6 +115,9 @@ async function cloudDescribe() {
       announce(r.en || t('nothing_seen'), r.bn || tBn('nothing_seen'), 'vision'); playEarcon(r.hazard ? 'hazard' : 'confirm'); haptic(r.hazard ? 'RAPID' : 'CONFIRM');
       heartFlash({ x: 0.5, y: 0.5, mode: 'lock', label: (r.objects || [])[0] || '' });
       logEvent('Cloud described: ' + ((r.objects || []).slice(0, 4).join(', ') || 'scene'));
+      if (typeof autoRecordMemory === 'function' && Array.isArray(r.objects)) {
+        r.objects.slice(0, 3).forEach(obj => autoRecordMemory({ item: obj, location: r.en || 'In front of you', source: 'Scene description' }));
+      }
     } catch (e) { if (cloudFail(e)) announce('The cloud is busy for a moment; describing on-device.', 'ক্লাউড একটু ব্যস্ত; ডিভাইসেই বর্ণনা করছি।', 'system'); state.busy = false; return describeScene(true); }
   });
 }
@@ -124,6 +129,9 @@ async function cloudIdentify() {
       const r = await gemini(CLOUD_PROMPTS.identify, frame);
       announce(r.en, r.bn, 'vision'); playEarcon('confirm'); haptic('CONFIRM');
       heartFlash({ x: 0.5, y: 0.5, mode: 'lock', label: r.name || '' }); logEvent('Cloud identified: ' + (r.name || ''));
+      if (typeof autoRecordMemory === 'function' && r.name) {
+        autoRecordMemory({ item: r.name, location: 'Held in front of camera', source: 'Identified object', score: 0.95 });
+      }
     } catch (e) { cloudFail(e); state.busy = false; return identifyObject(true); }
   });
 }
@@ -134,6 +142,9 @@ async function cloudClothes() {
       const r = await gemini(CLOUD_PROMPTS.clothes, frame);
       announce(r.en, r.bn, 'vision'); playEarcon('confirm');
       heartFlash({ x: 0.5, y: 0.5, mode: 'lock', label: r.garment || '' }); logEvent('Cloud clothes: ' + (r.colour || '') + ' ' + (r.garment || ''));
+      if (typeof autoRecordMemory === 'function' && r.garment) {
+        autoRecordMemory({ item: (r.colour ? r.colour + ' ' : '') + r.garment, location: 'Worn or held', source: 'Clothes inspection' });
+      }
     } catch (e) { cloudFail(e); state.busy = false; return inspectClothesAndColor(true); }
   });
 }
@@ -165,6 +176,52 @@ async function cloudVerifyAndSpeak(fresh, fallbackEn, fallbackBn) {
   } catch (e) { if (!cloudFail(e)) { setCaption(t('new_title'), fallbackEn, 'vision', null, fallbackBn); speak(fallbackEn, fallbackBn); } }
 }
 async function cloudScreen(frame) { return gemini(CLOUD_PROMPTS.screen, frame, { maxW: 1280, maxTokens: 2500 }); }
+
+// Conversational Visual Question Answering (VQA)
+async function cloudVisualQA(query, frame, history = '') {
+  return withBusy('Answering…', async () => {
+    const f = frame || captureFrame(896);
+    if (!f) return null;
+    heartSet({ x: 0.5, y: 0.5, mode: 'seek', label: 'Looking…' });
+    try {
+      const prompt = typeof CLOUD_PROMPTS.vqa === 'function' ? CLOUD_PROMPTS.vqa(query, history) : CLOUD_PROMPTS.vqa;
+      const r = await gemini(prompt, f, { maxTokens: 900 });
+      if (r && (r.en || r.bn)) {
+        announce(r.en, r.bn, 'vision');
+        playEarcon('confirm');
+        heartFlash({ x: 0.5, y: 0.5, mode: 'lock', label: r.item || 'Answer' });
+        logEvent('Answered: ' + (r.en || '').slice(0, 50));
+        if (typeof autoRecordMemory === 'function' && r.found && r.item) {
+          autoRecordMemory({
+            item: r.item,
+            location: (r.surface ? 'On ' + r.surface : '') + (r.room_hint ? ' in ' + r.room_hint : (r.surface ? '' : 'In front of you')),
+            source: 'Visual question answer',
+            score: 0.95
+          });
+        }
+        return r;
+      }
+      return null;
+    } catch (e) {
+      cloudFail(e);
+      throw e;
+    }
+  });
+}
+
+// Live Video Walkthrough Room Calibration Frame Analyzer
+async function cloudCalibrateVideoFrame(frame, roomName) {
+  const f = frame || captureFrame(896);
+  if (!f) return null;
+  try {
+    const prompt = typeof CLOUD_PROMPTS.calibrate_video === 'function' ? CLOUD_PROMPTS.calibrate_video(roomName) : CLOUD_PROMPTS.calibrate_video;
+    const r = await gemini(prompt, f, { maxTokens: 600 });
+    return r;
+  } catch (e) {
+    cloudFail(e);
+    return null;
+  }
+}
 
 // ---- Modes: auto (busy area) vs quiet (only when asked) ----------------------
 function setMode(mode, silent) {

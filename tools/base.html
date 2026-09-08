@@ -642,14 +642,46 @@
       </div>
 
       <div class="calib-overlay" id="calib-modal" hidden role="dialog" aria-modal="true" aria-labelledby="calib-heading">
-        <div class="calib-card">
-          <h3 id="calib-heading" tabindex="-1">Remember a room</h3>
-          <p>Record landmarks you or a trusted person have confirmed. Notes do not track your current position or measure a safe route.</p>
-          <form onsubmit="event.preventDefault(); saveCalibratedRoom()">
-            <label class="field" for="room-name">Room name<input id="room-name" maxlength="80" required placeholder="Bedroom / শোবার ঘর"></label>
-            <label class="field" for="room-notes">Confirmed landmarks<textarea id="room-notes" maxlength="2000" required placeholder="The bedside table is beside the bed. The charger stays in its top drawer."></textarea></label>
-            <div class="utility-row"><button class="btn accent" type="submit">Save room notes</button><button class="btn" type="button" onclick="closeHomeCalibration()">Cancel</button></div>
-          </form>
+        <div class="calib-card" style="max-width: 580px; width: 92%;">
+          <div class="card-head" style="margin-bottom: 0.5rem;">
+            <h3 id="calib-heading" tabindex="-1">🏠 Video Home & Room Calibration</h3>
+            <span class="pill ok" id="calib-status-pill">Ready to scan</span>
+          </div>
+          <p class="help" id="calib-instruction">Choose a room name, then walk through with your camera. Astha will continuously identify furniture surfaces (dressing table, reading table, bed, chairs) and remember where items are placed.</p>
+          
+          <div style="display: flex; gap: 0.5rem; margin-bottom: 0.75rem; flex-wrap: wrap;">
+            <label class="field" for="room-name" style="flex: 1; min-width: 180px; margin: 0;">Room name
+              <input id="room-name" list="room-presets" maxlength="80" required placeholder="Reading Room, Bedroom, etc.">
+              <datalist id="room-presets">
+                <option value="Reading Room">
+                <option value="Bedroom">
+                <option value="Living Room">
+                <option value="Dining Room">
+                <option value="Kitchen">
+                <option value="Office">
+              </datalist>
+            </label>
+          </div>
+
+          <div id="calib-video-preview" style="position: relative; aspect-ratio: 16/9; background: #000; border-radius: 8px; overflow: hidden; margin-bottom: 0.75rem; border: 2px solid var(--border); display: flex; align-items: center; justify-content: center;">
+            <div id="calib-view-status" style="color: var(--muted); font-weight: bold; text-align: center; padding: 1rem;">
+              Point camera at room furniture and tap "Start Video Walkthrough"
+            </div>
+            <div id="calib-live-tags" style="position: absolute; bottom: 8px; left: 8px; right: 8px; display: flex; flex-wrap: wrap; gap: 4px; pointer-events: none;"></div>
+          </div>
+
+          <div style="margin-bottom: 0.75rem;">
+            <div style="font-size: 0.875rem; font-weight: 600; color: var(--muted); margin-bottom: 0.35rem;">Detected Furniture & Landmarks in this Room:</div>
+            <div id="calib-furniture-chips" style="display: flex; flex-wrap: wrap; gap: 6px; min-height: 32px; padding: 6px; background: var(--surface); border: 1px dashed var(--border); border-radius: 6px;">
+              <span class="empty-note" style="margin: 0; font-size: 0.85rem;">None detected yet. Walk through room with camera.</span>
+            </div>
+          </div>
+
+          <div class="utility-row">
+            <button class="btn accent" id="calib-start-btn" type="button" onclick="toggleVideoCalibrationWalk()">🎥 Start Video Walkthrough</button>
+            <button class="btn" id="calib-save-btn" type="button" onclick="finishVideoRoomCalibration()" disabled>✓ Save Calibrated Room</button>
+            <button class="btn" type="button" onclick="closeHomeCalibration()">Cancel</button>
+          </div>
         </div>
       </div>
 
@@ -1746,6 +1778,9 @@ function afterLiveUpdate() {
     }
     if (!worldSorted().some(isHazard)) showHazard(false);
   }
+  if (typeof trackItemPlacementOnFurniture === 'function') {
+    trackItemPlacementOnFurniture(captureFrame(640), state.lastCocoPreds);
+  }
   if (!state.narrate) return;
   if (state.listening || reader.active || asthaSpeaking()) return;
   const fresh = worldSorted().filter(o => (state.announced.get(o.id) || 0) < now - 12000 && now - o.first < 2500 && o.score >= (o.src === 'coco' ? 0.55 : 0.28));
@@ -2371,6 +2406,7 @@ function handleQuery(query) {
   if (/where|find|locate|খুঁজ|কোথায়|কোথায়|কই/.test(q)) return findItems(query);
   if (/obstacle|safe|danger|hazard|clear|বাধা|বিপদ|নিরাপদ/.test(q)) return safetyCheck();
   if (/describe|surround|front|around|চারপাশ|সামনে/.test(q)) return describeScene();
+  if (typeof handleVisualQA === 'function') return handleVisualQA(query);
   return announce('I did not recognise that request. Try Describe surroundings, Read this, or Find my glasses.', 'অনুরোধ বুঝতে পারিনি। বলুন চারপাশ বলো, এটা পড়ো অথবা আমার চশমা কোথায়।');
 }
 
@@ -2429,16 +2465,30 @@ function clearMemory() {
 }
 
 function findItems(query) {
-  const q = (query || '').toLocaleLowerCase();
+  const q = (query || '').toLocaleLowerCase().replace(/^(where('s| is| are)?( my| the)?|where did i (put|leave|keep)( my| the)?|find( my| the)?|locate( my| the)?|আমার|কোথায়|কোথাই|কই)\s*/i, '').trim();
   let records = state.memory;
   if (q) {
-    const ids = VOCAB.filter(v => [v.en,v.bn,...(v.al || [])].filter(Boolean).some(w => q.includes(w.toLowerCase()))).map(v=>v.id);
-    const knownNames = VOCAB.filter(v=>ids.includes(v.id)).flatMap(v=>[v.en,v.bn]).filter(Boolean);
-    records = records.filter(m => q.includes(m.item.toLowerCase()) || ids.includes(m.id) || knownNames.some(n=>m.item.toLowerCase().includes(n.toLowerCase())));
+    const cleanQ = q.replace(/[?!.,।]/g, '').trim();
+    const terms = cleanQ.split(/\s+/).filter(w => w.length >= 2);
+    records = records.filter(m => {
+      const target = (m.item + ' ' + m.location).toLowerCase();
+      return target.includes(cleanQ) || terms.some(t => target.includes(t));
+    });
   }
-  if (!records.length) return announce(q ? 'I have no saved memory matching that item. Search your memories or add a note.' : 'No memories saved yet.', 'মিল আছে এমন কোনো স্মৃতি নেই। খুঁজুন অথবা নোট যোগ করুন।', 'memory');
-  const msg = records.slice(0,3).map(m => m.item+': last recorded '+m.location+', '+memoryDate(m.time)+'. Source: '+m.source+'.').join(' ');
-  announce(msg+' This is a past observation, not its confirmed current location.', msg+' এটি আগের নোট, বর্তমান অবস্থান নিশ্চিত নয়।', 'memory');
+  if (!records.length) {
+    return announce(
+      q ? `I could not find any record of your ${q} in my memory. Try showing it to the camera or scanning your rooms.` : 'No memories saved yet.',
+      q ? `আমার স্মৃতিতে আপনার ${q}-এর কোনো তথ্য পাইনি। ক্যামেরার সামনে দেখান বা ঘরে খুঁজুন।` : 'এখনও কোনো স্মৃতি সংরক্ষিত নেই।',
+      'memory'
+    );
+  }
+  const top = records[0];
+  const timeStr = memoryDate(top.time);
+  const locStr = top.location.startsWith('on ') || top.location.startsWith('in ') ? top.location : 'at ' + top.location;
+  const msgEn = `I saw your ${top.item} ${locStr} at ${timeStr}.`;
+  const msgBn = `আপনার ${top.item} ${timeStr}-এ ${locStr}-এ দেখা হয়েছিল।`;
+  announce(msgEn, msgBn, 'memory');
+  playEarcon('confirm');
 }
 
 function encodeBytes(bytes) {
@@ -2570,7 +2620,20 @@ function saveCalibratedRoom() {
 }
 
 function renderSpatialLayout() {
-  $('spatial-list').innerHTML = state.spatialHome.length ? state.spatialHome.map(r=>'<div class="room-notes"><strong>'+esc(r.name)+'</strong><p>'+esc(r.notes)+'</p><p class="meta">Your note · '+esc(memoryDate(r.updated))+'</p><button class="btn small" data-delete-room="'+esc(r.id)+'" aria-label="Delete '+esc(r.name)+' room notes">Delete</button></div>').join('') : '<p class="empty-note">No confirmed room notes yet.</p>';
+  const el = $('spatial-list');
+  if (!el) return;
+  el.innerHTML = state.spatialHome.length ? state.spatialHome.map(r => `
+    <div class="room-notes" style="margin-bottom: 0.75rem; padding: 0.75rem; border-radius: 8px; background: var(--surface); border: 1px solid var(--border);">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 4px;">
+        <strong style="font-size: 1.05rem;">🏠 ${esc(r.name)}</strong>
+        <span class="meta">${esc(memoryDate(r.updated))}</span>
+      </div>
+      <p style="margin: 0.35rem 0; font-size: 0.95rem; color: var(--fg);">${esc(r.notes)}</p>
+      <div class="utility-row" style="margin-top: 0.5rem; gap: 0.5rem;">
+        <button class="btn small accent" onclick="recalibrateRoom('${esc(r.id)}')" aria-label="Recalibrate ${esc(r.name)}">🔄 Recalibrate</button>
+        <button class="btn small" data-delete-room="${esc(r.id)}" aria-label="Delete ${esc(r.name)} room">Delete</button>
+      </div>
+    </div>`).join('') : '<p class="empty-note">No calibrated rooms yet. Tap "Home layout calibration" to map your rooms with video.</p>';
 }
 
 function deleteCalibratedRoom(id) {

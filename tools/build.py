@@ -169,6 +169,9 @@ NEW_IDENTIFY = r"""function identifyObject(skipCloud) {
       announce(en, bn, 'vision'); playEarcon('confirm'); haptic('CONFIRM');
       heartFlash({ x: 0.5, y: 0.5, mode: 'lock', label: labelText });
       logEvent(t('log_identify', { a: labelText }));
+      if (typeof autoRecordMemory === 'function' && labelText) {
+        autoRecordMemory({ item: labelText, location: 'In front of camera', source: 'Identified object', score: 0.95 });
+      }
     };
     const ocrTail = ocrText.length >= 3 ? [` The text on it says: “${ocrText.slice(0, 80)}”.`, ` এর গায়ে লেখা: “${ocrText.slice(0, 80)}”।`] : ['', ''];
 

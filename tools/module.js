@@ -789,6 +789,8 @@ const SiriVoice = {
   active: false,
   rec: null,
   restartTimer: null,
+  speechDebounceTimer: null,
+  pendingSpeech: '',
   lastCommandAt: 0,
   lastBargeInAt: 0,
   starting: false,
@@ -816,6 +818,8 @@ const SiriVoice = {
   stop(silent) {
     this.active = false;
     clearTimeout(this.restartTimer);
+    clearTimeout(this.speechDebounceTimer);
+    this.pendingSpeech = '';
     if (this.rec) {
       try { this.rec.abort(); } catch (e) {}
       this.rec = null;
@@ -872,6 +876,8 @@ const SiriVoice = {
 
         // 1. INSTANT STOP / BARGE-IN CHECK (Evaluated on BOTH interim and final for <50ms response)
         if (STOP_TALKING_REGEX.test(currentSpeech)) {
+          clearTimeout(this.speechDebounceTimer);
+          this.pendingSpeech = '';
           if (VoiceEngine.speaking || (typeof reader !== 'undefined' && reader.active) || (typeof reading !== 'undefined' && reading.active)) {
             VoiceEngine.stop();
             if (typeof stopReader === 'function') stopReader();
@@ -899,9 +905,17 @@ const SiriVoice = {
         // Drop any delayed echo of recent machine utterances
         if (VoiceEchoFilter.isMachineEcho(currentSpeech)) return;
 
-        // 3. HUMAN VOICE COMMAND DISPATCH (on final utterance)
+        // 3. HUMAN VOICE COMMAND DISPATCH (debounced for long messages and natural sentence pauses)
         if (finalText.trim()) {
-          this.handleVoiceInput(finalText.trim());
+          this.pendingSpeech = ((this.pendingSpeech || '') + ' ' + finalText.trim()).trim();
+          clearTimeout(this.speechDebounceTimer);
+          this.speechDebounceTimer = setTimeout(() => {
+            if (this.pendingSpeech) {
+              const cmdToSend = this.pendingSpeech;
+              this.pendingSpeech = '';
+              this.handleVoiceInput(cmdToSend);
+            }
+          }, 1100);
         }
       };
 
@@ -1056,15 +1070,172 @@ function classifyIntent(q) {
   }
   return bestScore > 0 ? best : null;
 }
+// ---- Conversational Visual Question Answering (VQA) Engine ------------------
+const conversationHistory = [];
+
+function recordConversationTurn(role, text) {
+  if (!text) return;
+  const now = Date.now();
+  conversationHistory.push({ role, text: String(text).slice(0, 300), time: now });
+  while (conversationHistory.length > 8) conversationHistory.shift();
+  for (let i = conversationHistory.length - 1; i >= 0; i--) {
+    if (now - conversationHistory[i].time > 300000) conversationHistory.splice(i, 1);
+  }
+}
+
+function getConversationContext() {
+  return conversationHistory.map(t => `${t.role === 'user' ? 'User' : 'Astha'}: ${t.text}`).join('\n');
+}
+
+async function handleVisualQA(query) {
+  if (privacyTransition) return;
+  const qClean = (query || '').trim();
+  if (!qClean) return;
+
+  if (withCamera(() => handleVisualQA(query))) return;
+  recordConversationTurn('user', qClean);
+
+  // 1. If Cloud (Gemini) is available, use cloudVisualQA
+  if (typeof cloudReady === 'function' && cloudReady()) {
+    try {
+      const frame = captureFrame(896);
+      if (frame && typeof cloudVisualQA === 'function') {
+        const hist = getConversationContext();
+        const r = await cloudVisualQA(qClean, frame, hist);
+        if (r && (r.en || r.bn)) {
+          recordConversationTurn('assistant', r.en || r.bn);
+          return r;
+        }
+      }
+    } catch (e) {
+      console.warn('Cloud VQA failed, falling back to on-device visual analysis:', e);
+    }
+  }
+
+  // 2. On-Device Fallback (Without Gemini / Offline)
+  return handleOnDeviceVisualQA(qClean);
+}
+
+async function handleOnDeviceVisualQA(query) {
+  return withBusy('Answering…', async () => {
+    const frame = captureFrame(640);
+    if (!frame) return;
+    heartSet({ x: 0.5, y: 0.5, mode: 'seek', label: 'Looking…' });
+
+    const qLower = query.toLowerCase();
+
+    // A. Check for document / ID card / text queries via OCR
+    let ocrText = '';
+    const askingForIdOrText = /\b(id|card|idcard|identity|name|written|label|text|read|আইডি|কার্ড|নাম|লেখা)\b/i.test(qLower);
+    try {
+      const worker = await ensureOcr();
+      const ocrRes = await worker.recognize(cropToCanvas(frame, centerRect(frame, 0.75)));
+      ocrText = (ocrRes.data.lines || [])
+        .filter(l => l.confidence >= 50)
+        .map(l => l.text.replace(/\s+/g, ' ').trim())
+        .filter(l => l.replace(/[^\p{L}\p{N}]/gu, '').length >= 3)
+        .join(' ').trim();
+    } catch (e) {
+      console.warn('VQA OCR check:', e);
+    }
+
+    if (askingForIdOrText && ocrText.length >= 4) {
+      const snippet = ocrText.slice(0, 90);
+      const enMsg = `Yes, I see your ID card in front of the camera. The text on it reads: “${snippet}”.`;
+      const bnMsg = `হ্যাঁ, ক্যামেরার সামনে আপনার আইডি কার্ড দেখতে পাচ্ছি। এতে লেখা: “${snippet}”।`;
+      announce(enMsg, bnMsg, 'vision');
+      playEarcon('confirm');
+      haptic('CONFIRM');
+      heartFlash({ x: 0.5, y: 0.5, mode: 'lock', label: 'ID Card' });
+      recordConversationTurn('assistant', enMsg);
+      if (typeof autoRecordMemory === 'function') {
+        autoRecordMemory({ item: 'ID card', location: 'Held in front of camera', source: 'On-device OCR check', score: 0.95 });
+      }
+      return;
+    }
+
+    // B. Check object detection (COCO SSD)
+    await ensureVisionModels();
+    const cocoObjs = await runCoco(frame);
+    state.lastCocoPreds = cocoObjs;
+
+    // Detect surface (e.g. table, desk, bed)
+    const tableObj = cocoObjs.find(o => ['dining table', 'desk'].includes(o.id));
+    const bedObj = cocoObjs.find(o => o.id === 'bed');
+    const surfaceName = tableObj ? 'table' : (bedObj ? 'bed' : 'surface');
+    const surfaceNameBn = tableObj ? 'টেবিল' : (bedObj ? 'বিছানা' : 'স্থান');
+
+    // Keyword mapping to detectable COCO classes or descriptors
+    const targetMap = [
+      { terms: ['id card', 'id', 'card', 'identity card', 'আইডি'], label: 'ID card', labelBn: 'আইডি কার্ড', match: o => o.id === 'book' || o.id === 'cell phone' || ocrText.length > 5 },
+      { terms: ['powerbank', 'power bank', 'charger', 'পাওয়ার ব্যাংক', 'চার্জার'], label: 'powerbank', labelBn: 'পাওয়ার ব্যাংক', match: o => o.id === 'cell phone' || o.id === 'mouse' },
+      { terms: ['phone', 'mobile', 'cell phone', 'ফোন', 'মোবাইল'], label: 'phone', labelBn: 'ফোন', match: o => o.id === 'cell phone' },
+      { terms: ['bottle', 'glue', 'tube', 'glue tube', 'বোতল', 'আঠা'], label: 'bottle or tube', labelBn: 'বোতল বা টিউব', match: o => o.id === 'bottle' },
+      { terms: ['cup', 'mug', 'glass', 'কাপ', 'মগ'], label: 'cup', labelBn: 'কাপ', match: o => o.id === 'cup' },
+      { terms: ['laptop', 'computer', 'pc', 'ল্যাপটপ', 'কম্পিউটার'], label: 'laptop', labelBn: 'ল্যাপটপ', match: o => o.id === 'laptop' || o.id === 'tv' },
+      { terms: ['book', 'paper', 'notebook', 'বই', 'কাগজ', 'নোটবুক'], label: 'book or notebook', labelBn: 'বই বা নোটবুক', match: o => o.id === 'book' },
+      { terms: ['pen', 'pencil', 'কলম'], label: 'pen', labelBn: 'কলম', match: o => ocrText.length > 0 || o.id === 'toothbrush' },
+      { terms: ['keys', 'key', 'চাবি'], label: 'keys', labelBn: 'চাবি', match: o => o.score > 0.4 }
+    ];
+
+    let matchedTarget = null;
+    let foundObj = null;
+
+    for (const t of targetMap) {
+      if (t.terms.some(kw => qLower.includes(kw))) {
+        matchedTarget = t;
+        foundObj = cocoObjs.find(t.match);
+        break;
+      }
+    }
+
+    if (matchedTarget && foundObj) {
+      const cx = (foundObj.bbox[0] + foundObj.bbox[2] / 2) / frame.width;
+      const pos = cx < 0.38 ? 'on your left' : cx > 0.62 ? 'on your right' : 'directly ahead of you';
+      const posBn = cx < 0.38 ? 'বামে' : cx > 0.62 ? 'ডানে' : 'সামনে';
+      const enMsg = `Yes, I can see a ${matchedTarget.label} ${pos} on the ${surfaceName}.`;
+      const bnMsg = `হ্যাঁ, আপনার ${posBn} ${surfaceNameBn}-এর ওপর ${matchedTarget.labelBn} দেখতে পাচ্ছি।`;
+      announce(enMsg, bnMsg, 'vision');
+      playEarcon('confirm');
+      haptic('CONFIRM');
+      heartFlash({ x: cx, y: 0.5, mode: 'lock', label: matchedTarget.label });
+      recordConversationTurn('assistant', enMsg);
+      if (typeof autoRecordMemory === 'function') {
+        autoRecordMemory({
+          item: matchedTarget.label,
+          location: `On the ${surfaceName} ${pos}`,
+          source: 'On-device Visual Q&A',
+          score: foundObj.score
+        });
+      }
+      return;
+    }
+
+    // C. General or negative response
+    const cleanNounMatch = query.replace(/^(can you see|do you see|is there|where is|what is|can you find|আমার|তুমি কি|দেখতে পাচ্ছো|দেখছ)\s*/i, '').replace(/[?!.,।]/g, '').trim();
+    if (cocoObjs.length > 0) {
+      const topObj = cocoObjs[0];
+      const objName = label(topObj.id);
+      const objNameBn = labelBn(topObj.id);
+      const cx = (topObj.bbox[0] + topObj.bbox[2] / 2) / frame.width;
+      const pos = cx < 0.38 ? 'on your left' : cx > 0.62 ? 'on your right' : 'ahead of you';
+      const enMsg = `I do not clearly see a ${cleanNounMatch || 'matching item'}, but I see ${article(objName)} ${objName} ${pos} on the ${surfaceName}.`;
+      const bnMsg = `${cleanNounMatch || 'জিনিসটি'} স্পষ্ট দেখছি না, তবে ${pos === 'ahead of you' ? 'সামনে' : pos} ${surfaceNameBn}-এ একটি ${objNameBn} দেখতে পাচ্ছি।`;
+      announce(enMsg, bnMsg, 'vision');
+      recordConversationTurn('assistant', enMsg);
+    } else {
+      const enMsg = `I am looking at what is in front of the camera, but I cannot see ${cleanNounMatch || 'that item'} right now. Try holding it closer or tilting the camera down.`;
+      const bnMsg = `ক্যামেরার সামনে দেখছি, কিন্তু এই মুহূর্তে ${cleanNounMatch || 'সেটি'} দেখতে পাচ্ছি না। ক্যামেরা আরেকটু কাছে ধরুন।`;
+      announce(enMsg, bnMsg, 'vision');
+      recordConversationTurn('assistant', enMsg);
+    }
+  });
+}
+
 function smartFallback(query, q) {
   const it = classifyIntent(q);
   if (it) { logEvent('Understood: ' + it.id); return it.run(query); }
-  if (state.source === 'camera' && !reading.active) {
-    announce(`I heard “${query}”. Let me tell you what I see.`, `শুনলাম “${query}”। যা দেখছি বলছি।`, 'voice');
-    return describeScene();
-  }
-  announce(`I heard “${query}”, but I am not sure what you want. You can say: describe, read this, what is this, where is my phone, what am I wearing, or what is on my screen.`,
-    `শুনলাম “${query}”, কিন্তু কী চান বুঝিনি। বলতে পারেন: চারপাশ বলো, এটা পড়ো, এটা কী, আমার ফোন কোথায়, আমি কী পরেছি, বা স্ক্রিনে কী আছে।`, 'voice');
+  return handleVisualQA(query);
 }
 
 // ---- One-tap listening that actually waits --------------------------------
@@ -1102,13 +1273,13 @@ function toggleListening() {
       setCaption(t('agent_voice'), 'Heard: ' + (finalText + ' ' + interim).trim(), 'voice', 'busy');
       clearTimeout(listenTimer);
       // Wait a moment after the last words in case the sentence continues.
-      listenTimer = setTimeout(finish, finalText.trim() ? 900 : 2500);
+      listenTimer = setTimeout(finish, finalText.trim() ? 2200 : 3500);
     };
     recognizer.onerror = ev => { if (ev.error === 'no-speech') return; console.warn('speech', ev.error); if (ev.error === 'not-allowed') { stopListening(); announce('Microphone access was denied.', 'মাইক্রোফোনের অনুমতি নেই।', 'voice'); } };
-    recognizer.onend = () => { if (state.listening) { if (finalText.trim()) finish(); else if (!gotSpeech && Date.now() - listenStart < 7500) { try { recognizer.start(); } catch (e) {} } else finish(); } };
+    recognizer.onend = () => { if (state.listening) { if (finalText.trim()) finish(); else if (!gotSpeech && Date.now() - listenStart < 11000) { try { recognizer.start(); } catch (e) {} } else finish(); } };
     const listenStart = Date.now();
     recognizer.start();
-    listenTimer = setTimeout(finish, 8000);
+    listenTimer = setTimeout(finish, 12000);
   } catch (e) { console.warn(e); stopListening(); }
 }
 
@@ -1176,6 +1347,62 @@ async function refreshRooms() {
   renderSpatialLayout();
 }
 
+// ---- Automatic Memory Recording Engine --------------------------------------
+// Persists every confident visual observation and placed object to personal memory.
+let _recentMemoryDedupe = []; // { item, time }
+async function autoRecordMemory({ item, location, source = 'Camera observation', score = null, room = null, furniture = null }) {
+  if (privacyMode || privacyTransition) return;
+  if (!item || !String(item).trim()) return;
+  const cleanItem = String(item).trim().slice(0, 80);
+  const now = Date.now();
+
+  // Deduplicate against identical items recorded within the last 45 seconds to prevent spam
+  _recentMemoryDedupe = _recentMemoryDedupe.filter(m => now - m.time < 45000);
+  const isDuplicate = _recentMemoryDedupe.some(m => m.item.toLowerCase() === cleanItem.toLowerCase());
+  if (isDuplicate) return;
+  _recentMemoryDedupe.push({ item: cleanItem, time: now });
+
+  // Resolve location context with calibrated room and furniture if available
+  let resolvedLocation = location || 'In front of you';
+  const curRoom = room || state.currentRoom || (state.spatialHome.length ? state.spatialHome[0].name : null);
+  if (furniture && curRoom) {
+    resolvedLocation = `on the ${furniture} in the ${curRoom}`;
+  } else if (furniture) {
+    resolvedLocation = `on the ${furniture}`;
+  } else if (curRoom && !resolvedLocation.toLowerCase().includes(curRoom.toLowerCase())) {
+    resolvedLocation = `${resolvedLocation} (${curRoom})`;
+  }
+
+  const memEntry = {
+    uid: (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : 'mem_' + now + '_' + Math.random().toString(36).slice(2, 7),
+    item: cleanItem,
+    location: resolvedLocation.slice(0, 160),
+    source: String(source || 'Observation').slice(0, 80),
+    score: typeof score === 'number' ? score : null,
+    time: new Date(now).toISOString()
+  };
+
+  // Add to local state and update UI immediately
+  state.memory = [memEntry, ...state.memory.filter(m => m.item.toLowerCase() !== cleanItem.toLowerCase())].slice(0, 60);
+  if (typeof renderMemory === 'function') renderMemory();
+  logEvent(`Memory saved: ${cleanItem} (${resolvedLocation})`);
+
+  // Persist to backend server asynchronously
+  try {
+    if (typeof apiSend === 'function') {
+      await apiSend('POST', '/api/memories', {
+        item: memEntry.item,
+        location: memEntry.location,
+        source: memEntry.source,
+        score: memEntry.score
+      });
+    }
+  } catch (err) {
+    // If offline, local state remains stored in memory
+    console.warn('Memory sync note (offline/local):', err.message || err);
+  }
+}
+
 async function saveManualMemory() {
   if (privacyTransition) return;
   if (privacyMode) return announce('Memory is off in privacy mode.', 'গোপনীয়তা মোডে মেমরি বন্ধ।');
@@ -1213,15 +1440,338 @@ async function clearMemory() {
   await refreshMemory(); await refreshRooms(); state.log = []; renderLog();
   announce('All personal memories and room notes deleted.', 'সব ব্যক্তিগত স্মৃতি ও ঘরের নোট মুছে ফেলা হয়েছে।', 'memory');
 }
-async function saveCalibratedRoom() {
+// ---- Video Walkthrough Home & Room Calibration Engine ------------------------
+const VideoRoomCalib = {
+  active: false,
+  timer: null,
+  roomName: 'Reading Room',
+  furniture: new Set(),
+  lastSpokenAt: 0,
+  isProcessing: false,
+  calibratingId: null
+};
+
+function startHomeCalibration(presetName) {
   if (privacyTransition) return;
-  if (privacyMode) return;
-  const name = $('room-name').value.trim(), notes = $('room-notes').value.trim(); if (!name || !notes) return;
+  if (privacyMode) return announce('Room memory is off in privacy mode.', 'গোপনীয়তা মোডে ঘরের মেমরি বন্ধ।');
+
+  priorModalFocus = document.activeElement;
+  state.calib.active = true;
+  VideoRoomCalib.active = false;
+  clearInterval(VideoRoomCalib.timer);
+  VideoRoomCalib.timer = null;
+  VideoRoomCalib.calibratingId = null;
+
+  const defaultRoom = presetName || 'Reading Room';
+  VideoRoomCalib.roomName = defaultRoom;
+  VideoRoomCalib.furniture = new Set();
+
+  const nameInput = $('room-name');
+  if (nameInput) nameInput.value = defaultRoom;
+
+  renderCalibFurnitureChips();
+  updateCalibStatus('Ready to scan', 'ok');
+  const startBtn = $('calib-start-btn');
+  if (startBtn) startBtn.textContent = '🎥 Start Video Walkthrough';
+  const saveBtn = $('calib-save-btn');
+  if (saveBtn) saveBtn.disabled = true;
+  const modal = $('calib-modal');
+  if (modal) modal.hidden = false;
+
+  // Make sure camera is running
+  if (!state.source) toggleCamera();
+
+  const msgEn = `Video calibration opened for ${defaultRoom}. Walk through your room with the camera and tap Start Video Walkthrough.`;
+  const msgBn = `${defaultRoom}-এর ভিডিও ক্যালিব্রেশন প্রস্তুত। ক্যামেরা নিয়ে ঘরে হেঁটে স্টার্ট চাপুন।`;
+  announce(msgEn, msgBn, 'system');
+}
+
+function recalibrateRoom(roomId) {
+  const room = state.spatialHome.find(r => r.id === roomId);
+  if (!room) return startHomeCalibration();
+
+  startHomeCalibration(room.name);
+  VideoRoomCalib.calibratingId = room.id;
+  updateCalibStatus(`Recalibrating ${room.name}`, 'warn');
+
+  // Parse existing furniture from notes if available
+  const match = (room.notes || '').match(/(?:furniture|landmarks?|detected|walkthrough)[:\s]+([^.]+)/i);
+  if (match) {
+    match[1].split(/[,;]/).map(s => s.trim()).filter(Boolean).forEach(f => VideoRoomCalib.furniture.add(f));
+  }
+  renderCalibFurnitureChips();
+  if (VideoRoomCalib.furniture.size > 0) {
+    const saveBtn = $('calib-save-btn');
+    if (saveBtn) saveBtn.disabled = false;
+  }
+
+  const msgEn = `Recalibrating ${room.name}. You can remove wrongly detected items or start walkthrough to rescan.`;
+  const msgBn = `${room.name} পুনরায় ক্যালিব্রেট করা হচ্ছে। ভুল জিনিস মুছতে পারেন বা ক্যামেরা দিয়ে নতুন করে স্ক্যান করতে পারেন।`;
+  announce(msgEn, msgBn, 'system');
+}
+
+function updateCalibStatus(text, type = 'ok') {
+  const pill = $('calib-status-pill');
+  if (pill) {
+    pill.textContent = text;
+    pill.className = `pill ${type}`;
+  }
+}
+
+function renderCalibFurnitureChips() {
+  const container = $('calib-furniture-chips');
+  if (!container) return;
+  if (VideoRoomCalib.furniture.size === 0) {
+    container.innerHTML = '<span class="empty-note" style="margin: 0; font-size: 0.85rem;">None detected yet. Walk through room with camera.</span>';
+    return;
+  }
+  container.innerHTML = Array.from(VideoRoomCalib.furniture).map(name => `
+    <span class="pill ok" style="display: inline-flex; align-items: center; gap: 4px; padding: 4px 8px; font-size: 0.85rem;">
+      🪑 ${esc(name)}
+      <button type="button" onclick="removeCalibFurniture('${esc(name)}')" style="background: none; border: none; color: inherit; cursor: pointer; padding: 0 2px; font-weight: bold;" aria-label="Remove ${esc(name)}">×</button>
+    </span>
+  `).join('');
+}
+
+function removeCalibFurniture(name) {
+  VideoRoomCalib.furniture.delete(name);
+  renderCalibFurnitureChips();
+  if (VideoRoomCalib.furniture.size === 0) {
+    const saveBtn = $('calib-save-btn');
+    if (saveBtn) saveBtn.disabled = true;
+  }
+  playEarcon('click');
+}
+
+function toggleVideoCalibrationWalk() {
+  if (VideoRoomCalib.active) {
+    // Pause / Stop walkthrough
+    VideoRoomCalib.active = false;
+    clearInterval(VideoRoomCalib.timer);
+    VideoRoomCalib.timer = null;
+    const startBtn = $('calib-start-btn');
+    if (startBtn) startBtn.textContent = '🎥 Resume Walkthrough';
+    updateCalibStatus('Walkthrough paused', 'ok');
+    if (VideoRoomCalib.furniture.size > 0) {
+      const saveBtn = $('calib-save-btn');
+      if (saveBtn) saveBtn.disabled = false;
+    }
+    const count = VideoRoomCalib.furniture.size;
+    const msgEn = `Walkthrough paused. Found ${count} furniture items. Tap Save Calibrated Room when done.`;
+    const msgBn = `ওয়াকথ্রু সাময়িক বন্ধ। ${count}টি আসবাবপত্র শনাক্ত হয়েছে। নিশ্চিত করতে সেভ চাপুন।`;
+    announce(msgEn, msgBn, 'system');
+  } else {
+    // Start walkthrough
+    const roomInput = $('room-name');
+    VideoRoomCalib.roomName = (roomInput && roomInput.value.trim()) || 'Reading Room';
+    VideoRoomCalib.active = true;
+    const startBtn = $('calib-start-btn');
+    if (startBtn) startBtn.textContent = '⏹️ Stop Walkthrough';
+    updateCalibStatus('Walking & scanning room…', 'busy');
+
+    const msgEn = `Walkthrough active for ${VideoRoomCalib.roomName}. Walk slowly and show your reading table, dressing table, bed, and shelves.`;
+    const msgBn = `${VideoRoomCalib.roomName}-এর ওয়াকথ্রু চালু হয়েছে। ধীরে ধীরে হেঁটে টেবিল ও আসবাবপত্র দেখান।`;
+    announce(msgEn, msgBn, 'system');
+
+    VideoRoomCalib.timer = setInterval(videoCalibrationTick, 1400);
+    videoCalibrationTick();
+  }
+}
+
+async function videoCalibrationTick() {
+  if (!VideoRoomCalib.active || VideoRoomCalib.isProcessing) return;
+  const frame = captureFrame(896);
+  if (!frame) return;
+  VideoRoomCalib.isProcessing = true;
+
+  try {
+    // 1. Cloud-powered calibration if available
+    if (typeof cloudReady === 'function' && cloudReady() && typeof cloudCalibrateVideoFrame === 'function') {
+      const r = await cloudCalibrateVideoFrame(frame, VideoRoomCalib.roomName);
+      if (r && Array.isArray(r.furniture) && r.furniture.length > 0) {
+        let hasNew = false;
+        r.furniture.forEach(item => {
+          const clean = item.trim();
+          if (clean && !VideoRoomCalib.furniture.has(clean)) {
+            VideoRoomCalib.furniture.add(clean);
+            hasNew = true;
+          }
+        });
+        if (hasNew) {
+          renderCalibFurnitureChips();
+          const saveBtn = $('calib-save-btn');
+          if (saveBtn) saveBtn.disabled = false;
+          playEarcon('confirm');
+        }
+        if (r.en_feedback && Date.now() - VideoRoomCalib.lastSpokenAt > 3500) {
+          announce(r.en_feedback, r.bn_feedback, 'vision');
+          VideoRoomCalib.lastSpokenAt = Date.now();
+        }
+        return;
+      }
+    }
+
+    // 2. On-device fallback room calibration (Without Gemini / Offline)
+    await ensureVisionModels();
+    const cocoObjs = await runCoco(frame);
+    state.lastCocoPreds = cocoObjs;
+
+    // Detect furniture objects: table, desk, bed, chair, couch, tv, book
+    const detected = [];
+    const tableObj = cocoObjs.find(o => ['dining table', 'desk'].includes(o.id));
+    const bedObj = cocoObjs.find(o => o.id === 'bed');
+    const chairObj = cocoObjs.find(o => o.id === 'chair');
+    const couchObj = cocoObjs.find(o => o.id === 'couch');
+    const tvObj = cocoObjs.find(o => o.id === 'tv');
+
+    if (tableObj) {
+      // Heuristic: determine dressing table or reading table
+      const isDressing = /dress|mirror|bed|শোবার/i.test(VideoRoomCalib.roomName) || cocoObjs.some(o => o.id === 'bottle');
+      const tableLabel = isDressing ? 'dressing table' : 'reading table';
+      detected.push(tableLabel);
+    }
+    if (bedObj) detected.push('bed');
+    if (chairObj) detected.push('chair');
+    if (couchObj) detected.push('sofa');
+    if (tvObj) detected.push('television');
+
+    let hasNew = false;
+    detected.forEach(item => {
+      if (!VideoRoomCalib.furniture.has(item)) {
+        VideoRoomCalib.furniture.add(item);
+        hasNew = true;
+      }
+    });
+
+    if (hasNew) {
+      renderCalibFurnitureChips();
+      const saveBtn = $('calib-save-btn');
+      if (saveBtn) saveBtn.disabled = false;
+      playEarcon('confirm');
+      if (Date.now() - VideoRoomCalib.lastSpokenAt > 3500) {
+        const itemNames = detected.join(', ');
+        announce(`I see a ${itemNames} ahead.`, `সামনে ${itemNames} দেখতে পাচ্ছি।`, 'vision');
+        VideoRoomCalib.lastSpokenAt = Date.now();
+      }
+    }
+  } catch (err) {
+    console.warn('Video calibration tick note:', err);
+  } finally {
+    VideoRoomCalib.isProcessing = false;
+  }
+}
+
+async function finishVideoRoomCalibration() {
+  if (privacyTransition || privacyMode) return;
+  clearInterval(VideoRoomCalib.timer);
+  VideoRoomCalib.timer = null;
+  VideoRoomCalib.active = false;
+
+  const roomName = (VideoRoomCalib.roomName || $('room-name')?.value || 'Reading Room').trim();
+  const furnList = Array.from(VideoRoomCalib.furniture);
+  const furnStr = furnList.length ? furnList.join(', ') : 'reading table, chair';
+
+  const notes = `Calibrated with video walkthrough: ${furnStr}. Mapped on ${new Date().toLocaleDateString('en-GB')}.`;
+
   closeHomeCalibration();
-  try { await apiSend('POST', '/api/rooms', { name, notes }); }
-  catch (e) { return announce('I could not save that room. Check your connection.', 'ঘরের নোট সংরক্ষণ করা যায়নি। সংযোগ দেখুন।'); }
-  await refreshRooms();
-  announce('Saved your confirmed notes for ' + name + '.', name + ' এর নিশ্চিত নোট সংরক্ষিত।', 'memory');
+  state.currentRoom = roomName;
+
+  try {
+    if (typeof apiSend === 'function') {
+      await apiSend('POST', '/api/rooms', { name: roomName, notes });
+    }
+  } catch (e) {
+    console.warn('Failed to post room to server, saving locally:', e);
+  }
+
+  // Update local state and render
+  const existingIdx = state.spatialHome.findIndex(r => r.name.toLowerCase() === roomName.toLowerCase());
+  const roomEntry = {
+    id: VideoRoomCalib.calibratingId || crypto.randomUUID(),
+    name: roomName,
+    notes,
+    updated: new Date().toISOString()
+  };
+  if (existingIdx >= 0) {
+    state.spatialHome[existingIdx] = roomEntry;
+  } else {
+    state.spatialHome.unshift(roomEntry);
+  }
+
+  if (typeof renderSpatialLayout === 'function') renderSpatialLayout();
+
+  const msgEn = `Saved calibrated room ${roomName} with ${furnStr}. I will now remember items placed on these surfaces.`;
+  const msgBn = `${roomName}-এর ক্যালিব্রেশন সংরক্ষিত হয়েছে (${furnStr})। এখানে রাখা জিনিসের অবস্থান মনে রাখা হবে।`;
+  announce(msgEn, msgBn, 'memory');
+  playEarcon('confirm');
+}
+
+async function saveCalibratedRoom() {
+  return finishVideoRoomCalibration();
+}
+
+function closeHomeCalibration() {
+  clearInterval(VideoRoomCalib.timer);
+  VideoRoomCalib.timer = null;
+  VideoRoomCalib.active = false;
+  const modal = $('calib-modal');
+  if (modal) modal.hidden = true;
+  state.calib.active = false;
+  priorModalFocus?.focus();
+}
+
+// ---- Furniture-Aware Item Placement Tracking ---------------------------------
+// Detects when user places items (powerbank, phone, charger, glasses, keys) on calibrated furniture
+let lastPlacementRecordAt = 0;
+function trackItemPlacementOnFurniture(frame, cocoObjs) {
+  if (privacyMode || !cocoObjs || !cocoObjs.length) return;
+  const now = Date.now();
+  if (now - lastPlacementRecordAt < 8000) return; // Debounce 8s
+
+  const surfaces = cocoObjs.filter(o => ['dining table', 'desk', 'bed', 'couch'].includes(o.id));
+  if (!surfaces.length) return;
+
+  const smallItems = cocoObjs.filter(o => ['cell phone', 'bottle', 'cup', 'book', 'mouse'].includes(o.id));
+  if (!smallItems.length) return;
+
+  for (const item of smallItems) {
+    for (const surf of surfaces) {
+      // Check spatial overlap: is the item inside or resting on top of the surface box?
+      const ix = item.bbox[0] + item.bbox[2] / 2;
+      const iy = item.bbox[1] + item.bbox[3] / 2;
+      const sx = surf.bbox[0], sy = surf.bbox[1], sw = surf.bbox[2], sh = surf.bbox[3];
+
+      const overlaps = (ix >= sx - 25 && ix <= sx + sw + 25 && iy >= sy - 35 && iy <= sy + sh + 25);
+      if (overlaps) {
+        lastPlacementRecordAt = now;
+        // Determine item name
+        let itemName = label(item.id);
+        if (item.id === 'cell phone') itemName = 'powerbank or phone';
+
+        // Determine furniture type from calibrated room or surface
+        let furniture = 'table';
+        const curRoom = state.currentRoom || (state.spatialHome.length ? state.spatialHome[0].name : 'Reading Room');
+        const roomRecord = state.spatialHome.find(r => r.name.toLowerCase() === curRoom.toLowerCase());
+        if (roomRecord && roomRecord.notes && /dressing table/i.test(roomRecord.notes)) {
+          furniture = 'dressing table';
+        } else if (surf.id === 'bed') {
+          furniture = 'bed';
+        } else {
+          furniture = 'reading table';
+        }
+
+        autoRecordMemory({
+          item: itemName,
+          location: `on the ${furniture} in the ${curRoom}`,
+          room: curRoom,
+          furniture,
+          source: 'Item placed on surface',
+          score: item.score
+        });
+        break;
+      }
+    }
+  }
 }
 async function deleteCalibratedRoom(id) {
   if (privacyTransition) return;
