@@ -192,5 +192,9 @@ v('toy vehicle', 'toy vehicle', 'খেলনা যানবাহন', { zoneQ
 v('toy animal', 'toy animal', 'খেলনা প্রাণী', { zoneQuiet: true, personal: true, p: ['a stuffed toy animal', 'a plush toy', 'a plastic toy animal'], al: ['toy', 'খেলনা'] });
 v('doll', 'doll', 'পুতুল', { zoneQuiet: true, personal: true, p: ['a doll', 'a toy action figure', 'a mannequin'], al: ['doll', 'পুতুল'] });
 v('photo', 'picture of someone', 'কারও ছবি', { zoneQuiet: true, p: ['a printed photograph of a person', 'a photo of a person on a phone screen', 'a poster with a face'], al: ['photo', 'picture', 'ছবি'] });
-v('mirror selfie', 'your reflection in a mirror', 'আয়নায় আপনার প্রতিবিম্ব', { special: 'mirror', p: ['a person taking a selfie in a mirror', 'a reflection of someone holding a phone in a mirror', 'a mirror selfie in a bathroom'] });
+// --- Critical Safety Hazards (Stairs, Drop-offs, High Stage Edges) ---
+v('stairs', 'stairs', 'সিঁড়ি', { hz: 'always', p: ['a flight of stairs', 'stairs leading down', 'stairs leading up', 'concrete steps or staircase', 'a staircase'], al: ['stairs', 'staircase', 'steps', 'সিঁড়ি', 'ধাপ'] });
+v('drop_off', 'drop-off edge', 'খাড়া ড্রপ বা প্রান্ত', { hz: 'always', p: ['the edge of a high stage or platform', 'a drop-off edge with a sudden drop', 'the edge of an elevated stage', 'a steep drop edge with no railing', 'a dangerous ledge or cliff', 'edge of platform'], al: ['edge', 'stage edge', 'platform edge', 'drop off', 'high stage', 'প্রান্ত', 'মঞ্চের কিনারা', 'খাদ'] });
+
 v('_bg', 'background', 'পটভূমি', { p: ['a blurry photo', 'an empty plain wall', 'a dark blurry image', 'a plain background with nothing in it'] });
+

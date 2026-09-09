@@ -1225,6 +1225,15 @@ function playEarcon(type) {
     gain.gain.setValueAtTime(0.3, now);
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
     osc.start(now); osc.stop(now + 0.45);
+  } else if (type === 'emergency') {
+    // High-urgency piercing siren sweep: 920Hz -> 460Hz -> 920Hz
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(920, now);
+    osc.frequency.exponentialRampToValueAtTime(460, now + 0.08);
+    osc.frequency.exponentialRampToValueAtTime(920, now + 0.16);
+    gain.gain.setValueAtTime(0.38, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
+    osc.start(now); osc.stop(now + 0.28);
   }
 }
 
@@ -1443,7 +1452,10 @@ v('toy vehicle', 'toy vehicle', 'খেলনা যানবাহন', { zoneQ
 v('toy animal', 'toy animal', 'খেলনা প্রাণী', { zoneQuiet: true, personal: true, p: ['a stuffed toy animal', 'a plush toy', 'a plastic toy animal'], al: ['toy', 'খেলনা'] });
 v('doll', 'doll', 'পুতুল', { zoneQuiet: true, personal: true, p: ['a doll', 'a toy action figure', 'a mannequin'], al: ['doll', 'পুতুল'] });
 v('photo', 'picture of someone', 'কারও ছবি', { zoneQuiet: true, p: ['a printed photograph of a person', 'a photo of a person on a phone screen', 'a poster with a face'], al: ['photo', 'picture', 'ছবি'] });
-v('mirror selfie', 'your reflection in a mirror', 'আয়নায় আপনার প্রতিবিম্ব', { special: 'mirror', p: ['a person taking a selfie in a mirror', 'a reflection of someone holding a phone in a mirror', 'a mirror selfie in a bathroom'] });
+// --- Critical Safety Hazards (Stairs, Drop-offs, High Stage Edges) ---
+v('stairs', 'stairs', 'সিঁড়ি', { hz: 'always', p: ['a flight of stairs', 'stairs leading down', 'stairs leading up', 'concrete steps or staircase', 'a staircase'], al: ['stairs', 'staircase', 'steps', 'সিঁড়ি', 'ধাপ'] });
+v('drop_off', 'drop-off edge', 'খাড়া ড্রপ বা প্রান্ত', { hz: 'always', p: ['the edge of a high stage or platform', 'a drop-off edge with a sudden drop', 'the edge of an elevated stage', 'a steep drop edge with no railing', 'a dangerous ledge or cliff', 'edge of platform'], al: ['edge', 'stage edge', 'platform edge', 'drop off', 'high stage', 'প্রান্ত', 'মঞ্চের কিনারা', 'খাদ'] });
+
 v('_bg', 'background', 'পটভূমি', { p: ['a blurry photo', 'an empty plain wall', 'a dark blurry image', 'a plain background with nothing in it'] });
 const VOCAB_BY_ID = Object.fromEntries(VOCAB.map(x => [x.id, x]));
 const COCO_TO_ID = Object.fromEntries(VOCAB.filter(x => x.coco).map(x => [x.coco, x.id]));
@@ -1487,7 +1499,7 @@ const state = {
   sceneKey: null,
   audio: true,
   narrate: true,
-  shield: false,
+  shield: true,
   listening: false,
   busy: false,
   liveLoop: null,
@@ -1934,9 +1946,10 @@ function drawOverlay(frame, cocoObjs, clipHits) {
 }
 
 function isHazard(o) {
+  if (o.id === 'stairs' || o.id === 'drop_off') return true;
   const vb = VOCAB_BY_ID[o.id]; if (!vb || !vb.hz) return false;
   if (vb.hz === 'always') return true;
-  return o.prox === 'very_close' || (o.src === 'clip' && o.score >= 0.45 && o.pos === 'ahead');
+  return o.prox === 'very_close' || (o.src === 'clip' && o.score >= 0.40 && o.pos === 'ahead');
 }
 
 function renderSeen() {
@@ -1975,6 +1988,36 @@ async function cocoTick() {
       const objs = await runCoco(frame);
       if (!loop.active || state.liveLoop !== loop) return;
       state.lastCocoPreds = objs;
+      // ---- AUTOMATIC REAL-TIME ACTIVE SAFETY GUARDIAN (ZERO COMMAND NEEDED) ----
+      let handledEmergency = false;
+      if (typeof ApproachVelocityTracker !== 'undefined') {
+        const velHazard = ApproachVelocityTracker.evaluate(frame.width, frame.height, objs);
+        if (velHazard) {
+          handledEmergency = true;
+          if (typeof VoiceEngine !== 'undefined' && typeof VoiceEngine.emergencyAlert === 'function') {
+            VoiceEngine.emergencyAlert(velHazard.en, velHazard.bn, velHazard.type);
+          } else {
+            announce(velHazard.en, velHazard.bn, 'safety');
+            playEarcon('emergency');
+            haptic('RAPID');
+          }
+          logEvent('EMERGENCY HAZARD: ' + velHazard.en);
+        }
+      }
+      if (!handledEmergency && typeof EdgeAndStairsDetector !== 'undefined') {
+        EdgeAndStairsDetector.evaluate(frame).then(edgeHazard => {
+          if (edgeHazard) {
+            if (typeof VoiceEngine !== 'undefined' && typeof VoiceEngine.emergencyAlert === 'function') {
+              VoiceEngine.emergencyAlert(edgeHazard.en, edgeHazard.bn, edgeHazard.type);
+            } else {
+              announce(edgeHazard.en, edgeHazard.bn, 'safety');
+              playEarcon('emergency');
+              haptic('RAPID');
+            }
+            logEvent('EMERGENCY HAZARD: ' + edgeHazard.en);
+          }
+        }).catch(() => {});
+      }
       trackPersonMotion(objs, frame);
       ingest(objs.concat(state.lastClipHits.filter(h => Date.now() - h.at < 4000)));
       drawOverlay(frame, objs, state.lastClipHits);
@@ -1982,7 +2025,7 @@ async function cocoTick() {
       ownerAutoCheck();
     }
   } catch (e) { console.warn('coco tick', e); }
-  if (loop.active) setTimeout(cocoTick, 350);
+  if (loop.active) setTimeout(cocoTick, 280);
 }
 async function clipTick() {
   const loop = state.liveLoop; if (!loop || !loop.active) return;
@@ -2008,17 +2051,39 @@ function afterLiveUpdate() {
   if (privacyTransition) return;
   const now = Date.now();
   if (state.shield) {
-    const hz = worldSorted().filter(isHazard).filter(o => (state.hazardCooldown.get(o.id) || 0) < now - 6000);
+    const hz = worldSorted().filter(isHazard).filter(o => {
+      const cd = (o.id === 'stairs' || o.id === 'drop_off' || o.id === 'car') ? 3000 : 6000;
+      return (state.hazardCooldown.get(o.id) || 0) < now - cd;
+    });
     if (hz.length) {
       const o = hz[0];
       state.hazardCooldown.set(o.id, now);
-      const msgEn = o.prox ? t('hazard_msg', { obj: label(o.id), pos: t('pos_' + o.pos), prox: t('prox_' + o.prox) }) : t('hazard_msg_noprox', { obj: label(o.id), pos: t('pos_' + o.pos) });
-      const msgBn = o.prox ? tBn('hazard_msg', { obj: labelBn(o.id), pos: tBn('pos_' + o.pos), prox: tBn('prox_' + o.prox) }) : tBn('hazard_msg_noprox', { obj: labelBn(o.id), pos: tBn('pos_' + o.pos) });
+      let msgEn = '', msgBn = '';
+      if (o.id === 'stairs') {
+        msgEn = 'Warning! Stairs directly ahead!';
+        msgBn = 'সতর্ক! সামনে সিঁড়ি!';
+      } else if (o.id === 'drop_off') {
+        msgEn = 'Stop! High stage edge and drop-off ahead!';
+        msgBn = 'থামুন! সামনে উঁচু মঞ্চের শেষ কিনারা ও খাদ!';
+      } else {
+        msgEn = o.prox ? t('hazard_msg', { obj: label(o.id), pos: t('pos_' + o.pos), prox: t('prox_' + o.prox) }) : t('hazard_msg_noprox', { obj: label(o.id), pos: t('pos_' + o.pos) });
+        msgBn = o.prox ? tBn('hazard_msg', { obj: labelBn(o.id), pos: tBn('pos_' + o.pos), prox: tBn('prox_' + o.prox) }) : tBn('hazard_msg_noprox', { obj: labelBn(o.id), pos: tBn('pos_' + o.pos) });
+      }
       showHazard(true);
       setCaption(t('agent_safety'), msgEn, 'safety', 'danger', msgBn);
-      playEarcon('hazard');
-      speak(msgEn, msgBn);
-      haptic(o.pos === 'left' ? 'LEFT' : o.pos === 'right' ? 'RIGHT' : 'RAPID');
+      if (o.id === 'stairs' || o.id === 'drop_off' || o.id === 'car') {
+        if (typeof VoiceEngine !== 'undefined' && typeof VoiceEngine.emergencyAlert === 'function') {
+          VoiceEngine.emergencyAlert(msgEn, msgBn, o.id);
+        } else {
+          playEarcon('emergency');
+          speak(msgEn, msgBn);
+          haptic('RAPID');
+        }
+      } else {
+        playEarcon('hazard');
+        speak(msgEn, msgBn);
+        haptic(o.pos === 'left' ? 'LEFT' : o.pos === 'right' ? 'RIGHT' : 'RAPID');
+      }
       logEvent(t('log_hazard', { obj: label(o.id) }));
       state.announced.set(o.id, now);
       return;
@@ -2434,6 +2499,19 @@ function safetyCheck(silentIfClear) {
 const motors = () => ({ LEFT: $('motor-left'), CENTER: $('motor-center'), RIGHT: $('motor-right') });
 let hapticTimer = null;
 function haptic(pattern) {
+  if (typeof navigator !== 'undefined' && navigator.vibrate) {
+    try {
+      if (pattern === 'RAPID' || pattern === 'DANGER' || pattern === 'EMERGENCY') {
+        navigator.vibrate([0, 160, 60, 160, 60, 260]);
+      } else if (pattern === 'LEFT') {
+        navigator.vibrate([0, 120, 60, 120]);
+      } else if (pattern === 'RIGHT') {
+        navigator.vibrate([0, 120, 60, 120]);
+      } else if (pattern === 'CONFIRM') {
+        navigator.vibrate(50);
+      }
+    } catch (e) {}
+  }
   const m = motors();
   Object.values(m).forEach(el => el.classList.remove('on', 'danger'));
   clearTimeout(hapticTimer);
@@ -3111,7 +3189,7 @@ function enhancementBoot() {
     if(['short','detailed'].includes(p.style))$('description-style').value=p.style;
     if(['ben+eng','eng'].includes(p.ocr))$('ocr-language').value=p.ocr; else if(voiceLang==='en')$('ocr-language').value='eng';
     const stt=localStorage.getItem('astha.stt'); if(stt && $('stt-lang'))$('stt-lang').value=stt;
-    state.narrate=localStorage.getItem('astha.narrate')!=='0';
+    state.narrate=localStorage.getItem('astha.narrate')!=='0'; state.shield=localStorage.getItem('astha.shield')!=='0';
     $('narrate-switch').setAttribute('aria-checked',state.narrate);
     if(localStorage.getItem(VAULT_KEY))$('vault-status').textContent='Saved encrypted memories found. Enter your passphrase to unlock.';
   } catch (_) {}
@@ -3269,6 +3347,31 @@ const VoiceEngine = {
     if (this.mode === 'synth') this.mode = null;
     this.lastSpokeAt = Date.now();
     return ok;
+  },
+  emergencyAlert(textEn, textBn, hazardType) {
+    this.stop();
+    if (!state.audio) return;
+    if (typeof playEarcon === 'function') playEarcon('emergency');
+    if (typeof haptic === 'function') haptic('RAPID');
+    const useBn = voiceLang === 'bn' && !!textBn;
+    const text = useBn ? textBn : textEn;
+    if (!text) return;
+    VoiceEchoFilter.recordMachineSpeech(text);
+    if (typeof setCaption === 'function') setCaption('EMERGENCY HAZARD', textEn, 'safety', 'danger', textBn);
+    if (typeof showHazard === 'function') showHazard(true);
+
+    if (window.speechSynthesis) {
+      try { window.speechSynthesis.cancel(); } catch (e) {}
+      const u = typeof makeUtterance === 'function' ? makeUtterance(sanitizeForSpeech(text), useBn ? 'bn' : 'en') : new SpeechSynthesisUtterance(text);
+      if (u) {
+        u.rate = 1.18; // Urgent fast speech
+        u.pitch = 1.1;
+        this.mode = 'synth';
+        u.onend = () => { if (this.mode === 'synth') this.mode = null; };
+        u.onerror = () => { if (this.mode === 'synth') this.mode = null; };
+        window.speechSynthesis.speak(u);
+      }
+    }
   },
 };
 function asthaSpeaking() { return VoiceEngine.speaking; }
@@ -5264,6 +5367,254 @@ async function trackItemPlacementOnFurniture(frame, cocoObjs) {
     isTrackingPlacement = false;
   }
 }
+
+// ---- Real-Time Optical Approach Velocity & Looming Collision Tracker ------
+const ApproachVelocityTracker = {
+  history: [],
+  lastAlertAt: new Map(),
+
+  evaluate(frameWidth, frameHeight, cocoObjs) {
+    if (!cocoObjs || !cocoObjs.length) {
+      const now = Date.now();
+      this.history = this.history.filter(h => now - h.time < 1200);
+      return null;
+    }
+
+    const now = Date.now();
+    const frameArea = frameWidth * frameHeight;
+    const currentTracks = [];
+    let criticalHazard = null;
+    const vehicleClasses = new Set(['car', 'truck', 'bus', 'motorcycle', 'bicycle']);
+
+    for (const obj of cocoObjs) {
+      const isVehicle = vehicleClasses.has(obj.id);
+      const isPerson = obj.id === 'person';
+      if (!isVehicle && !isPerson) continue;
+      if (obj.score < 0.38) continue;
+
+      const [x, y, w, h] = obj.bbox;
+      const area = w * h;
+      const normArea = area / frameArea;
+      const cx = (x + w / 2) / frameWidth;
+      const cy = (y + h / 2) / frameHeight;
+
+      // Find best match in recent history (within 1400ms)
+      let bestMatch = null;
+      let minDistance = 0.38;
+
+      for (const prev of this.history) {
+        if (now - prev.time > 1400) continue;
+        if (prev.id !== obj.id && !(isVehicle && vehicleClasses.has(prev.id))) continue;
+        const dist = Math.hypot(cx - prev.cx, cy - prev.cy);
+        if (dist < minDistance) {
+          minDistance = dist;
+          bestMatch = prev;
+        }
+      }
+
+      currentTracks.push({
+        id: obj.id,
+        isVehicle,
+        isPerson,
+        bbox: obj.bbox,
+        area,
+        normArea,
+        cx,
+        cy,
+        time: now
+      });
+
+      const dirEn = cx < 0.35 ? 'on your left' : cx > 0.65 ? 'on your right' : 'directly ahead';
+      const dirBn = cx < 0.35 ? 'বামে' : cx > 0.65 ? 'ডানে' : 'সামনে';
+
+      if (bestMatch) {
+        const dt = (now - bestMatch.time) / 1000;
+        if (dt >= 0.12 && dt <= 1.2) {
+          const areaGrowthRatio = area / (bestMatch.area || 1);
+          const expansionRatePerSec = (areaGrowthRatio - 1) / dt;
+
+          // 1. VEHICLE APPROACHING WITH HIGH VELOCITY
+          if (isVehicle) {
+            const isRapidVehicleApproach = (areaGrowthRatio >= 1.22 && expansionRatePerSec >= 0.40 && normArea >= 0.07);
+            const isImminentVehicleCollision = (normArea >= 0.28 && cx >= 0.18 && cx <= 0.82);
+
+            if (isRapidVehicleApproach || isImminentVehicleCollision) {
+              const alertKey = `vehicle_${Math.round(cx * 4)}`;
+              if (now - (this.lastAlertAt.get(alertKey) || 0) > 2000) {
+                this.lastAlertAt.set(alertKey, now);
+                criticalHazard = {
+                  type: 'vehicle_collision',
+                  en: `Watch out! Car approaching quickly ${dirEn}!`,
+                  bn: `সাবধান! ${dirBn} দিয়ে দ্রুত গাড়ি আসছে!`,
+                  pos: cx < 0.35 ? 'left' : cx > 0.65 ? 'right' : 'center',
+                  haptic: 'RAPID'
+                };
+                break;
+              }
+            }
+          }
+
+          // 2. BODY / PERSON APPROACHING WITH HIGH VELOCITY
+          if (isPerson) {
+            const isRapidPersonApproach = (areaGrowthRatio >= 1.28 && expansionRatePerSec >= 0.48 && normArea >= 0.10 && cx >= 0.15 && cx <= 0.85);
+            const isImminentPersonCollision = (normArea >= 0.40 && cx >= 0.20 && cx <= 0.80);
+
+            if (isRapidPersonApproach || isImminentPersonCollision) {
+              const alertKey = `person_${Math.round(cx * 4)}`;
+              if (now - (this.lastAlertAt.get(alertKey) || 0) > 2200) {
+                this.lastAlertAt.set(alertKey, now);
+                criticalHazard = {
+                  type: 'body_collision',
+                  en: `Watch out! Person approaching rapidly ${dirEn}!`,
+                  bn: `সাবধান! ${dirBn} দ্রুত মানুষ এগিয়ে আসছে!`,
+                  pos: cx < 0.35 ? 'left' : cx > 0.65 ? 'right' : 'center',
+                  haptic: 'RAPID'
+                };
+                break;
+              }
+            }
+          }
+        }
+      } else {
+        // High threat: vehicle already large and forward in path
+        if (isVehicle && normArea >= 0.32 && cx >= 0.20 && cx <= 0.80) {
+          const alertKey = `vehicle_${Math.round(cx * 4)}`;
+          if (now - (this.lastAlertAt.get(alertKey) || 0) > 2500) {
+            this.lastAlertAt.set(alertKey, now);
+            criticalHazard = {
+              type: 'vehicle_collision',
+              en: `Watch out! Vehicle dangerously close ${dirEn}!`,
+              bn: `সাবধান! ${dirBn} গাড়ি খুব কাছে!`,
+              pos: cx < 0.35 ? 'left' : cx > 0.65 ? 'right' : 'center',
+              haptic: 'RAPID'
+            };
+            break;
+          }
+        }
+      }
+    }
+
+    this.history = this.history.filter(h => now - h.time < 1500).concat(currentTracks);
+    return criticalHazard;
+  }
+};
+
+// ---- Real-Time Stairs, High Stage & Drop-off Edge Detector ----------------
+const EdgeAndStairsDetector = {
+  lastStairsAlertAt: 0,
+  lastEdgeAlertAt: 0,
+  scanCanvas: null,
+
+  scanStairGeometry(frame) {
+    if (!frame) return { hasPeriodicSteps: false, peaks: 0 };
+    const W = 128, H = 96;
+    if (!this.scanCanvas) {
+      this.scanCanvas = document.createElement('canvas');
+      this.scanCanvas.width = W;
+      this.scanCanvas.height = H;
+    }
+    const ctx = this.scanCanvas.getContext('2d', { willReadFrequently: true });
+    const srcY = Math.floor(frame.height * 0.35);
+    const srcH = frame.height - srcY;
+    ctx.drawImage(frame, 0, srcY, frame.width, srcH, 0, 0, W, H);
+    const imgData = ctx.getImageData(0, 0, W, H).data;
+
+    const rowGradients = new Float32Array(H);
+    for (let y = 1; y < H - 1; y++) {
+      let gradSum = 0;
+      for (let x = 16; x < W - 16; x++) {
+        const idxCurr = (y * W + x) * 4;
+        const idxTop = ((y - 1) * W + x) * 4;
+        const lumCurr = (imgData[idxCurr] * 299 + imgData[idxCurr + 1] * 587 + imgData[idxCurr + 2] * 114) / 1000;
+        const lumTop = (imgData[idxTop] * 299 + imgData[idxTop + 1] * 587 + imgData[idxTop + 2] * 114) / 1000;
+        gradSum += Math.abs(lumCurr - lumTop);
+      }
+      rowGradients[y] = gradSum / (W - 32);
+    }
+
+    let peakCount = 0;
+    let lastPeakY = -1;
+    const avgGrad = rowGradients.reduce((a, b) => a + b, 0) / H;
+    const threshold = Math.max(16, avgGrad * 1.30);
+
+    for (let y = 3; y < H - 3; y++) {
+      if (rowGradients[y] > threshold) {
+        if (lastPeakY === -1) {
+          peakCount++;
+          lastPeakY = y;
+        } else if ((y - lastPeakY) >= 6 && (y - lastPeakY) <= 28) {
+          peakCount++;
+          lastPeakY = y;
+        }
+      }
+    }
+
+    return { hasPeriodicSteps: peakCount >= 3, peaks: peakCount };
+  },
+
+  async evaluate(frame) {
+    if (!frame) return null;
+    const now = Date.now();
+    const canAlertStairs = now - this.lastStairsAlertAt > 3200;
+    const canAlertEdge = now - this.lastEdgeAlertAt > 3200;
+    if (!canAlertStairs && !canAlertEdge) return null;
+
+    // 1. Instant geometry check (~2ms)
+    const geom = this.scanStairGeometry(frame);
+    if (geom.hasPeriodicSteps && canAlertStairs) {
+      this.lastStairsAlertAt = now;
+      return {
+        type: 'stairs',
+        en: 'Warning! Stairs directly ahead!',
+        bn: 'সতর্ক! সামনে সিঁড়ি!',
+        haptic: 'RAPID'
+      };
+    }
+
+    // 2. Open-vocabulary CLIP check on lower-middle field
+    if (typeof engine !== 'undefined' && engine.clip && engine.clip.status === 'ready' && typeof clipEmbedCrops === 'function') {
+      try {
+        const lowerCrop = {
+          x: Math.floor(frame.width * 0.15),
+          y: Math.floor(frame.height * 0.40),
+          w: Math.floor(frame.width * 0.70),
+          h: Math.floor(frame.height * 0.55)
+        };
+        const [emb] = await clipEmbedCrops(frame, [lowerCrop]);
+        if (emb) {
+          const ranked = scoreEmbedding(emb);
+          const topStairs = ranked.find(r => r.id === 'stairs');
+          const topEdge = ranked.find(r => r.id === 'drop_off');
+
+          if (topEdge && topEdge.p >= 0.18 && canAlertEdge) {
+            this.lastEdgeAlertAt = now;
+            return {
+              type: 'drop_off',
+              en: 'Stop! High stage edge and drop-off ahead!',
+              bn: 'থামুন! সামনে উঁচু মঞ্চের শেষ কিনারা ও খাদ!',
+              haptic: 'RAPID'
+            };
+          }
+
+          if (topStairs && topStairs.p >= 0.18 && canAlertStairs) {
+            this.lastStairsAlertAt = now;
+            return {
+              type: 'stairs',
+              en: 'Warning! Stairs directly ahead!',
+              bn: 'সতর্ক! সামনে সিঁড়ি!',
+              haptic: 'RAPID'
+            };
+          }
+        }
+      } catch (e) {
+        console.warn('Edge/Stairs CLIP check:', e);
+      }
+    }
+
+    return null;
+  }
+};
+
 async function deleteCalibratedRoom(id) {
   if (privacyTransition) return;
   try { await apiSend('DELETE', '/api/rooms/' + encodeURIComponent(id)); } catch (e) {}

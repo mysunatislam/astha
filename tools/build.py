@@ -256,13 +256,46 @@ rep("  if (/read all|read book|read document|বই পড়|পুরো.*প�
 # ---- accuracy: keep garments/toys/pictures out of the live zone scan, track person motion ----
 rep("    const ranked = scoreEmbedding(emb).filter(r => r.id !== '_bg' && !VOCAB_BY_ID[r.id].quiet);\n    if (rects[i].pos === 'center')",
     "    const ranked = scoreEmbedding(emb).filter(r => r.id !== '_bg' && !VOCAB_BY_ID[r.id].quiet && !VOCAB_BY_ID[r.id].zoneQuiet);\n    if (rects[i].pos === 'center')")
-rep("      state.lastCocoPreds = objs;\n      ingest(objs.concat(", "      state.lastCocoPreds = objs;\n      trackPersonMotion(objs, frame);\n      ingest(objs.concat(")
+rep("      state.lastCocoPreds = objs;\n      ingest(objs.concat(",
+    "      state.lastCocoPreds = objs;\n"
+    "      // ---- AUTOMATIC REAL-TIME ACTIVE SAFETY GUARDIAN (ZERO COMMAND NEEDED) ----\n"
+    "      let handledEmergency = false;\n"
+    "      if (typeof ApproachVelocityTracker !== 'undefined') {\n"
+    "        const velHazard = ApproachVelocityTracker.evaluate(frame.width, frame.height, objs);\n"
+    "        if (velHazard) {\n"
+    "          handledEmergency = true;\n"
+    "          if (typeof VoiceEngine !== 'undefined' && typeof VoiceEngine.emergencyAlert === 'function') {\n"
+    "            VoiceEngine.emergencyAlert(velHazard.en, velHazard.bn, velHazard.type);\n"
+    "          } else {\n"
+    "            announce(velHazard.en, velHazard.bn, 'safety');\n"
+    "            playEarcon('emergency');\n"
+    "            haptic('RAPID');\n"
+    "          }\n"
+    "          logEvent('EMERGENCY HAZARD: ' + velHazard.en);\n"
+    "        }\n"
+    "      }\n"
+    "      if (!handledEmergency && typeof EdgeAndStairsDetector !== 'undefined') {\n"
+    "        EdgeAndStairsDetector.evaluate(frame).then(edgeHazard => {\n"
+    "          if (edgeHazard) {\n"
+    "            if (typeof VoiceEngine !== 'undefined' && typeof VoiceEngine.emergencyAlert === 'function') {\n"
+    "              VoiceEngine.emergencyAlert(edgeHazard.en, edgeHazard.bn, edgeHazard.type);\n"
+    "            } else {\n"
+    "              announce(edgeHazard.en, edgeHazard.bn, 'safety');\n"
+    "              playEarcon('emergency');\n"
+    "              haptic('RAPID');\n"
+    "            }\n"
+    "            logEvent('EMERGENCY HAZARD: ' + edgeHazard.en);\n"
+    "          }\n"
+    "        }).catch(() => {});\n"
+    "      }\n"
+    "      trackPersonMotion(objs, frame);\n"
+    "      ingest(objs.concat(")
 rep("if (rframe) { await refineWorld(rframe, state.lastCocoPreds, ''); if (await mirrorCheck(rframe, true)) return; }",
     "if (rframe) { await refineWorld(rframe, state.lastCocoPreds, ''); if (state.lastCocoPreds.some(o => o.id === 'person') && await mirrorCheck(rframe, true)) return; }")
 
-# ---- instant narration: on by default, announce anything not yet announced ----
-rep("  narrate: false,\n  shield: false,", "  narrate: true,\n  shield: false,")
-rep("state.narrate=localStorage.getItem('astha.narrate')==='1';", "state.narrate=localStorage.getItem('astha.narrate')!=='0';")
+# ---- instant narration & proactive safety shield: on by default ----
+rep("  narrate: false,\n  shield: false,", "  narrate: true,\n  shield: true,")
+rep("state.narrate=localStorage.getItem('astha.narrate')==='1';", "state.narrate=localStorage.getItem('astha.narrate')!=='0'; state.shield=localStorage.getItem('astha.shield')!=='0';")
 rep("auto_narrate: 'Announce new objects automatically (off by default for screen readers)'", "auto_narrate: 'Announce objects out loud the moment they appear'")
 rep("const fresh = worldSorted().filter(o => (state.announced.get(o.id) || 0) < now - 12000 && now - o.first < 2500 && o.score >= (o.src === 'coco' ? 0.55 : 0.28));\n  if (fresh.length && now - (state.lastNarration || 0) > 3000) {",
     "const fresh = worldSorted().filter(o => (state.announced.get(o.id) || 0) < now - 10000 && o.score >= (o.src === 'coco' ? 0.55 : 0.28));\n  if (fresh.length && now - (state.lastNarration || 0) > 1500) {")

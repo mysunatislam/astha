@@ -1119,6 +1119,15 @@ function playEarcon(type) {
     gain.gain.setValueAtTime(0.3, now);
     gain.gain.exponentialRampToValueAtTime(0.001, now + 0.45);
     osc.start(now); osc.stop(now + 0.45);
+  } else if (type === 'emergency') {
+    // High-urgency piercing siren sweep: 920Hz -> 460Hz -> 920Hz
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(920, now);
+    osc.frequency.exponentialRampToValueAtTime(460, now + 0.08);
+    osc.frequency.exponentialRampToValueAtTime(920, now + 0.16);
+    gain.gain.setValueAtTime(0.38, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.28);
+    osc.start(now); osc.stop(now + 0.28);
   }
 }
 
@@ -1691,9 +1700,10 @@ function drawOverlay(frame, cocoObjs, clipHits) {
 }
 
 function isHazard(o) {
+  if (o.id === 'stairs' || o.id === 'drop_off') return true;
   const vb = VOCAB_BY_ID[o.id]; if (!vb || !vb.hz) return false;
   if (vb.hz === 'always') return true;
-  return o.prox === 'very_close' || (o.src === 'clip' && o.score >= 0.45 && o.pos === 'ahead');
+  return o.prox === 'very_close' || (o.src === 'clip' && o.score >= 0.40 && o.pos === 'ahead');
 }
 
 function renderSeen() {
@@ -1737,7 +1747,7 @@ async function cocoTick() {
       afterLiveUpdate();
     }
   } catch (e) { console.warn('coco tick', e); }
-  if (loop.active) setTimeout(cocoTick, 350);
+  if (loop.active) setTimeout(cocoTick, 280);
 }
 async function clipTick() {
   const loop = state.liveLoop; if (!loop || !loop.active) return;
@@ -1761,17 +1771,39 @@ function afterLiveUpdate() {
   if (privacyTransition) return;
   const now = Date.now();
   if (state.shield) {
-    const hz = worldSorted().filter(isHazard).filter(o => (state.hazardCooldown.get(o.id) || 0) < now - 6000);
+    const hz = worldSorted().filter(isHazard).filter(o => {
+      const cd = (o.id === 'stairs' || o.id === 'drop_off' || o.id === 'car') ? 3000 : 6000;
+      return (state.hazardCooldown.get(o.id) || 0) < now - cd;
+    });
     if (hz.length) {
       const o = hz[0];
       state.hazardCooldown.set(o.id, now);
-      const msgEn = o.prox ? t('hazard_msg', { obj: label(o.id), pos: t('pos_' + o.pos), prox: t('prox_' + o.prox) }) : t('hazard_msg_noprox', { obj: label(o.id), pos: t('pos_' + o.pos) });
-      const msgBn = o.prox ? tBn('hazard_msg', { obj: labelBn(o.id), pos: tBn('pos_' + o.pos), prox: tBn('prox_' + o.prox) }) : tBn('hazard_msg_noprox', { obj: labelBn(o.id), pos: tBn('pos_' + o.pos) });
+      let msgEn = '', msgBn = '';
+      if (o.id === 'stairs') {
+        msgEn = 'Warning! Stairs directly ahead!';
+        msgBn = 'সতর্ক! সামনে সিঁড়ি!';
+      } else if (o.id === 'drop_off') {
+        msgEn = 'Stop! High stage edge and drop-off ahead!';
+        msgBn = 'থামুন! সামনে উঁচু মঞ্চের শেষ কিনারা ও খাদ!';
+      } else {
+        msgEn = o.prox ? t('hazard_msg', { obj: label(o.id), pos: t('pos_' + o.pos), prox: t('prox_' + o.prox) }) : t('hazard_msg_noprox', { obj: label(o.id), pos: t('pos_' + o.pos) });
+        msgBn = o.prox ? tBn('hazard_msg', { obj: labelBn(o.id), pos: tBn('pos_' + o.pos), prox: tBn('prox_' + o.prox) }) : tBn('hazard_msg_noprox', { obj: labelBn(o.id), pos: tBn('pos_' + o.pos) });
+      }
       showHazard(true);
       setCaption(t('agent_safety'), msgEn, 'safety', 'danger', msgBn);
-      playEarcon('hazard');
-      speak(msgEn, msgBn);
-      haptic(o.pos === 'left' ? 'LEFT' : o.pos === 'right' ? 'RIGHT' : 'RAPID');
+      if (o.id === 'stairs' || o.id === 'drop_off' || o.id === 'car') {
+        if (typeof VoiceEngine !== 'undefined' && typeof VoiceEngine.emergencyAlert === 'function') {
+          VoiceEngine.emergencyAlert(msgEn, msgBn, o.id);
+        } else {
+          playEarcon('emergency');
+          speak(msgEn, msgBn);
+          haptic('RAPID');
+        }
+      } else {
+        playEarcon('hazard');
+        speak(msgEn, msgBn);
+        haptic(o.pos === 'left' ? 'LEFT' : o.pos === 'right' ? 'RIGHT' : 'RAPID');
+      }
       logEvent(t('log_hazard', { obj: label(o.id) }));
       state.announced.set(o.id, now);
       return;
@@ -2152,6 +2184,19 @@ function safetyCheck(silentIfClear) {
 const motors = () => ({ LEFT: $('motor-left'), CENTER: $('motor-center'), RIGHT: $('motor-right') });
 let hapticTimer = null;
 function haptic(pattern) {
+  if (typeof navigator !== 'undefined' && navigator.vibrate) {
+    try {
+      if (pattern === 'RAPID' || pattern === 'DANGER' || pattern === 'EMERGENCY') {
+        navigator.vibrate([0, 160, 60, 160, 60, 260]);
+      } else if (pattern === 'LEFT') {
+        navigator.vibrate([0, 120, 60, 120]);
+      } else if (pattern === 'RIGHT') {
+        navigator.vibrate([0, 120, 60, 120]);
+      } else if (pattern === 'CONFIRM') {
+        navigator.vibrate(50);
+      }
+    } catch (e) {}
+  }
   const m = motors();
   Object.values(m).forEach(el => el.classList.remove('on', 'danger'));
   clearTimeout(hapticTimer);

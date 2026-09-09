@@ -132,6 +132,31 @@ const VoiceEngine = {
     this.lastSpokeAt = Date.now();
     return ok;
   },
+  emergencyAlert(textEn, textBn, hazardType) {
+    this.stop();
+    if (!state.audio) return;
+    if (typeof playEarcon === 'function') playEarcon('emergency');
+    if (typeof haptic === 'function') haptic('RAPID');
+    const useBn = voiceLang === 'bn' && !!textBn;
+    const text = useBn ? textBn : textEn;
+    if (!text) return;
+    VoiceEchoFilter.recordMachineSpeech(text);
+    if (typeof setCaption === 'function') setCaption('EMERGENCY HAZARD', textEn, 'safety', 'danger', textBn);
+    if (typeof showHazard === 'function') showHazard(true);
+
+    if (window.speechSynthesis) {
+      try { window.speechSynthesis.cancel(); } catch (e) {}
+      const u = typeof makeUtterance === 'function' ? makeUtterance(sanitizeForSpeech(text), useBn ? 'bn' : 'en') : new SpeechSynthesisUtterance(text);
+      if (u) {
+        u.rate = 1.18; // Urgent fast speech
+        u.pitch = 1.1;
+        this.mode = 'synth';
+        u.onend = () => { if (this.mode === 'synth') this.mode = null; };
+        u.onerror = () => { if (this.mode === 'synth') this.mode = null; };
+        window.speechSynthesis.speak(u);
+      }
+    }
+  },
 };
 function asthaSpeaking() { return VoiceEngine.speaking; }
 
@@ -2126,6 +2151,254 @@ async function trackItemPlacementOnFurniture(frame, cocoObjs) {
     isTrackingPlacement = false;
   }
 }
+
+// ---- Real-Time Optical Approach Velocity & Looming Collision Tracker ------
+const ApproachVelocityTracker = {
+  history: [],
+  lastAlertAt: new Map(),
+
+  evaluate(frameWidth, frameHeight, cocoObjs) {
+    if (!cocoObjs || !cocoObjs.length) {
+      const now = Date.now();
+      this.history = this.history.filter(h => now - h.time < 1200);
+      return null;
+    }
+
+    const now = Date.now();
+    const frameArea = frameWidth * frameHeight;
+    const currentTracks = [];
+    let criticalHazard = null;
+    const vehicleClasses = new Set(['car', 'truck', 'bus', 'motorcycle', 'bicycle']);
+
+    for (const obj of cocoObjs) {
+      const isVehicle = vehicleClasses.has(obj.id);
+      const isPerson = obj.id === 'person';
+      if (!isVehicle && !isPerson) continue;
+      if (obj.score < 0.38) continue;
+
+      const [x, y, w, h] = obj.bbox;
+      const area = w * h;
+      const normArea = area / frameArea;
+      const cx = (x + w / 2) / frameWidth;
+      const cy = (y + h / 2) / frameHeight;
+
+      // Find best match in recent history (within 1400ms)
+      let bestMatch = null;
+      let minDistance = 0.38;
+
+      for (const prev of this.history) {
+        if (now - prev.time > 1400) continue;
+        if (prev.id !== obj.id && !(isVehicle && vehicleClasses.has(prev.id))) continue;
+        const dist = Math.hypot(cx - prev.cx, cy - prev.cy);
+        if (dist < minDistance) {
+          minDistance = dist;
+          bestMatch = prev;
+        }
+      }
+
+      currentTracks.push({
+        id: obj.id,
+        isVehicle,
+        isPerson,
+        bbox: obj.bbox,
+        area,
+        normArea,
+        cx,
+        cy,
+        time: now
+      });
+
+      const dirEn = cx < 0.35 ? 'on your left' : cx > 0.65 ? 'on your right' : 'directly ahead';
+      const dirBn = cx < 0.35 ? 'বামে' : cx > 0.65 ? 'ডানে' : 'সামনে';
+
+      if (bestMatch) {
+        const dt = (now - bestMatch.time) / 1000;
+        if (dt >= 0.12 && dt <= 1.2) {
+          const areaGrowthRatio = area / (bestMatch.area || 1);
+          const expansionRatePerSec = (areaGrowthRatio - 1) / dt;
+
+          // 1. VEHICLE APPROACHING WITH HIGH VELOCITY
+          if (isVehicle) {
+            const isRapidVehicleApproach = (areaGrowthRatio >= 1.22 && expansionRatePerSec >= 0.40 && normArea >= 0.07);
+            const isImminentVehicleCollision = (normArea >= 0.28 && cx >= 0.18 && cx <= 0.82);
+
+            if (isRapidVehicleApproach || isImminentVehicleCollision) {
+              const alertKey = `vehicle_${Math.round(cx * 4)}`;
+              if (now - (this.lastAlertAt.get(alertKey) || 0) > 2000) {
+                this.lastAlertAt.set(alertKey, now);
+                criticalHazard = {
+                  type: 'vehicle_collision',
+                  en: `Watch out! Car approaching quickly ${dirEn}!`,
+                  bn: `সাবধান! ${dirBn} দিয়ে দ্রুত গাড়ি আসছে!`,
+                  pos: cx < 0.35 ? 'left' : cx > 0.65 ? 'right' : 'center',
+                  haptic: 'RAPID'
+                };
+                break;
+              }
+            }
+          }
+
+          // 2. BODY / PERSON APPROACHING WITH HIGH VELOCITY
+          if (isPerson) {
+            const isRapidPersonApproach = (areaGrowthRatio >= 1.28 && expansionRatePerSec >= 0.48 && normArea >= 0.10 && cx >= 0.15 && cx <= 0.85);
+            const isImminentPersonCollision = (normArea >= 0.40 && cx >= 0.20 && cx <= 0.80);
+
+            if (isRapidPersonApproach || isImminentPersonCollision) {
+              const alertKey = `person_${Math.round(cx * 4)}`;
+              if (now - (this.lastAlertAt.get(alertKey) || 0) > 2200) {
+                this.lastAlertAt.set(alertKey, now);
+                criticalHazard = {
+                  type: 'body_collision',
+                  en: `Watch out! Person approaching rapidly ${dirEn}!`,
+                  bn: `সাবধান! ${dirBn} দ্রুত মানুষ এগিয়ে আসছে!`,
+                  pos: cx < 0.35 ? 'left' : cx > 0.65 ? 'right' : 'center',
+                  haptic: 'RAPID'
+                };
+                break;
+              }
+            }
+          }
+        }
+      } else {
+        // High threat: vehicle already large and forward in path
+        if (isVehicle && normArea >= 0.32 && cx >= 0.20 && cx <= 0.80) {
+          const alertKey = `vehicle_${Math.round(cx * 4)}`;
+          if (now - (this.lastAlertAt.get(alertKey) || 0) > 2500) {
+            this.lastAlertAt.set(alertKey, now);
+            criticalHazard = {
+              type: 'vehicle_collision',
+              en: `Watch out! Vehicle dangerously close ${dirEn}!`,
+              bn: `সাবধান! ${dirBn} গাড়ি খুব কাছে!`,
+              pos: cx < 0.35 ? 'left' : cx > 0.65 ? 'right' : 'center',
+              haptic: 'RAPID'
+            };
+            break;
+          }
+        }
+      }
+    }
+
+    this.history = this.history.filter(h => now - h.time < 1500).concat(currentTracks);
+    return criticalHazard;
+  }
+};
+
+// ---- Real-Time Stairs, High Stage & Drop-off Edge Detector ----------------
+const EdgeAndStairsDetector = {
+  lastStairsAlertAt: 0,
+  lastEdgeAlertAt: 0,
+  scanCanvas: null,
+
+  scanStairGeometry(frame) {
+    if (!frame) return { hasPeriodicSteps: false, peaks: 0 };
+    const W = 128, H = 96;
+    if (!this.scanCanvas) {
+      this.scanCanvas = document.createElement('canvas');
+      this.scanCanvas.width = W;
+      this.scanCanvas.height = H;
+    }
+    const ctx = this.scanCanvas.getContext('2d', { willReadFrequently: true });
+    const srcY = Math.floor(frame.height * 0.35);
+    const srcH = frame.height - srcY;
+    ctx.drawImage(frame, 0, srcY, frame.width, srcH, 0, 0, W, H);
+    const imgData = ctx.getImageData(0, 0, W, H).data;
+
+    const rowGradients = new Float32Array(H);
+    for (let y = 1; y < H - 1; y++) {
+      let gradSum = 0;
+      for (let x = 16; x < W - 16; x++) {
+        const idxCurr = (y * W + x) * 4;
+        const idxTop = ((y - 1) * W + x) * 4;
+        const lumCurr = (imgData[idxCurr] * 299 + imgData[idxCurr + 1] * 587 + imgData[idxCurr + 2] * 114) / 1000;
+        const lumTop = (imgData[idxTop] * 299 + imgData[idxTop + 1] * 587 + imgData[idxTop + 2] * 114) / 1000;
+        gradSum += Math.abs(lumCurr - lumTop);
+      }
+      rowGradients[y] = gradSum / (W - 32);
+    }
+
+    let peakCount = 0;
+    let lastPeakY = -1;
+    const avgGrad = rowGradients.reduce((a, b) => a + b, 0) / H;
+    const threshold = Math.max(16, avgGrad * 1.30);
+
+    for (let y = 3; y < H - 3; y++) {
+      if (rowGradients[y] > threshold) {
+        if (lastPeakY === -1) {
+          peakCount++;
+          lastPeakY = y;
+        } else if ((y - lastPeakY) >= 6 && (y - lastPeakY) <= 28) {
+          peakCount++;
+          lastPeakY = y;
+        }
+      }
+    }
+
+    return { hasPeriodicSteps: peakCount >= 3, peaks: peakCount };
+  },
+
+  async evaluate(frame) {
+    if (!frame) return null;
+    const now = Date.now();
+    const canAlertStairs = now - this.lastStairsAlertAt > 3200;
+    const canAlertEdge = now - this.lastEdgeAlertAt > 3200;
+    if (!canAlertStairs && !canAlertEdge) return null;
+
+    // 1. Instant geometry check (~2ms)
+    const geom = this.scanStairGeometry(frame);
+    if (geom.hasPeriodicSteps && canAlertStairs) {
+      this.lastStairsAlertAt = now;
+      return {
+        type: 'stairs',
+        en: 'Warning! Stairs directly ahead!',
+        bn: 'সতর্ক! সামনে সিঁড়ি!',
+        haptic: 'RAPID'
+      };
+    }
+
+    // 2. Open-vocabulary CLIP check on lower-middle field
+    if (typeof engine !== 'undefined' && engine.clip && engine.clip.status === 'ready' && typeof clipEmbedCrops === 'function') {
+      try {
+        const lowerCrop = {
+          x: Math.floor(frame.width * 0.15),
+          y: Math.floor(frame.height * 0.40),
+          w: Math.floor(frame.width * 0.70),
+          h: Math.floor(frame.height * 0.55)
+        };
+        const [emb] = await clipEmbedCrops(frame, [lowerCrop]);
+        if (emb) {
+          const ranked = scoreEmbedding(emb);
+          const topStairs = ranked.find(r => r.id === 'stairs');
+          const topEdge = ranked.find(r => r.id === 'drop_off');
+
+          if (topEdge && topEdge.p >= 0.18 && canAlertEdge) {
+            this.lastEdgeAlertAt = now;
+            return {
+              type: 'drop_off',
+              en: 'Stop! High stage edge and drop-off ahead!',
+              bn: 'থামুন! সামনে উঁচু মঞ্চের শেষ কিনারা ও খাদ!',
+              haptic: 'RAPID'
+            };
+          }
+
+          if (topStairs && topStairs.p >= 0.18 && canAlertStairs) {
+            this.lastStairsAlertAt = now;
+            return {
+              type: 'stairs',
+              en: 'Warning! Stairs directly ahead!',
+              bn: 'সতর্ক! সামনে সিঁড়ি!',
+              haptic: 'RAPID'
+            };
+          }
+        }
+      } catch (e) {
+        console.warn('Edge/Stairs CLIP check:', e);
+      }
+    }
+
+    return null;
+  }
+};
+
 async function deleteCalibratedRoom(id) {
   if (privacyTransition) return;
   try { await apiSend('DELETE', '/api/rooms/' + encodeURIComponent(id)); } catch (e) {}
