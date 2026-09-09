@@ -275,7 +275,7 @@ rep("      state.lastCocoPreds = objs;\n      ingest(objs.concat(",
     "        }\n"
     "      }\n"
     "      if (!handledEmergency && typeof EdgeAndStairsDetector !== 'undefined') {\n"
-    "        EdgeAndStairsDetector.evaluate(frame).then(edgeHazard => {\n"
+    "        EdgeAndStairsDetector.evaluate(frame, objs).then(edgeHazard => {\n"
     "          if (edgeHazard) {\n"
     "            if (typeof VoiceEngine !== 'undefined' && typeof VoiceEngine.emergencyAlert === 'function') {\n"
     "              VoiceEngine.emergencyAlert(edgeHazard.en, edgeHazard.bn, edgeHazard.type);\n"

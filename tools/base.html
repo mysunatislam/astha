@@ -1700,7 +1700,12 @@ function drawOverlay(frame, cocoObjs, clipHits) {
 }
 
 function isHazard(o) {
-  if (o.id === 'stairs' || o.id === 'drop_off') return true;
+  if (o.id === 'stairs' || o.id === 'drop_off') {
+    if (state.lastCocoPreds && state.lastCocoPreds.some(p => ['desk', 'dining table', 'keyboard', 'laptop', 'mouse', 'tv', 'monitor'].includes(p.id))) {
+      return false;
+    }
+    return o.score >= 0.55;
+  }
   const vb = VOCAB_BY_ID[o.id]; if (!vb || !vb.hz) return false;
   if (vb.hz === 'always') return true;
   return o.prox === 'very_close' || (o.src === 'clip' && o.score >= 0.40 && o.pos === 'ahead');

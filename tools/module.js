@@ -2336,26 +2336,26 @@ const EdgeAndStairsDetector = {
     return { hasPeriodicSteps: peakCount >= 3, peaks: peakCount };
   },
 
-  async evaluate(frame) {
+  async evaluate(frame, cocoObjs) {
     if (!frame) return null;
-    const now = Date.now();
-    const canAlertStairs = now - this.lastStairsAlertAt > 3200;
-    const canAlertEdge = now - this.lastEdgeAlertAt > 3200;
-    if (!canAlertStairs && !canAlertEdge) return null;
 
-    // 1. Instant geometry check (~2ms)
-    const geom = this.scanStairGeometry(frame);
-    if (geom.hasPeriodicSteps && canAlertStairs) {
-      this.lastStairsAlertAt = now;
-      return {
-        type: 'stairs',
-        en: 'Warning! Stairs directly ahead!',
-        bn: 'সতর্ক! সামনে সিঁড়ি!',
-        haptic: 'RAPID'
-      };
+    // 1. Context suppression: If desk, table, keyboard, laptop, monitor, or TV is present,
+    // suppress stairs and high-stage drop-off alerts completely (they are false alarms caused by keyboard/desk rows)
+    const deskItems = new Set(['desk', 'dining table', 'keyboard', 'laptop', 'mouse', 'tv', 'monitor', 'bed', 'couch']);
+    if (cocoObjs && cocoObjs.some(o => deskItems.has(o.id) && o.score >= 0.25)) {
+      return null;
+    }
+    if (typeof state !== 'undefined' && state.lastCocoPreds && state.lastCocoPreds.some(o => deskItems.has(o.id) && o.score >= 0.25)) {
+      return null;
     }
 
-    // 2. Open-vocabulary CLIP check on lower-middle field
+    const now = Date.now();
+    const canAlertStairs = now - this.lastStairsAlertAt > 6000;
+    const canAlertEdge = now - this.lastEdgeAlertAt > 6000;
+    if (!canAlertStairs && !canAlertEdge) return null;
+
+    // 2. Stairs require BOTH structural periodic lines AND high-confidence MobileCLIP classification (p >= 0.48)
+    // Never trigger on geometry alone!
     if (typeof engine !== 'undefined' && engine.clip && engine.clip.status === 'ready' && typeof clipEmbedCrops === 'function') {
       try {
         const lowerCrop = {
@@ -2366,11 +2366,17 @@ const EdgeAndStairsDetector = {
         };
         const [emb] = await clipEmbedCrops(frame, [lowerCrop]);
         if (emb) {
-          const ranked = scoreEmbedding(emb);
+          const ranked = scoreEmbedding(emb).filter(r => r.id !== '_bg');
           const topStairs = ranked.find(r => r.id === 'stairs');
           const topEdge = ranked.find(r => r.id === 'drop_off');
 
-          if (topEdge && topEdge.p >= 0.18 && canAlertEdge) {
+          // Check if top ranked object is an indoor object or background
+          const topItem = ranked[0];
+          if (topItem && ['desk', 'laptop', 'keyboard', 'dining table', 'chair', 'cell phone'].includes(topItem.id)) {
+            return null;
+          }
+
+          if (topEdge && topEdge.p >= 0.52 && canAlertEdge) {
             this.lastEdgeAlertAt = now;
             return {
               type: 'drop_off',
@@ -2380,7 +2386,8 @@ const EdgeAndStairsDetector = {
             };
           }
 
-          if (topStairs && topStairs.p >= 0.18 && canAlertStairs) {
+          const geom = this.scanStairGeometry(frame);
+          if (topStairs && topStairs.p >= 0.48 && geom.hasPeriodicSteps && canAlertStairs) {
             this.lastStairsAlertAt = now;
             return {
               type: 'stairs',
