@@ -3225,10 +3225,14 @@ function stopCamera() {
 }
 
 async function loadAllModels() {
-  $('load-models-btn').disabled=true;
-  try { const ready=await ensureVisionModels(); await ensureOcr(); if(ready && state.source==='camera')startLiveLoop(); }
-  catch (_) { announce(t('models_failed'),tBn('models_failed')); }
-  finally { $('load-models-btn').disabled=false; }
+  $('load-models-btn').disabled = true;
+  try {
+    const ready = await ensureVisionModels();
+    await Promise.allSettled([loadClip(), ensureOcr()]);
+    if (ready && state.source === 'camera') startLiveLoop();
+  }
+  catch (_) { announce(t('models_failed'), tBn('models_failed')); }
+  finally { $('load-models-btn').disabled = false; }
 }
 
 function enhancementBoot() {
