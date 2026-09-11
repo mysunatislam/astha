@@ -99,8 +99,9 @@ if old_busy in html:
 rep("    const objs = worldSorted();\n    const now = Date.now(); objs.forEach(o => state.announced.set(o.id, now));\n    if (!objs.length) { setCaption(t('describe_title'), t('nothing_seen'), 'vision', null, tBn('nothing_seen'));",
     "    const rframe = captureFrame(640);\n    if (rframe) { await refineWorld(rframe, state.lastCocoPreds, ''); if (await mirrorCheck(rframe, true)) return; }\n"
     "    const objs = worldSorted();\n    const now = Date.now(); objs.forEach(o => state.announced.set(o.id, now));\n    if (!objs.length) { setCaption(t('describe_title'), t('nothing_seen'), 'vision', null, tBn('nothing_seen'));")
-rep("const namesEn = g.map(o => labelWithArticle(o.id));", "const namesEn = g.map(o => objLabelWithArticle(o));")
-rep("const namesBn = g.map(o => labelBn(o.id));", "const namesBn = g.map(o => objLabelBn(o));")
+# Each named object carries how it is moving, e.g. "a person, coming closer" (see trackMotion in module.js).
+rep("const namesEn = g.map(o => labelWithArticle(o.id));", "const namesEn = g.map(o => objLabelWithArticle(o) + (o.motion && typeof motionPhrase === 'function' ? ', ' + motionPhrase(o.motion, false) : ''));")
+rep("const namesBn = g.map(o => labelBn(o.id));", "const namesBn = g.map(o => objLabelBn(o) + (o.motion && typeof motionPhrase === 'function' ? ' (' + motionPhrase(o.motion, true) + ')' : ''));")
 rep("`${label(closest.id)} ${t('prox_' + closest.prox)}`", "`${objLabel(closest)} ${t('prox_' + closest.prox)}`")
 rep("`${labelBn(closest.id)} ${tBn('prox_' + closest.prox)}`", "`${objLabelBn(closest)} ${tBn('prox_' + closest.prox)}`")
 rep("    setCaption(t('describe_title'), msgEn, 'vision', null, msgBn);\n    playEarcon('confirm');",
@@ -259,6 +260,7 @@ rep("    const ranked = scoreEmbedding(emb).filter(r => r.id !== '_bg' && !VOCAB
     "    const ranked = scoreEmbedding(emb).filter(r => r.id !== '_bg' && !VOCAB_BY_ID[r.id].quiet && !VOCAB_BY_ID[r.id].zoneQuiet);\n    if (rects[i].pos === 'center')")
 rep("      state.lastCocoPreds = objs;\n      ingest(objs.concat(",
     "      state.lastCocoPreds = objs;\n"
+    "      if (typeof trackMotion === 'function') trackMotion(objs, frame); // left/right/closer/away per object, on-device\n"
     "      // ---- AUTOMATIC REAL-TIME ACTIVE SAFETY GUARDIAN (ZERO COMMAND NEEDED) ----\n"
     "      let handledEmergency = false;\n"
     "      if (typeof ApproachVelocityTracker !== 'undefined') {\n"
@@ -299,7 +301,9 @@ rep("  narrate: false,\n  shield: false,", "  narrate: true,\n  shield: true,")
 rep("state.narrate=localStorage.getItem('astha.narrate')==='1';", "state.narrate=localStorage.getItem('astha.narrate')!=='0'; state.shield=localStorage.getItem('astha.shield')!=='0';")
 rep("auto_narrate: 'Announce new objects automatically (off by default for screen readers)'", "auto_narrate: 'Announce objects out loud the moment they appear'")
 rep("const fresh = worldSorted().filter(o => (state.announced.get(o.id) || 0) < now - 12000 && now - o.first < 2500 && o.score >= (o.src === 'coco' ? 0.55 : 0.28));\n  if (fresh.length && now - (state.lastNarration || 0) > 3000) {",
-    "const fresh = worldSorted().filter(o => (state.announced.get(o.id) || 0) < now - 10000 && o.score >= (o.src === 'coco' ? 0.55 : 0.28));\n  if (fresh.length && now - (state.lastNarration || 0) > 1500) {")
+    "// Movement first: \"a person on your left is coming closer\" matters more than a new static object.\n"
+    "  if (typeof narrateMotion === 'function' && narrateMotion(now)) { state.lastNarration = now; return; }\n"
+    "  const fresh = worldSorted().filter(o => (state.announced.get(o.id) || 0) < now - 10000 && o.score >= (o.src === 'coco' ? 0.55 : 0.28));\n  if (fresh.length && now - (state.lastNarration || 0) > 1500) {")
 
 # ---- voice: prefer the natural (female) voice, let the user pick ----
 rep("const selected = privacyMode ? matches.find(v => v.localService) : matches[0];", "const selected = privacyMode ? matches.find(v => v.localService) : pickVoice(matches, language);")
@@ -523,6 +527,20 @@ rep("  renderSpatialLayout();\n  enhancementBoot();\n})();", "  renderSpatialLay
 # ---- boot(): expose it instead of self-invoking, so backend.js can run it after sign-in ----
 rep('(function boot() {', 'window.__asthaBoot = function boot() {')
 rep('  companionBoot();\n  eyeBoot();\n  cloudBoot();\n})();',
-    '  companionBoot();\n  eyeBoot();\n  cloudBoot();\n  refreshMemory();\n  refreshRooms();\n};')
+    '  companionBoot();\n  eyeBoot();\n  cloudBoot();\n  refreshMemory();\n  refreshRooms();\n'
+    '  // Warm the on-device detector while the page settles (cached weights + WebGL shader compile),\n'
+    '  // so the first "describe" or camera start does not begin with a silent wait. Skipped on data-saver.\n'
+    "  setTimeout(() => { if (typeof loadCoco === 'function' && engine.coco.status === 'idle' && !(navigator.connection && navigator.connection.saveData)) loadCoco().catch(() => {}); }, 1200);\n"
+    '};')
 DST.write_text(html, encoding="utf-8")
 print("wrote", DST, len(html), "bytes")
+
+# ---- service worker: a new cache name per build, so stale shells are dropped on activate ----
+import hashlib
+sw_path = DST.parent / "sw.js"
+sw = sw_path.read_text(encoding="utf-8")
+stamp = hashlib.sha1(html.encode("utf-8")).hexdigest()[:10]
+sw_new = re.sub(r"const CACHE = 'astha-shell-[^']*';", f"const CACHE = 'astha-shell-{stamp}';", sw, count=1)
+if sw_new != sw:
+    sw_path.write_text(sw_new, encoding="utf-8")
+    print("stamped", sw_path, "cache astha-shell-" + stamp)

@@ -97,6 +97,9 @@ const VoiceEngine = {
     this.lastSpokeAt = Date.now();
     const voiceKey = lang === 'bn' ? 'bn-female' : 'en-female';
     try {
+      // With no backend (static hosting, offline) go straight to the device voice instead of
+      // paying a failed network round-trip before every sentence.
+      if (typeof backendReachable === 'function' && !backendReachable()) throw offlineError();
       const res = await fetch(apiUrl('/api/speak?text=' + encodeURIComponent(text) + '&voice=' + voiceKey), { credentials: 'include' });
       if (res.ok) {
         const blob = await res.blob();
@@ -1063,9 +1066,83 @@ function sttLang() {
   return voiceLang === 'bn' ? 'bn-BD' : 'en-US';
 }
 
+// ---- Motion: how things move, entirely on-device ------------------------------
+// Boxes from the fast detector are tracked per class across frames (largest box per class).
+// Horizontal drift gives left/right; box growth gives "coming closer" / "moving away".
+const motion = { tracks: new Map(), said: new Map() };
+function trackMotion(objs, frame) {
+  const now = Date.now();
+  const best = new Map();
+  objs.forEach(o => { if (!o.bbox) return; const a = o.bbox[2] * o.bbox[3]; const b = best.get(o.id); if (!b || a > b.bbox[2] * b.bbox[3]) best.set(o.id, o); });
+  for (const [id, o] of best) {
+    const cx = (o.bbox[0] + o.bbox[2] / 2) / frame.width;
+    const area = (o.bbox[2] * o.bbox[3]) / (frame.width * frame.height);
+    let tr = motion.tracks.get(id);
+    if (!tr || now - tr.t > 1500) { tr = { hist: [] }; motion.tracks.set(id, tr); }
+    tr.hist.push({ cx, area, t: now });
+    while (tr.hist.length > 1 && now - tr.hist[0].t > 1300) tr.hist.shift();
+    tr.t = now;
+    const f = tr.hist[0], dt = (now - f.t) / 1000;
+    if (dt >= 0.45) {
+      tr.vx = (cx - f.cx) / dt;                                   // frame-widths per second; + is the user's right
+      tr.grow = (area - f.area) / dt / Math.max(0.004, f.area);   // relative size change per second; + is approaching
+    } else { tr.vx = 0; tr.grow = 0; }
+    o.motion = motionOf(tr);
+  }
+  objs.forEach(o => { const b = best.get(o.id); if (b && o !== b) o.motion = b.motion; });
+  for (const [id, tr] of motion.tracks) if (now - tr.t > 3000) motion.tracks.delete(id);
+}
+function motionOf(tr) {
+  if (tr.vx == null) return null;
+  const ax = Math.abs(tr.vx), g = tr.grow || 0;
+  let dir = null;
+  // A person walking across a room crosses ~0.2-0.5 frame-widths per second; approaching grows the box quickly.
+  if (g > 0.4) dir = 'toward'; else if (g < -0.3) dir = 'away';
+  // Sideways drift wins over a mild size change, but something clearly approaching stays "coming closer".
+  if (ax > 0.12 && (!dir || (ax > 0.3 && g < 1.0))) dir = tr.vx > 0 ? 'right' : 'left';
+  if (!dir) return null;
+  return { dir, fast: ax > 0.4 || g > 1.0 };
+}
+function motionPhrase(m, bn) {
+  if (!m) return '';
+  const en = { left: 'moving to your left', right: 'moving to your right', toward: 'coming closer', away: 'moving away' }[m.dir];
+  const bnP = { left: 'বাম দিকে যাচ্ছে', right: 'ডান দিকে যাচ্ছে', toward: 'কাছে আসছে', away: 'দূরে যাচ্ছে' }[m.dir];
+  return bn ? (m.fast ? 'দ্রুত ' : '') + bnP : en + (m.fast ? ', fast' : '');
+}
+// Live narration of movement. One object at a time, throttled per object; something coming
+// closer fast, or any hazard class approaching, jumps the queue and is spoken as a warning.
+function narrateMotion(now) {
+  const moving = worldSorted().filter(o => o.motion && o.src === 'coco' && o.score >= 0.55);
+  if (!moving.length) return false;
+  const urgent = moving.find(o => o.motion.dir === 'toward' && (o.motion.fast || (VOCAB_BY_ID[o.id] || {}).hz));
+  const due = o => { const s = motion.said.get(o.id); return !s || s.dir !== o.motion.dir || now - s.t > 8000; };
+  const pick = urgent || moving.find(due);
+  if (!pick) return false;
+  const s = motion.said.get(pick.id);
+  if (s && s.dir === pick.motion.dir && now - s.t < (urgent ? 4000 : 8000)) return false;
+  motion.said.set(pick.id, { dir: pick.motion.dir, t: now });
+  const cap = x => x.charAt(0).toUpperCase() + x.slice(1);
+  const en = `${cap(labelWithArticle(pick.id))} ${t('pos_' + pick.pos)} is ${motionPhrase(pick.motion, false)}.`;
+  const bn = `${tBn('pos_' + pick.pos)} ${labelBn(pick.id)} ${motionPhrase(pick.motion, true)}।`;
+  setCaption(urgent ? t('agent_safety') : t('new_title'), en, urgent ? 'safety' : 'vision', urgent ? 'danger' : null, bn);
+  if (urgent) { playEarcon('hazard'); haptic(pick.pos === 'left' ? 'LEFT' : pick.pos === 'right' ? 'RIGHT' : 'RAPID'); }
+  speak(en, bn);
+  return true;
+}
+// "Is anything moving?" — works in quiet mode too, because the user asked.
+function describeMotionNow() {
+  if (withCamera(describeMotionNow)) return;
+  const moving = worldSorted().filter(o => o.motion);
+  if (!moving.length) return announce('Nothing is moving right now.', 'এখন কিছু নড়ছে না।', 'vision');
+  const en = moving.slice(0, 3).map(o => `${labelWithArticle(o.id)} ${t('pos_' + o.pos)} is ${motionPhrase(o.motion, false)}`).join('; ') + '.';
+  const bn = moving.slice(0, 3).map(o => `${tBn('pos_' + o.pos)} ${labelBn(o.id)} ${motionPhrase(o.motion, true)}`).join('; ') + '।';
+  announce(en, bn, 'vision');
+}
+
 // ---- Understanding what was said ------------------------------------------
 // Fuzzy intent matching over English, Bangla and Banglish words, so natural phrasing works.
 const INTENTS = [
+  { id: 'motion', run: () => describeMotionNow(), kw: ['moving', 'is anything moving', 'who is coming', 'what is coming', 'approaching', 'movement', 'নড়ছে', 'কে আসছে', 'কী আসছে', 'কাছে আসছে', 'নড়াচড়া', 'ke ashche', 'norche', 'nore'] },
   // Keywords cover English, Bangla script, and romanised Bangla ("amar phone kothay").
   { id: 'read', run: () => readText(), kw: ['read', 'reading', 'book', 'page', 'letter', 'label', 'text', 'পড়', 'পড়ো', 'লেখা', 'বই', 'রিড', 'বুক', 'পেজ', 'পৃষ্ঠা', 'poro', 'pore', 'boi', 'lekha', 'porhe', 'shonao'] },
   { id: 'identify', run: () => identifyObject(), kw: ['what is this', "what's this", 'what is it', "what's it", 'what is that', "what's that", 'what am i looking at', 'what am i seeing', 'what am i holding', 'what do i have', 'what do i hold', 'what is in my hand', "what's in my hand", "what's this called", 'what is this called', 'tell me what this is', 'tell me what it is', 'tell me what that is', 'what object is this', 'what object is it', 'what do you call this', 'identify', 'which brand', 'what phone', 'which phone', 'কী এটা', 'এটা কী', 'এটি কী', 'এটা কি', 'কী দেখছি', 'আমি কী দেখছি', 'কী দেখতে পাচ্ছ', 'আমার হাতে কী', 'আমার হাতে কি', 'কী জিনিস', 'এটা কী জিনিস', 'এটা কি জিনিস', 'হোয়াট ইজ দিস', 'আইডেন্টিফাই', 'কোন ফোন', 'eta ki', 'eita ki', 'ki eta', 'ki dekhchi', 'ki dekhsi', 'hate ki', 'amar hate ki', 'kon phone'] },
@@ -1548,12 +1625,20 @@ function companionBoot() {
        as before; only the storage target changed, from a client-side
        encrypted blob to this account's row on Astha's own server.
    ===================================================================== */
+// On a static host (GitHub Pages) with no backend configured there is no API at all; once the
+// health check has said so, skip the network instead of logging a 404 for every sync attempt.
+function backendReachable() { return !(typeof serverCloud !== 'undefined' && serverCloud.checked && serverCloud.reachable === false); }
+function offlineError() { const e = new Error('backend_unreachable'); e.status = 0; e.quiet = true; return e; }
 async function apiGet(path) {
+  if (typeof serverCloud !== 'undefined' && !serverCloud.checked && serverCloud.ready) await serverCloud.ready;
+  if (!backendReachable()) throw offlineError();
   const r = await fetch(apiUrl(path), { credentials: 'include' });
   if (!r.ok) { const e = new Error('http_' + r.status); e.status = r.status; throw e; }
   return r.json();
 }
 async function apiSend(method, path, body) {
+  if (typeof serverCloud !== 'undefined' && !serverCloud.checked && serverCloud.ready) await serverCloud.ready;
+  if (!backendReachable()) throw offlineError();
   const r = await fetch(apiUrl(path), { method, credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
   if (!r.ok) { const e = new Error('http_' + r.status); e.status = r.status; throw e; }
   return r.json();
@@ -1562,14 +1647,14 @@ async function refreshMemory() {
   try {
     const d = await apiGet('/api/memories');
     state.memory = d.memories.map(m => ({ uid: m.id, id: m.obj_id || undefined, item: m.item, location: m.location, source: m.source, score: m.score, time: new Date(m.created_at).toISOString() }));
-  } catch (e) { console.warn('memory fetch failed', e); }
+  } catch (e) { if (!e.quiet) console.warn('memory fetch failed', e); }
   renderMemory();
 }
 async function refreshRooms() {
   try {
     const d = await apiGet('/api/rooms');
     state.spatialHome = d.rooms.map(r => ({ id: r.id, name: r.name, notes: r.notes, updated: new Date(r.updated_at).toISOString() }));
-  } catch (e) { console.warn('rooms fetch failed', e); }
+  } catch (e) { if (!e.quiet) console.warn('rooms fetch failed', e); }
   renderSpatialLayout();
 }
 

@@ -30,8 +30,9 @@ function updateCloudBadge() {
 async function refreshCloudStatus() {
   try {
     const r = await fetch(apiUrl('/api/health'), { credentials: 'include' });
+    serverCloud.reachable = r.ok;
     if (r.ok) { const d = await r.json(); serverCloud.available = !!d.cloud; }
-  } catch (e) { /* offline; personal key (if any) still works */ }
+  } catch (e) { serverCloud.reachable = false; /* offline; personal key (if any) still works */ }
   serverCloud.checked = true;
   updateCloudBadge();
 }
@@ -453,7 +454,7 @@ function cloudBoot() {
   try { cloud.key = localStorage.getItem('astha.gemini') || ''; } catch (e) {}
   if ($('gemini-key')) $('gemini-key').value = cloud.key;
   updateCloudBadge();
-  refreshCloudStatus();
+  serverCloud.ready = refreshCloudStatus(); // memory/room syncs await this before their first request
   let mode = 'auto'; try { mode = localStorage.getItem('astha.mode') || 'auto'; } catch (e) {}
   setMode(mode, true);
   try { const f = localStorage.getItem('astha.owner.face'); if (f) owner.face = JSON.parse(f); const v = localStorage.getItem('astha.owner.voice'); if (v) owner.voice = JSON.parse(v); owner.lock = localStorage.getItem('astha.owner.lock') === '1'; } catch (e) {}

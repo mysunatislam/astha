@@ -1504,15 +1504,28 @@ async function waitForCocoSsd(timeoutMs = 10000) {
   }
   return cocoSsd;
 }
+const COCO_CACHE_URL = 'indexeddb://astha-coco-ssd-lite';
 function loadCoco() {
   if (cocoPromise) return cocoPromise;
   setEngineState('coco', 'loading');
+  // The first download is ~20 MB; on a phone that is a long silence, so say what is happening.
+  const slowNotice = setTimeout(() => {
+    if (engine.coco.status === 'loading') announce('Still loading the vision model. The first time takes up to a minute; after that it opens instantly.', 'ভিশন মডেল এখনো লোড হচ্ছে। প্রথমবার এক মিনিট পর্যন্ত লাগতে পারে; এরপর সাথে সাথে খুলবে।', 'system');
+  }, 12000);
   cocoPromise = (async () => {
     try {
       const lib = (typeof cocoSsd !== 'undefined') ? cocoSsd : await waitForCocoSsd();
-      engine.coco.model = await lib.load({ base: 'lite_mobilenet_v2' });
+      let model = null;
+      // Second visit onwards the weights are already in this browser's IndexedDB: no download, no wait.
+      try { model = await lib.load({ base: 'lite_mobilenet_v2', modelUrl: COCO_CACHE_URL }); } catch (e) { model = null; }
+      if (!model) {
+        model = await lib.load({ base: 'lite_mobilenet_v2' });
+        try { if (model.model && model.model.save) await model.model.save(COCO_CACHE_URL); } catch (e) { console.warn('coco cache save failed', e); }
+      }
+      engine.coco.model = model;
       setEngineState('coco', 'ready');
     } catch (e) { console.error('COCO-SSD failed', e); setEngineState('coco', 'error'); cocoPromise = null; throw e; }
+    finally { clearTimeout(slowNotice); }
   })();
   return cocoPromise;
 }
@@ -2860,6 +2873,9 @@ async function toggleCamera() {
     announce('Camera on. Loading recognition models.', 'ক্যামেরা চালু। শনাক্তকরণ মডেল লোড হচ্ছে।');
     if (!await ensureVisionModels() || token!==cameraRequest || state.source!=='camera') return;
     announce(t('live_on'),tBn('live_on'),'vision'); startLiveLoop();
+    // Open-vocabulary recogniser (chargers, cables, medicine strips...) loads in the background
+    // once the fast detector is live, so nobody has to press "Load models". Skipped on data-saver.
+    if (!(navigator.connection && navigator.connection.saveData) && engine.clip.status === 'idle') loadClip().catch(() => {});
   } catch (e) {
     if(token!==cameraRequest)return;
     stopCamera(); announce('Camera could not start. Check permission and use HTTPS or localhost, or upload a photo.', 'ক্যামেরা চালু হয়নি। অনুমতি পরীক্ষা করুন অথবা ছবি দিন।');
