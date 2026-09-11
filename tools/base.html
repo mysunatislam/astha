@@ -1485,7 +1485,6 @@ function showSource(kind) {
 
 
 async function ensureVisionModels() {
-  if (typeof cloudReady === 'function' && cloudReady()) return true;
   if (engine.coco.status === 'ready') return true;
   const jobs = [];
   if (engine.coco.status !== 'ready') jobs.push(loadCoco());
@@ -1497,12 +1496,21 @@ async function ensureVisionModels() {
 }
 
 let cocoPromise = null;
+async function waitForCocoSsd(timeoutMs = 10000) {
+  const start = Date.now();
+  while (typeof cocoSsd === 'undefined') {
+    if (Date.now() - start > timeoutMs) throw new Error('coco-ssd script timeout');
+    await new Promise(r => setTimeout(r, 100));
+  }
+  return cocoSsd;
+}
 function loadCoco() {
   if (cocoPromise) return cocoPromise;
   setEngineState('coco', 'loading');
   cocoPromise = (async () => {
     try {
-      engine.coco.model = await cocoSsd.load({ base: 'lite_mobilenet_v2' });
+      const lib = (typeof cocoSsd !== 'undefined') ? cocoSsd : await waitForCocoSsd();
+      engine.coco.model = await lib.load({ base: 'lite_mobilenet_v2' });
       setEngineState('coco', 'ready');
     } catch (e) { console.error('COCO-SSD failed', e); setEngineState('coco', 'error'); cocoPromise = null; throw e; }
   })();

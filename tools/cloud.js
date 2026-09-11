@@ -8,12 +8,9 @@
    ===================================================================== */
 const cloud = { key: '', model: 'gemini-flash-latest', models: ['gemini-flash-latest', 'gemini-3.5-flash', 'gemini-3-flash-preview'], lastCallAt: 0, lastVerifyAt: 0, badKeyWarned: false };
 const serverCloud = { checked: false, available: false };
-// Optimistic until proven otherwise: assume the server's cloud might be ready during the
-// brief window right after page load before refreshCloudStatus() resolves, so an action
-// fired immediately does not fall back to the slow on-device path for no reason. gemini()
-// itself always tries the server first regardless, so this only affects which path callers
-// choose up front.
-function cloudReady() { return !serverCloud.checked || serverCloud.available || !!cloud.key; }
+// Cloud reasoning is ready ONLY when the user configured a personal Gemini key
+// or the backend server explicitly confirmed cloud reasoning is available.
+function cloudReady() { return Boolean(cloud.key || serverCloud.available); }
 function setGeminiKey(v, silent) {
   cloud.key = (v || '').trim(); cloud.badKeyWarned = false;
   try { localStorage.setItem('astha.gemini', cloud.key); } catch (e) {}
@@ -72,7 +69,7 @@ If no target item is clearly placed on a surface, return JSON:
 async function gemini(task, frame, opts = {}) {
   cloud.lastCallAt = Date.now();
   const image = frame ? frameToJpeg(frame, opts.maxW || 896) : undefined;
-  if (serverCloud.checked ? serverCloud.available : true) {
+  if (serverCloud.available) {
     try {
       const res = await fetch(apiUrl('/api/vision'), {
         method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
@@ -128,7 +125,10 @@ async function cloudDescribe() {
       if (typeof autoRecordMemory === 'function' && Array.isArray(r.objects)) {
         r.objects.slice(0, 3).forEach(obj => autoRecordMemory({ item: obj, location: r.en || 'In front of you', source: 'Scene description' }));
       }
-    } catch (e) { if (cloudFail(e)) announce('The cloud is busy for a moment; describing on-device.', 'ক্লাউড একটু ব্যস্ত; ডিভাইসেই বর্ণনা করছি।', 'system'); state.busy = false; return describeScene(true); }
+    } catch (e) {
+      if (cloudFail(e)) announce('The cloud is busy for a moment; describing on-device.', 'ক্লাউড একটু ব্যস্ত; ডিভাইসেই বর্ণনা করছি।', 'system');
+      setTimeout(() => describeScene(true), 20);
+    }
   });
 }
 async function cloudIdentify() {
@@ -142,7 +142,10 @@ async function cloudIdentify() {
       if (typeof autoRecordMemory === 'function' && r.name) {
         autoRecordMemory({ item: r.name, location: 'Held in front of camera', source: 'Identified object', score: 0.95 });
       }
-    } catch (e) { cloudFail(e); state.busy = false; return identifyObject(true); }
+    } catch (e) {
+      cloudFail(e);
+      setTimeout(() => identifyObject(true), 20);
+    }
   });
 }
 async function cloudClothes() {
@@ -155,7 +158,10 @@ async function cloudClothes() {
       if (typeof autoRecordMemory === 'function' && r.garment) {
         autoRecordMemory({ item: (r.colour ? r.colour + ' ' : '') + r.garment, location: 'Worn or held', source: 'Clothes inspection' });
       }
-    } catch (e) { cloudFail(e); state.busy = false; return inspectClothesAndColor(true); }
+    } catch (e) {
+      cloudFail(e);
+      setTimeout(() => inspectClothesAndColor(true), 20);
+    }
   });
 }
 async function cloudCompliment(frame, r) {
