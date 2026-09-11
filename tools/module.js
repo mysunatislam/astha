@@ -1348,6 +1348,9 @@ async function handleOnDeviceVisualQA(query) {
 }
 
 function smartFallback(query, q) {
+  if (typeof AsthaAgent !== 'undefined' && (/\b(and|also|check|verify|plan|help me|find|where|এবং|আর|দেখো)\b/i.test(q) && q.split(/\s+/).length >= 3)) {
+    return AsthaAgent.run(query);
+  }
   const it = classifyIntent(q);
   if (it) { logEvent('Understood: ' + it.id); return it.run(query); }
   return handleVisualQA(query);

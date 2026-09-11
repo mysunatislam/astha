@@ -6,6 +6,8 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createUser, findByPhone, verifyPasscode, signToken, authMiddleware } from './auth.js';
 import { memoryRouter } from './memory.js';
+import { ragRouter } from './rag.js';
+import { agentRouter } from './agent.js';
 import { callGemini } from './gemini.js';
 import { synthesize } from './tts.js';
 
@@ -67,6 +69,8 @@ app.get('/api/auth/me', authMiddleware, (req, res) => {
 
 // ---- Memory, rooms, activity log (all require sign-in) ----
 app.use('/api', authMiddleware, memoryRouter);
+app.use('/api', authMiddleware, ragRouter);
+app.use('/api', authMiddleware, agentRouter);
 
 // ---- Gemini vision proxy: the API key never reaches the browser ----
 app.post('/api/vision', authMiddleware, async (req, res) => {

@@ -48,6 +48,30 @@ CREATE TABLE IF NOT EXISTS events (
   created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_events_user ON events(user_id, created_at DESC);
+CREATE TABLE IF NOT EXISTS agent_tasks (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  goal TEXT NOT NULL,
+  plan_json TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'pending',
+  step_history_json TEXT,
+  result_json TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_agent_tasks_user ON agent_tasks(user_id, updated_at DESC);
+CREATE TABLE IF NOT EXISTS knowledge_docs (
+  id TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  category TEXT NOT NULL,
+  title TEXT NOT NULL,
+  content TEXT NOT NULL,
+  tags_json TEXT,
+  embedding_json TEXT,
+  created_at INTEGER NOT NULL,
+  updated_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_knowledge_user ON knowledge_docs(user_id, category);
 `);
 
 export function run(sql, params = []) { return db.prepare(sql).run(...params); }

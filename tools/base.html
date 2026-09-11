@@ -568,6 +568,21 @@
           <div class="caption-voice-sub" id="caption-voice-sub" hidden></div>
         </div>
 
+        <!-- Accessible Autonomous Agentic Card (WCAG AAA) -->
+        <div class="card" id="agent-status-card" hidden style="margin-bottom: 1rem; border: 2px solid var(--accent); background: var(--surface);">
+          <div class="card-head">
+            <h3>🤖 <span id="agent-title">Autonomous Agent</span></h3>
+            <div style="display:flex; gap:6px; align-items:center;">
+              <span class="pill" id="agent-retry-count"></span>
+              <span class="pill accent" id="agent-state-badge">IDLE</span>
+            </div>
+          </div>
+          <div style="padding: 0.5rem 0;">
+            <div style="font-weight: 700; font-size: 0.95rem; color: var(--accent); margin-bottom: 4px;">Goal: <span id="agent-goal-text" style="color: var(--text);"></span></div>
+            <div id="agent-step-list" style="margin-top: 6px;"></div>
+          </div>
+        </div>
+
 
       <p id="source-status" class="source-status" role="status">Camera off · No image selected</p>
       <div class="viewport" id="viewport">
@@ -630,6 +645,10 @@
         <button class="action" onclick="inspectClothesAndColor()">
           <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.38 3.46L16 2a4 4 0 01-8 0L3.62 3.46a2 2 0 00-1.34 2.23l.58 3.47a1 1 0 00.99.84H6v10a2 2 0 002 2h8a2 2 0 002-2V10h2.15a1 1 0 00.99-.84l.58-3.47a2 2 0 00-1.34-2.23z"/></svg></span>
           <span><div class="title" data-i18n="act_clothes">Check clothes & color</div><div class="desc" data-i18n="act_clothes_desc">Identify garment type and perceived color</div></span>
+        </button>
+        <button class="action" onclick="promptAgentTask()">
+          <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 3"/></svg></span>
+          <span><div class="title">Autonomous task</div><div class="desc">Plan, RAG memory & verify loop</div></span>
         </button>
         <button class="action" onclick="startHomeCalibration()">
           <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></span>
@@ -2435,10 +2454,27 @@ function showCommandHelp() {
     'মাইক্রোফোন চাপুন, তারপর বলুন: হেই আস্থা, চারপাশ বলো। এটা পড়ো। আমার চশমা কোথায়? এটা মনে রাখো। পড়া থামাও। আবার পড়ো। বন্ধ করো।');
 }
 
+function promptAgentTask() {
+  const goal = prompt('What task should Astha execute autonomously? (e.g. Find my glasses and check if they are folded)', '');
+  if (goal && goal.trim()) {
+    if (typeof AsthaAgent !== 'undefined') {
+      AsthaAgent.run(goal.trim());
+    } else {
+      handleQuery(goal.trim());
+    }
+  }
+}
+
 function handleQuery(query) {
   if (privacyTransition) return;
   const q = query.toLowerCase().replace(/^(?:hey\s+)?astha[,.!\s]*/i, '').replace(/^(?:হেই\s+)?আস্থা[,।\s]*/, '').trim();
   if (!privacyMode) logEvent('Request: ' + query);
+  // Autonomous Agent Trigger: multi-part tasks, "find ... and check ...", "plan ...", "guide me to find ..."
+  if (/\b(plan|task|autonomous|find\s+.+\s+and\s+|where\s+.+\s+and\s+|check\s+.+\s+and\s+|পরিকল্পনা|খুঁজে দেখো এবং|আর দেখো)\b/i.test(q)) {
+    if (typeof AsthaAgent !== 'undefined') {
+      return AsthaAgent.run(query);
+    }
+  }
   if (/\b(stop|stop talking|cancel|quiet|be quiet|shut up|silence|pause|enough|halt|বন্ধ করো|থামো|চুপ|চুপ কর|চুপ করো|থামুন|কথা বন্ধ|পড়া বন্ধ|স্টপ|thamo|chup|bondho koro)\b/i.test(q)) {
     if (typeof reading !== 'undefined' && reading.active) return stopReading(true);
     return stopAllSpeech();

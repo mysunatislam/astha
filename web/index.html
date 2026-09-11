@@ -635,6 +635,21 @@
           <div class="caption-voice-sub" id="caption-voice-sub" hidden></div>
         </div>
 
+        <!-- Accessible Autonomous Agentic Card (WCAG AAA) -->
+        <div class="card" id="agent-status-card" hidden style="margin-bottom: 1rem; border: 2px solid var(--accent); background: var(--surface);">
+          <div class="card-head">
+            <h3>🤖 <span id="agent-title">Autonomous Agent</span></h3>
+            <div style="display:flex; gap:6px; align-items:center;">
+              <span class="pill" id="agent-retry-count"></span>
+              <span class="pill accent" id="agent-state-badge">IDLE</span>
+            </div>
+          </div>
+          <div style="padding: 0.5rem 0;">
+            <div style="font-weight: 700; font-size: 0.95rem; color: var(--accent); margin-bottom: 4px;">Goal: <span id="agent-goal-text" style="color: var(--text);"></span></div>
+            <div id="agent-step-list" style="margin-top: 6px;"></div>
+          </div>
+        </div>
+
 
       <p id="source-status" class="source-status" role="status">Camera off · No image selected</p>
       <div class="viewport" id="viewport">
@@ -701,6 +716,10 @@
         <button class="action" onclick="inspectClothesAndColor()">
           <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.38 3.46L16 2a4 4 0 01-8 0L3.62 3.46a2 2 0 00-1.34 2.23l.58 3.47a1 1 0 00.99.84H6v10a2 2 0 002 2h8a2 2 0 002-2V10h2.15a1 1 0 00.99-.84l.58-3.47a2 2 0 00-1.34-2.23z"/></svg></span>
           <span><div class="title" data-i18n="act_clothes">Check clothes & color</div><div class="desc" data-i18n="act_clothes_desc">Identify garment type and perceived color</div></span>
+        </button>
+        <button class="action" onclick="promptAgentTask()">
+          <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 3"/></svg></span>
+          <span><div class="title">Autonomous task</div><div class="desc">Plan, RAG memory & verify loop</div></span>
         </button>
         <button class="action" onclick="startHomeCalibration()">
           <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></span>
@@ -2754,6 +2773,17 @@ function showCommandHelp() {
     'মাইক্রোফোন চাপুন, তারপর বলুন: হেই আস্থা, চারপাশ বলো। এটা পড়ো। আমার চশমা কোথায়? এটা মনে রাখো। পড়া থামাও। আবার পড়ো। বন্ধ করো।');
 }
 
+function promptAgentTask() {
+  const goal = prompt('What task should Astha execute autonomously? (e.g. Find my glasses and check if they are folded)', '');
+  if (goal && goal.trim()) {
+    if (typeof AsthaAgent !== 'undefined') {
+      AsthaAgent.run(goal.trim());
+    } else {
+      handleQuery(goal.trim());
+    }
+  }
+}
+
 function handleQuery(query) {
   if (privacyTransition) return;
   const q = query.toLowerCase().replace(/^(?:hey\s+)?(?:astha|asta|ashtha)[,.!\s]*/i, '').replace(/^(?:হেই\s+)?আস্থা[,।\s]*/, '').trim();
@@ -2767,6 +2797,12 @@ function handleQuery(query) {
   if (/remember my voice|learn my voice|enrol+ my voice|আমার কণ্ঠ মনে রাখো|গলা শেখো/.test(q)) return enrollOwnerVoice();
   if (/^(it'?s me|this is me|unlock)\b|আমি আস্থা|আনলক করো|এটা আমি/.test(q)) return ownerItsMe();
   if (/owner lock|মালিক লক/.test(q)) return toggleOwnerLock();
+  // Autonomous Agent Trigger: multi-part tasks, "find ... and check ...", "plan ...", "guide me to find ..."
+  if (/\b(plan|task|autonomous|find\s+.+\s+and\s+|where\s+.+\s+and\s+|check\s+.+\s+and\s+|পরিকল্পনা|খুঁজে দেখো এবং|আর দেখো)\b/i.test(q)) {
+    if (typeof AsthaAgent !== 'undefined') {
+      return AsthaAgent.run(query);
+    }
+  }
   if (/\b(stop|stop talking|cancel|quiet|be quiet|shut up|silence|pause|enough|halt|বন্ধ করো|থামো|চুপ|চুপ কর|চুপ করো|থামুন|কথা বন্ধ|পড়া বন্ধ|স্টপ|thamo|chup|bondho koro)\b/i.test(q)) {
     if (typeof reading !== 'undefined' && reading.active) return stopReading(true);
     return stopAllSpeech();
@@ -4569,6 +4605,9 @@ async function handleOnDeviceVisualQA(query) {
 }
 
 function smartFallback(query, q) {
+  if (typeof AsthaAgent !== 'undefined' && (/\b(and|also|check|verify|plan|help me|find|where|এবং|আর|দেখো)\b/i.test(q) && q.split(/\s+/).length >= 3)) {
+    return AsthaAgent.run(query);
+  }
   const it = classifyIntent(q);
   if (it) { logEvent('Understood: ' + it.id); return it.run(query); }
   return handleVisualQA(query);
@@ -6453,6 +6492,571 @@ function cloudBoot() {
   renderOwner(); secureBanner();
   if (owner.face) loadFaceLib().catch(() => {});
 }
+/* =====================================================================
+   Astha Autonomous Agentic Engine
+   Provides:
+   1. Standardized Tool Orchestration (Vision, Crop, OCR, Guidance, RAG, Memory, Safety)
+   2. Client & Cloud Retrieval-Augmented Generation (RAG) over Room & Item Vaults
+   3. Goal Decomposition & Autonomous Task Planning
+   4. Closed-Loop Verification Evaluator with Self-Correction Feedback Loop
+   5. Accessible Spoken & Visual Transparency for Blind/Visually Impaired Users
+   ===================================================================== */
+
+const AGENT_SYNONYMS = {
+  wallet: ['moneybag', 'purse', 'billfold', 'মানিব্যাগ', 'মানিবেগ', 'ওয়ালেট'],
+  moneybag: ['wallet', 'purse', 'মানিব্যাগ', 'মানিবেগ', 'ওয়ালেট'],
+  glasses: ['spectacles', 'sunglasses', 'eyeglasses', 'specs', 'চশমা', 'রোদচশমা'],
+  charger: ['adapter', 'power cable', 'usb cable', 'চার্জার', 'এডাপ্টার'],
+  'laptop charger': ['laptop adapter', 'power brick', 'ল্যাপটপ চার্জার', 'চার্জার'],
+  'phone charger': ['mobile charger', 'usb-c charger', 'ফোন চার্জার', 'চার্জার'],
+  phone: ['mobile', 'cellphone', 'smartphone', 'ফোন', 'মোবাইল', 'সেলফোন'],
+  keys: ['keychain', 'car key', 'door key', 'চাবি', 'চাবির গোছা'],
+  powerbank: ['battery pack', 'portable battery', 'পাওয়ার ব্যাংক', 'পাওয়ারব্যাংক'],
+  medicine: ['prescription', 'pills', 'tablets', 'medication', 'ওষুধ', 'ঔষধ', 'ট্যাবলেট'],
+  table: ['desk', 'counter', 'surface', 'dressing table', 'reading table', 'টেবিল', 'ডেস্ক'],
+  'dressing table': ['vanity', 'dresser', 'ড্রেসিং টেবিল'],
+  'reading table': ['study desk', 'work table', 'পড়ার টেবিল', 'রিডিং টেবিল'],
+  bed: ['mattress', 'bedstead', 'বিছানা', 'খাট']
+};
+
+const ClientRAG = {
+  expandTerms(query) {
+    const q = String(query || '').toLowerCase().replace(/[^\p{L}\p{N}\s]/gu, ' ');
+    const words = q.split(/\s+/).filter(w => w.length >= 2);
+    const terms = new Set(words);
+    for (const [key, syns] of Object.entries(AGENT_SYNONYMS)) {
+      if (q.includes(key) || syns.some(s => q.includes(s))) {
+        terms.add(key);
+        syns.forEach(s => terms.add(s));
+      }
+    }
+    return Array.from(terms);
+  },
+
+  search(query, limit = 5) {
+    const terms = this.expandTerms(query);
+    const now = Date.now();
+
+    // 1. Memories
+    const mems = (state.memory || []).map(m => {
+      const text = `${m.item} ${m.location} ${m.source || ''}`.toLowerCase();
+      let score = 0;
+      for (const t of terms) {
+        if (text.includes(t)) score += (t.length >= 4 ? 3 : 1.5);
+      }
+      const hoursAgo = Math.max(0, (now - new Date(m.time).getTime()) / (1000 * 3600));
+      if (hoursAgo < 2) score += 2;
+      else if (hoursAgo < 24) score += 1;
+      return { type: 'memory', title: m.item, location: m.location, time: m.time, score };
+    }).filter(m => m.score > 0).sort((a, b) => b.score - a.score);
+
+    // 2. Associative 2-hop RAG expansion from top memories to room landmarks
+    const associativeTerms = new Set(terms);
+    mems.slice(0, 3).forEach(m => {
+      const locWords = this.expandTerms(m.location);
+      locWords.forEach(w => associativeTerms.add(w));
+    });
+    const roomSearchTerms = Array.from(associativeTerms);
+
+    // 3. Spatial Rooms
+    const rooms = (state.spatialHome || []).map(r => {
+      const text = `${r.name} ${r.notes}`.toLowerCase();
+      let score = 0;
+      for (const t of roomSearchTerms) {
+        if (text.includes(t)) score += (t.length >= 4 ? 3.5 : 2);
+      }
+      return { type: 'room', title: r.name, notes: r.notes, updated: r.updated, score };
+    }).filter(r => r.score > 0).sort((a, b) => b.score - a.score);
+
+    const topMems = mems.slice(0, limit);
+    const topRooms = rooms.slice(0, limit);
+
+    return {
+      query,
+      terms,
+      memories: topMems,
+      rooms: topRooms,
+      hasContext: topMems.length > 0 || topRooms.length > 0
+    };
+  },
+
+  formatContextBlock(ragResult) {
+    const lines = [];
+    if (ragResult.rooms && ragResult.rooms.length) {
+      lines.push('Calibrated Rooms:');
+      ragResult.rooms.forEach(r => lines.push(`- ${r.title}: ${r.notes}`));
+    }
+    if (ragResult.memories && ragResult.memories.length) {
+      lines.push('Past Item Memories:');
+      ragResult.memories.forEach(m => lines.push(`- ${m.title} at ${m.location}`));
+    }
+    return lines.join('\n');
+  }
+};
+
+const AsthaToolRegistry = {
+  tools: {},
+
+  register(name, desc, fn) {
+    this.tools[name] = { name, desc, execute: fn };
+  },
+
+  async call(name, args, context) {
+    const tool = this.tools[name];
+    if (!tool) throw new Error(`Unknown tool: ${name}`);
+    console.log(`[Agent Tool] Calling ${name}:`, args);
+    return await tool.execute(args, context);
+  }
+};
+
+// Register Standard Tools
+AsthaToolRegistry.register('tool_rag_retrieve', 'Retrieves relevant memories and room landmarks', async (args) => {
+  const q = args.search_query || '';
+  const local = ClientRAG.search(q);
+  // Try server RAG if online
+  if (typeof apiUrl === 'function' && serverCloud.available) {
+    try {
+      const r = await fetch(apiUrl('/api/rag/query'), {
+        method: 'POST',
+        credentials: 'include',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: q, limit: 5 })
+      });
+      if (r.ok) {
+        const srv = await r.json();
+        return {
+          found: true,
+          memories: srv.memories || local.memories,
+          rooms: srv.rooms || local.rooms,
+          summary: srv.contextBlock || ClientRAG.formatContextBlock(local)
+        };
+      }
+    } catch (_) {}
+  }
+  return {
+    found: local.hasContext,
+    memories: local.memories,
+    rooms: local.rooms,
+    summary: ClientRAG.formatContextBlock(local)
+  };
+});
+
+AsthaToolRegistry.register('tool_vision_detect', 'Scans camera frame for target object or obstacles', async (args, ctx) => {
+  const target = (args.target_item || '').toLowerCase().trim();
+  const minConf = args.min_confidence || 0.45;
+  const frame = ctx.frame || captureFrame(640);
+  if (!frame) return { found: false, error: 'no_frame' };
+
+  await ensureVisionModels();
+  const cocoObjs = await runCoco(frame);
+  state.lastCocoPreds = cocoObjs;
+
+  // 1. Direct COCO hit
+  const hit = cocoObjs.find(o => (o.id.toLowerCase().includes(target) || target.includes(o.id.toLowerCase())) && o.score >= minConf);
+  if (hit) {
+    const cx = (hit.bbox[0] + hit.bbox[2] / 2) / frame.width;
+    const pos = cx < 0.35 ? 'left' : cx > 0.65 ? 'right' : 'ahead';
+    return {
+      found: true,
+      item: hit.id,
+      confidence: hit.score,
+      position: pos,
+      bbox: hit.bbox,
+      objects: cocoObjs.map(o => o.id)
+    };
+  }
+
+  // 2. MobileCLIP open-vocab ranking
+  if (engine.clip && engine.clip.status === 'ready') {
+    const centerBbox = centerRect(frame, 0.6);
+    const [emb] = await clipEmbedCrops(frame, [centerBbox]);
+    const ranked = scoreEmbedding(emb).filter(r => r.id !== '_bg');
+    const clipHit = ranked.find(r => r.id.toLowerCase().includes(target) || target.includes(r.id.toLowerCase()));
+    if (clipHit && clipHit.p >= Math.min(minConf, 0.35)) {
+      return {
+        found: true,
+        item: clipHit.id,
+        confidence: clipHit.p,
+        position: 'ahead',
+        bbox: [centerBbox.x, centerBbox.y, centerBbox.s, centerBbox.s],
+        objects: ranked.slice(0, 3).map(r => r.id)
+      };
+    }
+  }
+
+  return {
+    found: false,
+    confidence: 0,
+    objects: cocoObjs.map(o => o.id),
+    message: `Target ${target} not clearly seen in this view.`
+  };
+});
+
+AsthaToolRegistry.register('tool_visual_inspect_crop', 'Zooms into a region to verify details and attributes', async (args, ctx) => {
+  const frame = ctx.frame || captureFrame(896);
+  if (!frame) return { inspected: false, error: 'no_frame' };
+  const region = args.region || 'center';
+  const rect = region === 'top-left' ? { x: 0, y: 0, s: frame.width * 0.5 }
+    : region === 'top-right' ? { x: frame.width * 0.5, y: 0, s: frame.width * 0.5 }
+    : region === 'bottom-left' ? { x: 0, y: frame.height * 0.5, s: frame.width * 0.5 }
+    : region === 'bottom-right' ? { x: frame.width * 0.5, y: frame.height * 0.5, s: frame.width * 0.5 }
+    : centerRect(frame, 0.5);
+
+  const cropped = cropToCanvas(frame, rect);
+  const colors = extractDominantColor(cropped);
+
+  return {
+    inspected: true,
+    region,
+    feature: args.feature_to_verify,
+    dominant_color: colorName(colors.top),
+    color_confidence: colors.top.pct,
+    details: `Inspected ${region} region; top color is ${colorName(colors.top)}`
+  };
+});
+
+AsthaToolRegistry.register('tool_ocr_read', 'Transcribes text from camera view or crop', async (args, ctx) => {
+  const frame = ctx.frame || captureFrame(896);
+  if (!frame) return { text: '', lines: [] };
+
+  // Try Cloud OCR if available
+  if (cloudReady()) {
+    try {
+      const res = await cloudReadLines(frame);
+      if (res && res.lines && res.lines.length) {
+        return { text: res.lines.join(' '), lines: res.lines, explain: res.explainEn };
+      }
+    } catch (_) {}
+  }
+
+  // Fallback to on-device Tesseract
+  try {
+    const worker = await ensureOcr();
+    const { data } = await worker.recognize(frame);
+    const lines = (data.lines || [])
+      .filter(l => l.confidence >= 55)
+      .map(l => cleanOcrLine(l.text))
+      .filter(l => l.length >= 2);
+    return { text: lines.join(' '), lines, confidence: data.confidence };
+  } catch (err) {
+    return { text: '', lines: [], error: err.message };
+  }
+});
+
+AsthaToolRegistry.register('tool_spatial_guidance', 'Provides directional alignment audio and haptics to user', async (args) => {
+  const en = args.instruction_en || 'Please adjust the camera slightly.';
+  const bn = args.instruction_bn || 'ক্যামেরাটি কিছুটা নাড়ান।';
+  announce(en, bn, 'guidance');
+  playEarcon('tick');
+  if (args.direction === 'hold_steady') haptic('CONFIRM');
+  else haptic('WARNING');
+  return { delivered: true, direction: args.direction };
+});
+
+AsthaToolRegistry.register('tool_memory_save', 'Saves a confirmed item location into memory', async (args) => {
+  const item = args.item;
+  const loc = args.location;
+  if (!item || !loc) return { saved: false };
+  if (typeof autoRecordMemory === 'function') {
+    autoRecordMemory({ item, location: loc, source: 'Autonomous Agent Verification', score: 0.95 });
+  }
+  return { saved: true, item, location: loc };
+});
+
+AsthaToolRegistry.register('tool_safety_scan', 'Evaluates walking path for stairs, drops, and obstacles', async (args, ctx) => {
+  const frame = ctx.frame || captureFrame(640);
+  if (!frame) return { safe: true };
+  const cocoObjs = await runCoco(frame);
+  const hazard = EdgeAndStairsDetector.evaluate(frame, cocoObjs);
+  return {
+    safe: !hazard,
+    hazard: hazard ? hazard.labelEn : null,
+    hazard_bn: hazard ? hazard.labelBn : null
+  };
+});
+
+// Autonomous Evaluator & Self-Correction Engine
+const AsthaEvaluator = {
+  evaluate(step, toolOutput, goal) {
+    if (!toolOutput) {
+      return {
+        verified: false,
+        score: 0,
+        needsCorrection: true,
+        correction: {
+          type: 'guidance',
+          direction: 'hold_steady',
+          instruction_en: 'Hold the camera steady for a clearer look.',
+          instruction_bn: 'ক্যামেরাটি স্থির রাখুন যাতে পরিষ্কার দেখতে পাই।'
+        }
+      };
+    }
+
+    if (step.tool === 'tool_vision_detect') {
+      if (toolOutput.found && toolOutput.confidence >= (step.args.min_confidence || 0.45)) {
+        return { verified: true, score: toolOutput.confidence, needsCorrection: false };
+      }
+      // Failure: Target not found in frame -> Autonomous self-correction (pan/tilt guidance)
+      return {
+        verified: false,
+        score: 0.2,
+        needsCorrection: true,
+        correction: {
+          type: 'guidance',
+          direction: 'tilt_down',
+          instruction_en: `I do not see the ${step.args.target_item || 'item'} here. Please tilt the camera down toward the table or pan slightly left.`,
+          instruction_bn: `এখানে ${step.args.target_item || 'জিনিসটি'} দেখতে পাচ্ছি না। ক্যামেরাটি টেবিলের দিকে আরেকটু নামান বা বামে ঘুরান।`
+        }
+      };
+    }
+
+    if (step.tool === 'tool_ocr_read') {
+      const len = (toolOutput.text || '').trim().length;
+      if (len >= 3) return { verified: true, score: 0.9, needsCorrection: false };
+      return {
+        verified: false,
+        score: 0.25,
+        needsCorrection: true,
+        correction: {
+          type: 'guidance',
+          direction: 'move_closer',
+          instruction_en: 'Move the camera about 10 centimeters closer so I can read the text.',
+          instruction_bn: 'লেখা স্পষ্ট পড়তে ক্যামেরাটি প্রায় ১০ সেন্টিমিটার কাছে নিন।'
+        }
+      };
+    }
+
+    return { verified: true, score: 0.8, needsCorrection: false };
+  }
+};
+
+// Autonomous Agent Coordinator State Machine
+const AsthaAgent = {
+  state: 'IDLE', // IDLE, PLANNING, EXECUTING, EVALUATING, CORRECTING, COMPLETED
+  currentTask: null,
+  activePlan: null,
+  stepIndex: 0,
+  retries: 0,
+  maxRetries: 2,
+  observations: [],
+
+  updateUI() {
+    const card = $('agent-status-card');
+    if (!card) return;
+    if (this.state === 'IDLE' || !this.currentTask) {
+      card.hidden = true;
+      return;
+    }
+    card.hidden = false;
+    const stateBadge = $('agent-state-badge');
+    const goalText = $('agent-goal-text');
+    const stepList = $('agent-step-list');
+    const retryText = $('agent-retry-count');
+
+    if (stateBadge) {
+      stateBadge.textContent = this.state;
+      stateBadge.className = `pill ${this.state === 'COMPLETED' ? 'ok' : this.state === 'CORRECTING' ? 'hazard' : ''}`;
+    }
+    if (goalText) goalText.textContent = this.currentTask.goal;
+    if (retryText) retryText.textContent = this.retries > 0 ? `Retries: ${this.retries}` : '';
+
+    if (stepList && this.activePlan && this.activePlan.steps) {
+      stepList.innerHTML = this.activePlan.steps.map((s, idx) => {
+        const isDone = idx < this.stepIndex;
+        const isCur = idx === this.stepIndex && this.state !== 'COMPLETED';
+        const icon = isDone ? '✅' : isCur ? '⏳' : '⚪';
+        return `<div class="step-item ${isCur ? 'active-step' : ''}" style="margin:4px 0; font-size:0.92rem;">
+          ${icon} <strong>${esc(s.purpose || s.id)}</strong> (${esc(s.tool)})
+        </div>`;
+      }).join('');
+    }
+  },
+
+  async plan(goal, frame) {
+    this.state = 'PLANNING';
+    this.updateUI();
+
+    // 1. RAG retrieval
+    const ragContext = ClientRAG.search(goal);
+    const formattedRag = ClientRAG.formatContextBlock(ragContext);
+
+    // 2. Try Server Planner if available
+    if (typeof apiUrl === 'function' && serverCloud.available) {
+      try {
+        const frameB64 = frame ? frameToJpeg(frame, 896) : undefined;
+        const res = await fetch(apiUrl('/api/agent/plan'), {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ goal, image: frameB64 })
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.plan && data.plan.steps && data.plan.steps.length) {
+            return data.plan;
+          }
+        }
+      } catch (err) {
+        console.warn('Server planner fallback to client:', err);
+      }
+    }
+
+    // 3. Fallback Client Heuristic Planner
+    const steps = [];
+    if (ragContext.hasContext) {
+      steps.push({
+        id: 'step_rag',
+        tool: 'tool_rag_retrieve',
+        args: { search_query: goal },
+        purpose: 'Retrieve room landmarks & past object placements'
+      });
+    }
+
+    const targetMatch = goal.match(/(?:find|where is|locate|see|check|my)\s+([a-z\s]+?)(?:$|\s+and|\s+on|\s+in)/i);
+    const targetItem = targetMatch ? targetMatch[1].trim() : 'item';
+
+    steps.push({
+      id: 'step_detect',
+      tool: 'tool_vision_detect',
+      args: { target_item: targetItem, min_confidence: 0.45 },
+      purpose: `Locate ${targetItem} in frame`
+    });
+
+    if (/read|text|label|written|dose|prescription|লেখা|পড়|পড়/i.test(goal)) {
+      steps.push({
+        id: 'step_ocr',
+        tool: 'tool_ocr_read',
+        args: { focus_area: 'center' },
+        purpose: 'Read text and labels'
+      });
+    } else if (/color|clean|folded|condition|রং/i.test(goal)) {
+      steps.push({
+        id: 'step_inspect',
+        tool: 'tool_visual_inspect_crop',
+        args: { region: 'center', feature_to_verify: 'condition' },
+        purpose: 'Verify condition and attributes'
+      });
+    }
+
+    return {
+      goal,
+      summary: `Autonomous plan with ${steps.length} steps`,
+      steps
+    };
+  },
+
+  async run(goal) {
+    if (withCamera(() => AsthaAgent.run(goal))) return;
+    this.currentTask = { goal, startedAt: Date.now() };
+    this.observations = [];
+    this.retries = 0;
+    this.stepIndex = 0;
+
+    announce(`Planning how to check: ${goal}.`, `পরিকল্পনা করছি: ${goal}।`, 'agent');
+    playEarcon('tick');
+
+    const frame = captureFrame(896);
+    this.activePlan = await this.plan(goal, frame);
+    this.updateUI();
+
+    // Execute steps in verification loop
+    while (this.stepIndex < this.activePlan.steps.length) {
+      const step = this.activePlan.steps[this.stepIndex];
+      this.state = 'EXECUTING';
+      this.updateUI();
+
+      const currentFrame = captureFrame(896);
+      const ctx = { frame: currentFrame, goal, observations: this.observations };
+
+      let toolOutput = null;
+      try {
+        toolOutput = await AsthaToolRegistry.call(step.tool, step.args || {}, ctx);
+      } catch (err) {
+        toolOutput = { error: err.message };
+      }
+
+      this.observations.push({ stepId: step.id, tool: step.tool, output: toolOutput });
+
+      // Verification loop
+      this.state = 'EVALUATING';
+      this.updateUI();
+
+      const evalResult = AsthaEvaluator.evaluate(step, toolOutput, goal);
+
+      if (evalResult.verified) {
+        // Step succeeded
+        playEarcon('click');
+        this.stepIndex++;
+        this.retries = 0;
+      } else if (evalResult.needsCorrection && this.retries < this.maxRetries) {
+        // Step failed -> Autonomous Self-Correction Loop
+        this.state = 'CORRECTING';
+        this.retries++;
+        this.updateUI();
+
+        if (evalResult.correction) {
+          await AsthaToolRegistry.call('tool_spatial_guidance', evalResult.correction, ctx);
+          // Wait 2.2 seconds for user to adjust physical camera position
+          await new Promise(r => setTimeout(r, 2200));
+        }
+        // Retry the current step with updated camera frame
+        continue;
+      } else {
+        // Exhausted retries or non-recoverable: advance to conclude with best effort
+        this.stepIndex++;
+      }
+    }
+
+    // Task Completion & Final Response Synthesis
+    this.state = 'COMPLETED';
+    this.updateUI();
+
+    await this.synthesizeFinalAnswer(goal);
+  },
+
+  async synthesizeFinalAnswer(goal) {
+    const visionObs = this.observations.find(o => o.tool === 'tool_vision_detect' && o.output && o.output.found);
+    const ocrObs = this.observations.find(o => o.tool === 'tool_ocr_read' && o.output && o.output.text);
+    const ragObs = this.observations.find(o => o.tool === 'tool_rag_retrieve' && o.output && o.output.memories && o.output.memories.length);
+
+    let en = '', bn = '';
+
+    if (visionObs && visionObs.output) {
+      const item = visionObs.output.item;
+      const pos = visionObs.output.position;
+      en = `I found your ${item} directly ${pos} of you.`;
+      bn = `আপনার ${item} ঠিক ${pos === 'left' ? 'বামে' : pos === 'right' ? 'ডানে' : 'সামনে'} দেখতে পেয়েছি।`;
+
+      if (ocrObs && ocrObs.output && ocrObs.output.text) {
+        en += ` The text on it says: "${ocrObs.output.text.slice(0, 60)}".`;
+        bn += ` এর গায়ে লেখা: "${ocrObs.output.text.slice(0, 60)}"।`;
+      }
+    } else if (ragObs && ragObs.output && ragObs.output.memories.length) {
+      const topMem = ragObs.output.memories[0];
+      en = `I do not see it in front of the camera right now, but your memory records state it was left at ${topMem.location}.`;
+      bn = `ক্যামেরার সামনে এখন দেখতে পাচ্ছি না, তবে আপনার স্মৃতিতে সংরক্ষিত আছে এটি ${topMem.location}-এ রাখা হয়েছিল।`;
+    } else {
+      en = `I completed the scan for ${goal}. It does not appear to be within this camera view. Try turning slowly or pointing at a different surface.`;
+      bn = `${goal}-এর জন্য স্ক্যান শেষ করেছি। এই দৃশ্যে দেখতে পাইনি। ক্যামেরাটি অন্য দিকে ঘুরিয়ে চেষ্টা করুন।`;
+    }
+
+    announce(en, bn, 'agent');
+    playEarcon('confirm');
+    haptic('CONFIRM');
+
+    setTimeout(() => {
+      if (this.state === 'COMPLETED') {
+        this.state = 'IDLE';
+        this.updateUI();
+      }
+    }, 12000);
+  }
+};
+
+window.ClientRAG = ClientRAG;
+window.AsthaToolRegistry = AsthaToolRegistry;
+window.AsthaEvaluator = AsthaEvaluator;
+window.AsthaAgent = AsthaAgent;
 
 window.__asthaBoot = function boot() {
   try {

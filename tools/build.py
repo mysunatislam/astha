@@ -11,6 +11,7 @@ html = SRC.read_text(encoding="utf-8")
 vocab = (HERE / "vocab.js").read_text(encoding="utf-8")
 css = (HERE / "styles.css").read_text(encoding="utf-8")
 module = (HERE / "module.js").read_text(encoding="utf-8")
+agent_js = (HERE / "agent.js").read_text(encoding="utf-8")
 
 def rep(old, new, count=1):
     global html
@@ -516,7 +517,7 @@ rep('</script>\n</body>\n</html>',
 
 
 # ---- module + boot ----
-rep("\n(function boot() {", module.rstrip("\n") + "\n" + eye_js.rstrip("\n") + "\n" + cloud_js.rstrip("\n") + "\n\n(function boot() {")
+rep("\n(function boot() {", module.rstrip("\n") + "\n" + eye_js.rstrip("\n") + "\n" + cloud_js.rstrip("\n") + "\n" + agent_js.rstrip("\n") + "\n\n(function boot() {")
 rep("  renderSpatialLayout();\n  enhancementBoot();\n})();", "  renderSpatialLayout();\n  enhancementBoot();\n  companionBoot();\n  eyeBoot();\n  cloudBoot();\n})();")
 
 # ---- boot(): expose it instead of self-invoking, so backend.js can run it after sign-in ----
