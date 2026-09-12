@@ -612,6 +612,10 @@
         <span class="mic-label" id="mic-label" data-i18n="mic_idle">Tap to speak</span>
         <span class="mic-hint" data-i18n="mic_hint">Ask in Bangla or English: “What is in front of me?”, “Read this”, “Where is my charger?”</span>
         <button class="chip-btn" id="hf-btn" onclick="toggleHandsFree()" aria-pressed="false" title="Keep listening for “Astha, …”">🎧 <span id="hf-label">Hands-free: off</span></button>
+        <div class="segmented" role="group" aria-label="AI Engine Mode" title="Switch between Online AI (Gemini with 20d Free Pass) and On-Device Offline Mode">
+          <button id="btn-mode-gemini" onclick="Subscription.setMode('gemini')" aria-pressed="true">✨ Online AI (20d Pass)</button>
+          <button id="btn-mode-offline" onclick="Subscription.setMode('offline')" aria-pressed="false">📱 Offline</button>
+        </div>
         <div class="segmented" role="group" aria-label="Speaking mode" title="Auto: speaks up in busy places. Quiet: speaks only when asked.">
           <button id="mode-auto" onclick="setMode('auto')" aria-pressed="true">Auto · busy area</button>
           <button id="mode-quiet" onclick="setMode('quiet')" aria-pressed="false">Quiet · ask me</button>
@@ -2519,6 +2523,7 @@ function toggleShield() {
 
 function safetyCheck(silentIfClear) {
   if (!state.source) { if (silentIfClear) return; return withCamera(safetyCheck); }
+  if (typeof cloudReady === 'function' && cloudReady() && typeof cloudSafetyCheck === 'function') return cloudSafetyCheck(silentIfClear);
   const run = () => {
     const hz = worldSorted().filter(isHazard);
     if (hz.length) {
@@ -2817,6 +2822,8 @@ function handleQuery(query) {
   if (!privacyMode) logEvent('Request: ' + query);
   if (answerYesNo(q)) return;
   if (!ownerGate(query)) return;
+  if (/online mode|online ai|gemini mode|gemini ai|use gemini|20 day pass|অনলাইন মোড|জেমিনি মোড/.test(q)) return Subscription.setMode('gemini');
+  if (/offline mode|on.?device mode|use offline|go offline|অফলাইন মোড|ডিভাইস মোড/.test(q)) return Subscription.setMode('offline');
   if (/auto mode|busy (area|place|road)|speak (up )?automatically|announce automatically|অটো মোড|নিজে থেকে বলো|ব্যস্ত জায়গা/.test(q)) return setMode('auto');
   if (/quiet mode|silent mode|only when i ask|speak only when|stop announcing|শান্ত মোড|চুপচাপ মোড|জিজ্ঞাসা করলে বলো/.test(q)) return setMode('quiet');
   if (/read (what i wrote|what i typed|my code|the code|the screen|the document|this page on (the )?screen|what is written|what's written)|read aloud what|স্ক্রিনের লেখা পড়|কোড পড়|যা লিখেছি পড়/.test(q)) return eyeReadScreen();
@@ -3939,9 +3946,13 @@ function readText() {
   // No camera yet? Start it and go straight into reading mode; the user never has to type or paste anything.
   if (!state.source) {
     state.pendingRead = true;
-    announce('Starting the camera. Hold the page in front of the phone.', 'ক্যামেরা চালু করছি। পৃষ্ঠাটি ফোনের সামনে ধরুন।', 'ocr');
+    announce(typeof cloudReady === 'function' && cloudReady() ? 'Starting camera to read text, blackboard or screen.' : 'Starting the camera. Hold the page in front of the phone.',
+             typeof cloudReady === 'function' && cloudReady() ? 'লেখা, ব্ল্যাকবোর্ড বা স্ক্রিন পড়ার জন্য ক্যামেরা চালু করছি।' : 'ক্যামেরা চালু করছি। পৃষ্ঠাটি ফোনের সামনে ধরুন।', 'ocr');
     toggleCamera();
     return;
+  }
+  if (typeof cloudReady === 'function' && cloudReady() && typeof cloudReadLive === 'function') {
+    return cloudReadLive();
   }
   if (state.source !== 'camera') return readStillOnce();
   if (reading.active) return stopReading();
@@ -4367,11 +4378,26 @@ function sttLang() {
 // ---- Motion: how things move, entirely on-device ------------------------------
 // Boxes from the fast detector are tracked per class across frames (largest box per class).
 // Horizontal drift gives left/right; box growth gives "coming closer" / "moving away".
+const REAL_MOBILE_AGENTS = new Set([
+  'person', 'car', 'truck', 'bus', 'motorcycle', 'bicycle',
+  'dog', 'cat', 'horse', 'sheep', 'cow', 'elephant', 'bear', 'bird'
+]);
 const motion = { tracks: new Map(), said: new Map() };
 function trackMotion(objs, frame) {
   const now = Date.now();
   const best = new Map();
-  objs.forEach(o => { if (!o.bbox) return; const a = o.bbox[2] * o.bbox[3]; const b = best.get(o.id); if (!b || a > b.bbox[2] * b.bbox[3]) best.set(o.id, o); });
+  // ONLY real mobile agents (people, vehicles, animals) are tracked for motion.
+  // Inanimate objects (mouse, keyboard, cup, laptop, etc.) MUST NEVER be tracked as moving,
+  // preventing false motion alarms when the user tilts or moves the camera over a desk.
+  objs.forEach(o => {
+    if (!o.bbox || !REAL_MOBILE_AGENTS.has(o.id)) {
+      o.motion = null;
+      return;
+    }
+    const a = o.bbox[2] * o.bbox[3];
+    const b = best.get(o.id);
+    if (!b || a > b.bbox[2] * b.bbox[3]) best.set(o.id, o);
+  });
   for (const [id, o] of best) {
     const cx = (o.bbox[0] + o.bbox[2] / 2) / frame.width;
     const area = (o.bbox[2] * o.bbox[3]) / (frame.width * frame.height);
@@ -4387,7 +4413,14 @@ function trackMotion(objs, frame) {
     } else { tr.vx = 0; tr.grow = 0; }
     o.motion = motionOf(tr);
   }
-  objs.forEach(o => { const b = best.get(o.id); if (b && o !== b) o.motion = b.motion; });
+  objs.forEach(o => {
+    if (!REAL_MOBILE_AGENTS.has(o.id)) {
+      o.motion = null;
+      return;
+    }
+    const b = best.get(o.id);
+    if (b && o !== b) o.motion = b.motion;
+  });
   for (const [id, tr] of motion.tracks) if (now - tr.t > 3000) motion.tracks.delete(id);
 }
 function motionOf(tr) {
@@ -4410,7 +4443,7 @@ function motionPhrase(m, bn) {
 // Live narration of movement. One object at a time, throttled per object; something coming
 // closer fast, or any hazard class approaching, jumps the queue and is spoken as a warning.
 function narrateMotion(now) {
-  const moving = worldSorted().filter(o => o.motion && o.src === 'coco' && o.score >= 0.55);
+  const moving = worldSorted().filter(o => o.motion && o.src === 'coco' && o.score >= 0.55 && REAL_MOBILE_AGENTS.has(o.id));
   if (!moving.length) return false;
   const urgent = moving.find(o => o.motion.dir === 'toward' && (o.motion.fast || (VOCAB_BY_ID[o.id] || {}).hz));
   const due = o => { const s = motion.said.get(o.id); return !s || s.dir !== o.motion.dir || now - s.t > 8000; };
@@ -4430,7 +4463,7 @@ function narrateMotion(now) {
 // "Is anything moving?" — works in quiet mode too, because the user asked.
 function describeMotionNow() {
   if (withCamera(describeMotionNow)) return;
-  const moving = worldSorted().filter(o => o.motion);
+  const moving = worldSorted().filter(o => o.motion && REAL_MOBILE_AGENTS.has(o.id));
   if (!moving.length) return announce('Nothing is moving right now.', 'এখন কিছু নড়ছে না।', 'vision');
   const en = moving.slice(0, 3).map(o => `${labelWithArticle(o.id)} ${t('pos_' + o.pos)} is ${motionPhrase(o.motion, false)}`).join('; ') + '.';
   const bn = moving.slice(0, 3).map(o => `${tBn('pos_' + o.pos)} ${labelBn(o.id)} ${motionPhrase(o.motion, true)}`).join('; ') + '।';
@@ -4442,7 +4475,7 @@ function describeMotionNow() {
 const INTENTS = [
   { id: 'motion', run: () => describeMotionNow(), kw: ['moving', 'is anything moving', 'who is coming', 'what is coming', 'approaching', 'movement', 'নড়ছে', 'কে আসছে', 'কী আসছে', 'কাছে আসছে', 'নড়াচড়া', 'ke ashche', 'norche', 'nore'] },
   // Keywords cover English, Bangla script, and romanised Bangla ("amar phone kothay").
-  { id: 'read', run: () => readText(), kw: ['read', 'reading', 'book', 'page', 'letter', 'label', 'text', 'পড়', 'পড়ো', 'লেখা', 'বই', 'রিড', 'বুক', 'পেজ', 'পৃষ্ঠা', 'poro', 'pore', 'boi', 'lekha', 'porhe', 'shonao'] },
+  { id: 'read', run: () => readText(), kw: ['read', 'reading', 'book', 'page', 'letter', 'label', 'text', 'blackboard', 'whiteboard', 'board', 'chalkboard', 'screen', 'sign', 'poster', 'পড়', 'পড়ো', 'লেখা', 'বই', 'রিড', 'বুক', 'পেজ', 'পৃষ্ঠা', 'ব্ল্যাকবোর্ড', 'বোর্ড', 'স্ক্রিন', 'হোয়াইটবোর্ড', 'poro', 'pore', 'boi', 'lekha', 'porhe', 'shonao'] },
   { id: 'identify', run: () => identifyObject(), kw: ['what is this', "what's this", 'what is it', "what's it", 'what is that', "what's that", 'what am i looking at', 'what am i seeing', 'what am i holding', 'what do i have', 'what do i hold', 'what is in my hand', "what's in my hand", "what's this called", 'what is this called', 'tell me what this is', 'tell me what it is', 'tell me what that is', 'what object is this', 'what object is it', 'what do you call this', 'identify', 'which brand', 'what phone', 'which phone', 'কী এটা', 'এটা কী', 'এটি কী', 'এটা কি', 'কী দেখছি', 'আমি কী দেখছি', 'কী দেখতে পাচ্ছ', 'আমার হাতে কী', 'আমার হাতে কি', 'কী জিনিস', 'এটা কী জিনিস', 'এটা কি জিনিস', 'হোয়াট ইজ দিস', 'আইডেন্টিফাই', 'কোন ফোন', 'eta ki', 'eita ki', 'ki eta', 'ki dekhchi', 'ki dekhsi', 'hate ki', 'amar hate ki', 'kon phone'] },
   { id: 'describe', run: () => describeScene(), kw: ['describe', 'what do you see', 'what can you see', 'what is in front', "what's in front", 'whats in front', 'what is around', 'whats around', 'surroundings', 'look around', 'scene', 'tell me what', 'what is there', 'চারপাশ', 'সামনে কী', 'কী দেখছ', 'কী দেখছো', 'কী আছে', 'দেখো', 'ডেসক্রাইব', 'বর্ণনা', 'samne ki', 'ki dekhcho', 'ki dekhso', 'charpash', 'ki ache', 'dekho'] },
   { id: 'visual_qa', run: q => handleVisualQA(q), kw: ['can you see', 'can you seem', 'do you see', 'did you see', 'can you find', 'is there a', 'is there an', 'is there', 'is my', 'are my', 'check for', 'look for', 'দেখতে পাচ্ছ', 'দেখতে পাচ্ছো', 'দেখছ', 'দেখছো', 'তুমি কি', 'খুঁজে পাচ্ছ', 'খুঁজে পাচ্ছো', 'dekhcho', 'dekhso', 'dekhchi'] },
@@ -5725,13 +5758,18 @@ const EdgeAndStairsDetector = {
   async evaluate(frame, cocoObjs) {
     if (!frame) return null;
 
-    // 1. Context suppression: If desk, table, keyboard, laptop, monitor, or TV is present,
-    // suppress stairs and high-stage drop-off alerts completely (they are false alarms caused by keyboard/desk rows)
-    const deskItems = new Set(['desk', 'dining table', 'keyboard', 'laptop', 'mouse', 'tv', 'monitor', 'bed', 'couch']);
-    if (cocoObjs && cocoObjs.some(o => deskItems.has(o.id) && o.score >= 0.25)) {
+    // 0. If Online AI (Gemini) is active, do not trigger false alarm emergency edge/stairs alerts from geometry gradients
+    if (typeof cloudReady === 'function' && cloudReady()) {
       return null;
     }
-    if (typeof state !== 'undefined' && state.lastCocoPreds && state.lastCocoPreds.some(o => deskItems.has(o.id) && o.score >= 0.25)) {
+
+    // 1. Context suppression: If desk, table, keyboard, laptop, monitor, chair, book, mouse, or TV is present,
+    // suppress stairs and high-stage drop-off alerts completely (they are false alarms caused by keyboard/desk rows)
+    const deskItems = new Set(['desk', 'dining table', 'keyboard', 'laptop', 'mouse', 'tv', 'monitor', 'bed', 'couch', 'chair', 'book', 'cell phone']);
+    if (cocoObjs && cocoObjs.some(o => deskItems.has(o.id) && o.score >= 0.20)) {
+      return null;
+    }
+    if (typeof state !== 'undefined' && state.lastCocoPreds && state.lastCocoPreds.some(o => deskItems.has(o.id) && o.score >= 0.20)) {
       return null;
     }
 
@@ -6172,9 +6210,92 @@ function eyeBoot() {
    ===================================================================== */
 const cloud = { key: '', model: 'gemini-flash-latest', models: ['gemini-flash-latest', 'gemini-3.5-flash', 'gemini-3-flash-preview'], lastCallAt: 0, lastVerifyAt: 0, badKeyWarned: false };
 const serverCloud = { checked: false, available: false };
-// Cloud reasoning is ready ONLY when the user configured a personal Gemini key
-// or the backend server explicitly confirmed cloud reasoning is available.
-function cloudReady() { return Boolean(cloud.key || serverCloud.available); }
+
+// ---- 20-Day Free Subscription / Pass & Dual-Engine Mode Controller ----
+const Subscription = {
+  TRIAL_DAYS: 20,
+  START_KEY: 'astha.sub_start',
+  MODE_KEY: 'astha.ai_mode', // 'gemini' | 'offline'
+
+  init() {
+    let start = localStorage.getItem(this.START_KEY);
+    if (!start) {
+      start = String(Date.now());
+      try { localStorage.setItem(this.START_KEY, start); } catch (e) {}
+    }
+    let mode = localStorage.getItem(this.MODE_KEY);
+    if (!mode) {
+      mode = 'gemini';
+      try { localStorage.setItem(this.MODE_KEY, mode); } catch (e) {}
+    }
+    this.renderButtons();
+    return { start: parseInt(start, 10), mode };
+  },
+
+  getDaysRemaining() {
+    let start = parseInt(localStorage.getItem(this.START_KEY) || '0', 10);
+    if (!start) {
+      start = Date.now();
+      try { localStorage.setItem(this.START_KEY, String(start)); } catch (e) {}
+    }
+    const elapsedDays = (Date.now() - start) / (1000 * 60 * 60 * 24);
+    const remaining = Math.max(0, Math.ceil(this.TRIAL_DAYS - elapsedDays));
+    return remaining;
+  },
+
+  isTrialActive() {
+    if (cloud.key) return true; // personal key is always active
+    return this.getDaysRemaining() > 0;
+  },
+
+  getMode() {
+    try {
+      const saved = localStorage.getItem(this.MODE_KEY);
+      if (saved === 'offline') return 'offline';
+    } catch (e) {}
+    return 'gemini';
+  },
+
+  setMode(mode, silent) {
+    if (mode !== 'offline' && mode !== 'gemini') mode = 'gemini';
+    try { localStorage.setItem(this.MODE_KEY, mode); } catch (e) {}
+    updateCloudBadge();
+    this.renderButtons();
+    if (!silent) {
+      if (mode === 'gemini') {
+        const days = this.getDaysRemaining();
+        announce(`Online AI mode active. ${days} days free pass remaining. Gemini reasoning is enabled for blackboard reading, stairs, and memory.`,
+                 `অনলাইন এআই মোড চালু। ফ্রি পাসের ${bnDigits(days)} দিন বাকি। ব্ল্যাকবোর্ড, সিঁড়ি ও মেমরির জন্য জেমিনি সক্রিয়।`, 'system');
+      } else {
+        announce('Switched to On-Device Offline mode. All vision and voice processing stay on this phone without internet.',
+                 'অন-ডিভাইস অফলাইন মোড চালু হয়েছে। ইন্টারনেট ছাড়াই সব এই ফোনে চলবে।', 'system');
+      }
+    }
+  },
+
+  renderButtons() {
+    const mode = this.getMode();
+    const gBtn = $('btn-mode-gemini');
+    const oBtn = $('btn-mode-offline');
+    if (gBtn) {
+      gBtn.setAttribute('aria-pressed', mode === 'gemini');
+      gBtn.classList.toggle('active', mode === 'gemini');
+    }
+    if (oBtn) {
+      oBtn.setAttribute('aria-pressed', mode === 'offline');
+      oBtn.classList.toggle('active', mode === 'offline');
+    }
+  }
+};
+
+// Cloud reasoning is ready ONLY when in 'gemini' mode, trial is active, and key or server is available.
+function cloudReady() {
+  if (typeof Subscription !== 'undefined') {
+    if (Subscription.getMode() === 'offline') return false;
+    if (!Subscription.isTrialActive()) return false;
+  }
+  return Boolean(cloud.key || serverCloud.available);
+}
 function setGeminiKey(v, silent) {
   cloud.key = (v || '').trim(); cloud.badKeyWarned = false;
   try { localStorage.setItem('astha.gemini', cloud.key); } catch (e) {}
@@ -6184,10 +6305,31 @@ function setGeminiKey(v, silent) {
 }
 function updateCloudBadge() {
   const b = $('cloud-pill'); if (!b) return;
-  if (serverCloud.available) { b.textContent = 'Cloud: Astha server'; b.className = 'pill ok'; }
-  else if (cloud.key) { b.textContent = 'Cloud: personal key'; b.className = 'pill ok'; }
-  else if (serverCloud.checked) { b.textContent = 'On-device only'; b.className = 'pill'; }
-  else { b.textContent = 'Checking cloud…'; b.className = 'pill'; }
+  const mode = typeof Subscription !== 'undefined' ? Subscription.getMode() : 'gemini';
+  if (mode === 'offline') {
+    b.textContent = '📱 On-device offline';
+    b.className = 'pill';
+    return;
+  }
+  const days = typeof Subscription !== 'undefined' ? Subscription.getDaysRemaining() : 20;
+  if (typeof Subscription !== 'undefined' && !Subscription.isTrialActive()) {
+    b.textContent = 'Free pass expired';
+    b.className = 'pill warn';
+    return;
+  }
+  if (serverCloud.available) {
+    b.textContent = `✨ Online AI (${days}d pass · server)`;
+    b.className = 'pill ok';
+  } else if (cloud.key) {
+    b.textContent = `✨ Online AI (${days}d pass · key)`;
+    b.className = 'pill ok';
+  } else if (serverCloud.checked) {
+    b.textContent = `✨ Online AI (${days}d pass)`;
+    b.className = 'pill ok';
+  } else {
+    b.textContent = `✨ Online AI (${days}d pass)`;
+    b.className = 'pill';
+  }
 }
 // Learn once at boot whether Astha's own server has a Gemini key configured, so the badge and
 // cloudReady() are accurate before the first camera action ever calls /api/vision.
@@ -6212,6 +6354,8 @@ const CLOUD_PROMPTS = {
   identify: 'The user is holding one object near the camera. Say what it is: type, colour, material, brand or model if a logo or printed text shows, and any text on it. If it is a toy, a picture, a screen, or an ID card, say so clearly. Return JSON: {"en": string, "bn": string, "name": short English noun}.',
   clothes: 'Describe the garment in view: type (shirt, saree, salwar kameez, panjabi, dress, t-shirt, lungi...), colours, pattern, and fabric if visible (cotton, silk, denim, wool, synthetic, lace). Say whether a person is wearing it or it is being held. Return JSON: {"en": string, "bn": string, "garment": string, "colour": string}.',
   read: 'Transcribe ALL readable text exactly as printed, in its original script (Bangla or English), keeping line breaks, into "text". If it is a medicine, a sign, a label, a letter or a page, give a one-sentence explanation in "en" and "bn". If there is no readable text, set "text" to "". Return JSON: {"text": string, "en": string, "bn": string}.',
+  read_broad: 'Read and transcribe ALL visible text in the camera view: blackboard, whiteboard, computer screen, classroom board, poster, book, document, paper, medicine packaging or sign. Transcribe the full text into "text". Provide a clear, natural spoken explanation of what is written in "en" and "bn". Set "isBoardOrSign": true if it is a blackboard, whiteboard, screen, or sign. Return JSON: {"text": string, "en": string, "bn": string, "isBoardOrSign": boolean}.',
+  stairs_hazard: 'The visually impaired user is moving or pointing the camera. Verify if there are REAL physical stairs, steps, or an elevated drop-off edge ahead in the camera view (NOT a computer keyboard, desk slats, striped pattern, book edges, floor tiles, or shadows). If real stairs/steps exist, report whether they go UP or DOWN, distance, step count visible, and handrail location. Return JSON: {"stairs": boolean, "edge": boolean, "direction": "up"|"down"|"none", "en": string, "bn": string, "hazard": boolean}. If NO stairs or danger, set "stairs": false, "hazard": false, and return reassuring clearance in "en" and "bn".',
   screen: 'This is a screenshot of the user\'s computer. Return JSON: {"app": name of the foreground app or website, "content": exact transcription of the main editor, document, chat or page text (skip menus, toolbars and sidebars; keep code indentation and line breaks), "dialog": {"present": boolean, "button": text of the safest dismiss button or "", "location": one of "top-left","top","top-right","left","center","right","bottom-left","bottom","bottom-right"}, "error": {"present": boolean, "line": exact error text or "", "fix": one short sentence or ""}, "en": one-sentence spoken summary of where the user is and what is on screen, "bn": the same in Bangla}.',
   verify: (names) => `The on-device detector thinks it sees: ${names}. Look at the frame: say in one short sentence what is really there that matters to a blind person (hazards first, then people and objects with position). If the detector was wrong, do not repeat its mistake. If nothing notable, set "none" true. Return JSON: {"en": string, "bn": string, "none": boolean, "mirror": boolean}.`,
   mirror: 'Is this image the user\'s own reflection in a mirror (a person holding up a phone toward a mirror)? Return JSON: {"mirror": boolean, "en": one sentence describing what the person is wearing if mirror is true else "", "bn": same in Bangla}.',
@@ -6358,6 +6502,73 @@ async function cloudVerifyAndSpeak(fresh, fallbackEn, fallbackBn) {
 }
 async function cloudScreen(frame) { return gemini(CLOUD_PROMPTS.screen, frame, { maxW: 1280, maxTokens: 2500 }); }
 
+// Read blackboard, whiteboard, computer screen, poster, book or sign with Gemini Vision
+async function cloudReadLive() {
+  return withBusy(t('reading_title'), async () => {
+    const frame = captureFrame(1280);
+    if (!frame) return;
+    heartSet({ x: 0.5, y: 0.5, mode: 'seek', label: 'Reading board…' });
+    setCaption(t('reading_title'), t('ocr_working'), 'ocr', 'busy', tBn('ocr_working'));
+    try {
+      const prompt = CLOUD_PROMPTS.read_broad || CLOUD_PROMPTS.read;
+      const r = await gemini(prompt, frame, { maxW: 1280, maxTokens: 2500 });
+      const text = (r.text || '').trim();
+      const explainEn = r.en || (text ? 'I read the text on the board or page.' : 'No readable text was found.');
+      const explainBn = r.bn || (text ? 'বোর্ড বা পৃষ্ঠার লেখাটি পড়েছি।' : 'পড়ার মতো কোনো লেখা পাওয়া যায়নি।');
+
+      // Update reader transcript in UI
+      const readerText = $('reader-text');
+      if (readerText && text) {
+        readerText.value = (readerText.value ? readerText.value + '\n\n' : '') + text;
+      }
+
+      const fullEn = (r.en ? r.en + ' ' : '') + (text ? `Text: “${text}”` : '');
+      const fullBn = (r.bn ? r.bn + ' ' : '') + (text ? `লেখা: “${text}”` : '');
+
+      setCaption(t('reading_title'), fullEn || explainEn, 'ocr', null, fullBn || explainBn);
+      announce(fullEn || explainEn, fullBn || explainBn, 'ocr');
+      playEarcon('confirm');
+      haptic('CONFIRM');
+      heartFlash({ x: 0.5, y: 0.5, mode: 'lock', label: r.isBoardOrSign ? 'Board text' : 'Read' });
+      logEvent('Cloud read: ' + (text.slice(0, 40) || 'board text'));
+    } catch (e) {
+      if (cloudFail(e)) announce('Cloud reading is busy; switching to on-device reader.', 'ক্লাউড রিডার ব্যস্ত; ডিভাইসের রিডারে চেষ্টা করছি।', 'system');
+      setTimeout(() => startReading(), 20);
+    }
+  });
+}
+
+// Check stairs and path hazards with Gemini Vision
+async function cloudSafetyCheck(silentIfClear) {
+  return withBusy(t('agent_safety'), async () => {
+    const frame = captureFrame(896);
+    if (!frame) return;
+    heartSet({ x: 0.5, y: 0.5, mode: 'seek', label: 'Checking stairs & safety…' });
+    try {
+      const r = await gemini(CLOUD_PROMPTS.stairs_hazard, frame, { maxTokens: 450 });
+      const isDangerous = Boolean(r.stairs || r.edge || r.hazard);
+      showHazard(isDangerous);
+      setCaption(t('agent_safety'), r.en || (isDangerous ? 'Caution: hazard ahead.' : t('path_clear')), 'safety', isDangerous ? 'danger' : null, r.bn || (isDangerous ? 'সাবধান: সামনে বিপদ।' : tBn('path_clear')));
+      if (isDangerous) {
+        playEarcon('hazard');
+        haptic(r.haptic || 'RAPID');
+      } else {
+        playEarcon('confirm');
+        haptic('CONFIRM');
+      }
+      if (!silentIfClear || isDangerous) {
+        speak(r.en, r.bn);
+      }
+      heartFlash({ x: 0.5, y: 0.5, mode: 'lock', label: isDangerous ? (r.stairs ? 'Stairs' : 'Hazard') : 'Clear' });
+      logEvent('Cloud safety: ' + (r.en || '').slice(0, 40));
+      return r;
+    } catch (e) {
+      if (cloudFail(e)) announce('Cloud safety busy; checking on-device.', 'ক্লাউড ব্যস্ত; ডিভাইসে পরীক্ষা করছি।', 'system');
+      setTimeout(() => safetyCheck(silentIfClear), 20);
+    }
+  });
+}
+
 // Conversational Visual Question Answering (VQA)
 async function cloudVisualQA(query, frame, history = '') {
   const f = frame || captureFrame(896);
@@ -6367,7 +6578,7 @@ async function cloudVisualQA(query, frame, history = '') {
     const prompt = typeof CLOUD_PROMPTS.vqa === 'function' ? CLOUD_PROMPTS.vqa(query, history) : CLOUD_PROMPTS.vqa;
     const r = await Promise.race([
       gemini(prompt, f, { maxTokens: 600 }),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('Cloud VQA timeout')), 3500))
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Cloud VQA timeout')), 9000))
     ]);
     if (r && (r.en || r.bn)) {
       announce(r.en, r.bn, 'vision');
@@ -6449,7 +6660,7 @@ async function cloudRecordPassivePlacement(frame, rooms) {
     const prompt = typeof CLOUD_PROMPTS.passive_placement === 'function' ? CLOUD_PROMPTS.passive_placement(rooms) : CLOUD_PROMPTS.passive_placement;
     const r = await Promise.race([
       gemini(prompt, f, { maxTokens: 400 }),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('Passive placement timeout')), 2500))
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Passive placement timeout')), 8000))
     ]);
     if (r && r.found && r.item && r.surface) {
       return r;
@@ -6615,6 +6826,10 @@ function secureBanner() {
 }
 
 function cloudBoot() {
+  if (typeof Subscription !== 'undefined') {
+    Subscription.init();
+    Subscription.renderButtons();
+  }
   try { cloud.key = localStorage.getItem('astha.gemini') || ''; } catch (e) {}
   if ($('gemini-key')) $('gemini-key').value = cloud.key;
   updateCloudBadge();
@@ -8321,6 +8536,16 @@ const OfflinePack = {
 // ---- Voice routing for the new abilities ----
 function nounAfter(q, re) { const m = q.match(re); if (!m) return ''; return q.slice(m.index + m[0].length).replace(/[?!.,।]/g, '').replace(/\b(please|now|for me|quickly)\b/g, '').trim(); }
 function offlineRoute(query, q) {
+  // If Gemini Online AI is active and ready, DO NOT intercept visual questions,
+  // scene descriptions, room reasoning, blackboard reading, or searches with rigid offline logic!
+  // Route them to Gemini and the main agentic loop!
+  if (typeof cloudReady === 'function' && cloudReady()) {
+    if (Seeker.active && /\b(found it|got it|i have it|i got it|i see it|thanks|thank you)\b|পেয়েছি|পেয়ে গেছি|হয়েছে|peyechi/.test(q)) { Seeker.stop('found'); announce('Great.', 'বাহ, ভালো।', 'voice'); return true; }
+    if (Seeker.active && /\b(stop (looking|searching|guiding)|cancel|never mind|forget it)\b|খোঁজা বন্ধ|থাক/.test(q)) { Seeker.stop('user'); return true; }
+    if (/prepare (for |me for )?offline|download (the |all )?models|work offline|go offline|make (it|astha) work without internet|অফলাইন/.test(q)) { OfflinePack.prepare(); return true; }
+    if (/\b(am i|are we|are you) (online|offline|connected)\b|is there internet|do (i|we) have internet|ইন্টারনেট আছে|নেট আছে/.test(q)) { announce('You are connected to the internet and Gemini Online AI is active with your free pass.', 'আপনি ইন্টারনেটে যুক্ত আছেন এবং ফ্রি পাসসহ জেমিনি অনলাইন এআই চালু আছে।', 'system'); return true; }
+    return false;
+  }
   if (Seeker.active && /\b(found it|got it|i have it|i got it|i see it|thanks|thank you)\b|পেয়েছি|পেয়ে গেছি|হয়েছে|peyechi/.test(q)) { Seeker.stop('found'); announce('Great.', 'বাহ, ভালো।', 'voice'); return true; }
   if (Seeker.active && /\b(stop (looking|searching|guiding)|cancel|never mind|forget it)\b|খোঁজা বন্ধ|থাক/.test(q)) { Seeker.stop('user'); return true; }
   const guide = q.match(/\b(guide me to|take me to|lead me to|walk me to|navigate (me )?to|bring me to|how do i get to|help me reach)\s+(the |my |a |an )?/);

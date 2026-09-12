@@ -8,9 +8,92 @@
    ===================================================================== */
 const cloud = { key: '', model: 'gemini-flash-latest', models: ['gemini-flash-latest', 'gemini-3.5-flash', 'gemini-3-flash-preview'], lastCallAt: 0, lastVerifyAt: 0, badKeyWarned: false };
 const serverCloud = { checked: false, available: false };
-// Cloud reasoning is ready ONLY when the user configured a personal Gemini key
-// or the backend server explicitly confirmed cloud reasoning is available.
-function cloudReady() { return Boolean(cloud.key || serverCloud.available); }
+
+// ---- 20-Day Free Subscription / Pass & Dual-Engine Mode Controller ----
+const Subscription = {
+  TRIAL_DAYS: 20,
+  START_KEY: 'astha.sub_start',
+  MODE_KEY: 'astha.ai_mode', // 'gemini' | 'offline'
+
+  init() {
+    let start = localStorage.getItem(this.START_KEY);
+    if (!start) {
+      start = String(Date.now());
+      try { localStorage.setItem(this.START_KEY, start); } catch (e) {}
+    }
+    let mode = localStorage.getItem(this.MODE_KEY);
+    if (!mode) {
+      mode = 'gemini';
+      try { localStorage.setItem(this.MODE_KEY, mode); } catch (e) {}
+    }
+    this.renderButtons();
+    return { start: parseInt(start, 10), mode };
+  },
+
+  getDaysRemaining() {
+    let start = parseInt(localStorage.getItem(this.START_KEY) || '0', 10);
+    if (!start) {
+      start = Date.now();
+      try { localStorage.setItem(this.START_KEY, String(start)); } catch (e) {}
+    }
+    const elapsedDays = (Date.now() - start) / (1000 * 60 * 60 * 24);
+    const remaining = Math.max(0, Math.ceil(this.TRIAL_DAYS - elapsedDays));
+    return remaining;
+  },
+
+  isTrialActive() {
+    if (cloud.key) return true; // personal key is always active
+    return this.getDaysRemaining() > 0;
+  },
+
+  getMode() {
+    try {
+      const saved = localStorage.getItem(this.MODE_KEY);
+      if (saved === 'offline') return 'offline';
+    } catch (e) {}
+    return 'gemini';
+  },
+
+  setMode(mode, silent) {
+    if (mode !== 'offline' && mode !== 'gemini') mode = 'gemini';
+    try { localStorage.setItem(this.MODE_KEY, mode); } catch (e) {}
+    updateCloudBadge();
+    this.renderButtons();
+    if (!silent) {
+      if (mode === 'gemini') {
+        const days = this.getDaysRemaining();
+        announce(`Online AI mode active. ${days} days free pass remaining. Gemini reasoning is enabled for blackboard reading, stairs, and memory.`,
+                 `অনলাইন এআই মোড চালু। ফ্রি পাসের ${bnDigits(days)} দিন বাকি। ব্ল্যাকবোর্ড, সিঁড়ি ও মেমরির জন্য জেমিনি সক্রিয়।`, 'system');
+      } else {
+        announce('Switched to On-Device Offline mode. All vision and voice processing stay on this phone without internet.',
+                 'অন-ডিভাইস অফলাইন মোড চালু হয়েছে। ইন্টারনেট ছাড়াই সব এই ফোনে চলবে।', 'system');
+      }
+    }
+  },
+
+  renderButtons() {
+    const mode = this.getMode();
+    const gBtn = $('btn-mode-gemini');
+    const oBtn = $('btn-mode-offline');
+    if (gBtn) {
+      gBtn.setAttribute('aria-pressed', mode === 'gemini');
+      gBtn.classList.toggle('active', mode === 'gemini');
+    }
+    if (oBtn) {
+      oBtn.setAttribute('aria-pressed', mode === 'offline');
+      oBtn.classList.toggle('active', mode === 'offline');
+    }
+  }
+};
+
+// Cloud reasoning is ready ONLY when in 'gemini' mode, trial is active, and key or server is available.
+function cloudReady() {
+  if (typeof Subscription !== 'undefined') {
+    if (Subscription.getMode() === 'offline') return false;
+    if (!Subscription.isTrialActive()) return false;
+  }
+  return Boolean(cloud.key || serverCloud.available);
+}
 function setGeminiKey(v, silent) {
   cloud.key = (v || '').trim(); cloud.badKeyWarned = false;
   try { localStorage.setItem('astha.gemini', cloud.key); } catch (e) {}
@@ -20,10 +103,31 @@ function setGeminiKey(v, silent) {
 }
 function updateCloudBadge() {
   const b = $('cloud-pill'); if (!b) return;
-  if (serverCloud.available) { b.textContent = 'Cloud: Astha server'; b.className = 'pill ok'; }
-  else if (cloud.key) { b.textContent = 'Cloud: personal key'; b.className = 'pill ok'; }
-  else if (serverCloud.checked) { b.textContent = 'On-device only'; b.className = 'pill'; }
-  else { b.textContent = 'Checking cloud…'; b.className = 'pill'; }
+  const mode = typeof Subscription !== 'undefined' ? Subscription.getMode() : 'gemini';
+  if (mode === 'offline') {
+    b.textContent = '📱 On-device offline';
+    b.className = 'pill';
+    return;
+  }
+  const days = typeof Subscription !== 'undefined' ? Subscription.getDaysRemaining() : 20;
+  if (typeof Subscription !== 'undefined' && !Subscription.isTrialActive()) {
+    b.textContent = 'Free pass expired';
+    b.className = 'pill warn';
+    return;
+  }
+  if (serverCloud.available) {
+    b.textContent = `✨ Online AI (${days}d pass · server)`;
+    b.className = 'pill ok';
+  } else if (cloud.key) {
+    b.textContent = `✨ Online AI (${days}d pass · key)`;
+    b.className = 'pill ok';
+  } else if (serverCloud.checked) {
+    b.textContent = `✨ Online AI (${days}d pass)`;
+    b.className = 'pill ok';
+  } else {
+    b.textContent = `✨ Online AI (${days}d pass)`;
+    b.className = 'pill';
+  }
 }
 // Learn once at boot whether Astha's own server has a Gemini key configured, so the badge and
 // cloudReady() are accurate before the first camera action ever calls /api/vision.
@@ -48,6 +152,8 @@ const CLOUD_PROMPTS = {
   identify: 'The user is holding one object near the camera. Say what it is: type, colour, material, brand or model if a logo or printed text shows, and any text on it. If it is a toy, a picture, a screen, or an ID card, say so clearly. Return JSON: {"en": string, "bn": string, "name": short English noun}.',
   clothes: 'Describe the garment in view: type (shirt, saree, salwar kameez, panjabi, dress, t-shirt, lungi...), colours, pattern, and fabric if visible (cotton, silk, denim, wool, synthetic, lace). Say whether a person is wearing it or it is being held. Return JSON: {"en": string, "bn": string, "garment": string, "colour": string}.',
   read: 'Transcribe ALL readable text exactly as printed, in its original script (Bangla or English), keeping line breaks, into "text". If it is a medicine, a sign, a label, a letter or a page, give a one-sentence explanation in "en" and "bn". If there is no readable text, set "text" to "". Return JSON: {"text": string, "en": string, "bn": string}.',
+  read_broad: 'Read and transcribe ALL visible text in the camera view: blackboard, whiteboard, computer screen, classroom board, poster, book, document, paper, medicine packaging or sign. Transcribe the full text into "text". Provide a clear, natural spoken explanation of what is written in "en" and "bn". Set "isBoardOrSign": true if it is a blackboard, whiteboard, screen, or sign. Return JSON: {"text": string, "en": string, "bn": string, "isBoardOrSign": boolean}.',
+  stairs_hazard: 'The visually impaired user is moving or pointing the camera. Verify if there are REAL physical stairs, steps, or an elevated drop-off edge ahead in the camera view (NOT a computer keyboard, desk slats, striped pattern, book edges, floor tiles, or shadows). If real stairs/steps exist, report whether they go UP or DOWN, distance, step count visible, and handrail location. Return JSON: {"stairs": boolean, "edge": boolean, "direction": "up"|"down"|"none", "en": string, "bn": string, "hazard": boolean}. If NO stairs or danger, set "stairs": false, "hazard": false, and return reassuring clearance in "en" and "bn".',
   screen: 'This is a screenshot of the user\'s computer. Return JSON: {"app": name of the foreground app or website, "content": exact transcription of the main editor, document, chat or page text (skip menus, toolbars and sidebars; keep code indentation and line breaks), "dialog": {"present": boolean, "button": text of the safest dismiss button or "", "location": one of "top-left","top","top-right","left","center","right","bottom-left","bottom","bottom-right"}, "error": {"present": boolean, "line": exact error text or "", "fix": one short sentence or ""}, "en": one-sentence spoken summary of where the user is and what is on screen, "bn": the same in Bangla}.',
   verify: (names) => `The on-device detector thinks it sees: ${names}. Look at the frame: say in one short sentence what is really there that matters to a blind person (hazards first, then people and objects with position). If the detector was wrong, do not repeat its mistake. If nothing notable, set "none" true. Return JSON: {"en": string, "bn": string, "none": boolean, "mirror": boolean}.`,
   mirror: 'Is this image the user\'s own reflection in a mirror (a person holding up a phone toward a mirror)? Return JSON: {"mirror": boolean, "en": one sentence describing what the person is wearing if mirror is true else "", "bn": same in Bangla}.',
@@ -194,6 +300,73 @@ async function cloudVerifyAndSpeak(fresh, fallbackEn, fallbackBn) {
 }
 async function cloudScreen(frame) { return gemini(CLOUD_PROMPTS.screen, frame, { maxW: 1280, maxTokens: 2500 }); }
 
+// Read blackboard, whiteboard, computer screen, poster, book or sign with Gemini Vision
+async function cloudReadLive() {
+  return withBusy(t('reading_title'), async () => {
+    const frame = captureFrame(1280);
+    if (!frame) return;
+    heartSet({ x: 0.5, y: 0.5, mode: 'seek', label: 'Reading board…' });
+    setCaption(t('reading_title'), t('ocr_working'), 'ocr', 'busy', tBn('ocr_working'));
+    try {
+      const prompt = CLOUD_PROMPTS.read_broad || CLOUD_PROMPTS.read;
+      const r = await gemini(prompt, frame, { maxW: 1280, maxTokens: 2500 });
+      const text = (r.text || '').trim();
+      const explainEn = r.en || (text ? 'I read the text on the board or page.' : 'No readable text was found.');
+      const explainBn = r.bn || (text ? 'বোর্ড বা পৃষ্ঠার লেখাটি পড়েছি।' : 'পড়ার মতো কোনো লেখা পাওয়া যায়নি।');
+
+      // Update reader transcript in UI
+      const readerText = $('reader-text');
+      if (readerText && text) {
+        readerText.value = (readerText.value ? readerText.value + '\n\n' : '') + text;
+      }
+
+      const fullEn = (r.en ? r.en + ' ' : '') + (text ? `Text: “${text}”` : '');
+      const fullBn = (r.bn ? r.bn + ' ' : '') + (text ? `লেখা: “${text}”` : '');
+
+      setCaption(t('reading_title'), fullEn || explainEn, 'ocr', null, fullBn || explainBn);
+      announce(fullEn || explainEn, fullBn || explainBn, 'ocr');
+      playEarcon('confirm');
+      haptic('CONFIRM');
+      heartFlash({ x: 0.5, y: 0.5, mode: 'lock', label: r.isBoardOrSign ? 'Board text' : 'Read' });
+      logEvent('Cloud read: ' + (text.slice(0, 40) || 'board text'));
+    } catch (e) {
+      if (cloudFail(e)) announce('Cloud reading is busy; switching to on-device reader.', 'ক্লাউড রিডার ব্যস্ত; ডিভাইসের রিডারে চেষ্টা করছি।', 'system');
+      setTimeout(() => startReading(), 20);
+    }
+  });
+}
+
+// Check stairs and path hazards with Gemini Vision
+async function cloudSafetyCheck(silentIfClear) {
+  return withBusy(t('agent_safety'), async () => {
+    const frame = captureFrame(896);
+    if (!frame) return;
+    heartSet({ x: 0.5, y: 0.5, mode: 'seek', label: 'Checking stairs & safety…' });
+    try {
+      const r = await gemini(CLOUD_PROMPTS.stairs_hazard, frame, { maxTokens: 450 });
+      const isDangerous = Boolean(r.stairs || r.edge || r.hazard);
+      showHazard(isDangerous);
+      setCaption(t('agent_safety'), r.en || (isDangerous ? 'Caution: hazard ahead.' : t('path_clear')), 'safety', isDangerous ? 'danger' : null, r.bn || (isDangerous ? 'সাবধান: সামনে বিপদ।' : tBn('path_clear')));
+      if (isDangerous) {
+        playEarcon('hazard');
+        haptic(r.haptic || 'RAPID');
+      } else {
+        playEarcon('confirm');
+        haptic('CONFIRM');
+      }
+      if (!silentIfClear || isDangerous) {
+        speak(r.en, r.bn);
+      }
+      heartFlash({ x: 0.5, y: 0.5, mode: 'lock', label: isDangerous ? (r.stairs ? 'Stairs' : 'Hazard') : 'Clear' });
+      logEvent('Cloud safety: ' + (r.en || '').slice(0, 40));
+      return r;
+    } catch (e) {
+      if (cloudFail(e)) announce('Cloud safety busy; checking on-device.', 'ক্লাউড ব্যস্ত; ডিভাইসে পরীক্ষা করছি।', 'system');
+      setTimeout(() => safetyCheck(silentIfClear), 20);
+    }
+  });
+}
+
 // Conversational Visual Question Answering (VQA)
 async function cloudVisualQA(query, frame, history = '') {
   const f = frame || captureFrame(896);
@@ -203,7 +376,7 @@ async function cloudVisualQA(query, frame, history = '') {
     const prompt = typeof CLOUD_PROMPTS.vqa === 'function' ? CLOUD_PROMPTS.vqa(query, history) : CLOUD_PROMPTS.vqa;
     const r = await Promise.race([
       gemini(prompt, f, { maxTokens: 600 }),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('Cloud VQA timeout')), 3500))
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Cloud VQA timeout')), 9000))
     ]);
     if (r && (r.en || r.bn)) {
       announce(r.en, r.bn, 'vision');
@@ -285,7 +458,7 @@ async function cloudRecordPassivePlacement(frame, rooms) {
     const prompt = typeof CLOUD_PROMPTS.passive_placement === 'function' ? CLOUD_PROMPTS.passive_placement(rooms) : CLOUD_PROMPTS.passive_placement;
     const r = await Promise.race([
       gemini(prompt, f, { maxTokens: 400 }),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('Passive placement timeout')), 2500))
+      new Promise((_, reject) => setTimeout(() => reject(new Error('Passive placement timeout')), 8000))
     ]);
     if (r && r.found && r.item && r.surface) {
       return r;
@@ -451,6 +624,10 @@ function secureBanner() {
 }
 
 function cloudBoot() {
+  if (typeof Subscription !== 'undefined') {
+    Subscription.init();
+    Subscription.renderButtons();
+  }
   try { cloud.key = localStorage.getItem('astha.gemini') || ''; } catch (e) {}
   if ($('gemini-key')) $('gemini-key').value = cloud.key;
   updateCloudBadge();

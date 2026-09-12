@@ -335,7 +335,7 @@ rep("    state.cameraPending=false; state.sceneKey=null; showSource('camera');\n
 rep("function describeScene() {\n  if (!state.source) { setCaption(t('ready_title'), t('need_source'), 'vision', null, tBn('need_source')); speak(t('need_source'), tBn('need_source')); return; }",
     "function describeScene() {\n  if (withCamera(describeScene)) return;")
 rep("function safetyCheck(silentIfClear) {\n  if (!state.source) { setCaption(t('agent_safety'), t('need_source'), 'safety', null, tBn('need_source')); speak(t('need_source'), tBn('need_source')); return; }",
-    "function safetyCheck(silentIfClear) {\n  if (!state.source) { if (silentIfClear) return; return withCamera(safetyCheck); }")
+    "function safetyCheck(silentIfClear) {\n  if (!state.source) { if (silentIfClear) return; return withCamera(safetyCheck); }\n  if (typeof cloudReady === 'function' && cloudReady() && typeof cloudSafetyCheck === 'function') return cloudSafetyCheck(silentIfClear);")
 rep("    stopCamera(); announce('Camera could not start. Check permission and use HTTPS or localhost, or upload a photo.',",
     "    state.pendingRead=false; state.pendingAction=null; stopCamera(); announce('Camera could not start. Check permission and use HTTPS or localhost, or upload a photo.',")
 # Voice: every "read …" request goes to the camera reader.
@@ -427,6 +427,10 @@ rep('<p class="prototype-note">Browser prototype · Camera recognition and readi
     '      <p class="prototype-note" id="secure-banner" hidden style="border-color:var(--danger)"><strong>This page is open on an insecure address.</strong> Chrome will ask for the microphone and camera every time and may block them. Open it as <code>http://localhost:8765</code> or over HTTPS. On Android, use Chrome\'s port forwarding (chrome://inspect on the computer) so the phone sees localhost, or a Cloudflare tunnel.</p>')
 rep('        <button class="chip-btn" id="hf-btn" onclick="toggleHandsFree()" aria-pressed="false" title="Keep listening for “Astha, …”">🎧 <span id="hf-label">Hands-free: off</span></button>\n      </div>',
     '        <button class="chip-btn" id="hf-btn" onclick="toggleHandsFree()" aria-pressed="false" title="Keep listening for “Astha, …”">🎧 <span id="hf-label">Hands-free: off</span></button>\n'
+    '        <div class="segmented" role="group" aria-label="AI Engine Mode" title="Switch between Online AI (Gemini with 20d Free Pass) and On-Device Offline Mode">\n'
+    '          <button id="btn-mode-gemini" onclick="Subscription.setMode(\'gemini\')" aria-pressed="true">✨ Online AI (20d Pass)</button>\n'
+    '          <button id="btn-mode-offline" onclick="Subscription.setMode(\'offline\')" aria-pressed="false">📱 Offline</button>\n'
+    '        </div>\n'
     '        <div class="segmented" role="group" aria-label="Speaking mode" title="Auto: speaks up in busy places. Quiet: speaks only when asked.">\n'
     '          <button id="mode-auto" onclick="setMode(\'auto\')" aria-pressed="true">Auto · busy area</button>\n'
     '          <button id="mode-quiet" onclick="setMode(\'quiet\')" aria-pressed="false">Quiet · ask me</button>\n'
@@ -459,6 +463,8 @@ rep("  if (!privacyMode) logEvent('Request: ' + query);\n",
     "  if (!privacyMode) logEvent('Request: ' + query);\n"
     "  if (answerYesNo(q)) return;\n"
     "  if (!ownerGate(query)) return;\n"
+    "  if (/online mode|online ai|gemini mode|gemini ai|use gemini|20 day pass|অনলাইন মোড|জেমিনি মোড/.test(q)) return Subscription.setMode('gemini');\n"
+    "  if (/offline mode|on.?device mode|use offline|go offline|অফলাইন মোড|ডিভাইস মোড/.test(q)) return Subscription.setMode('offline');\n"
     "  if (/auto mode|busy (area|place|road)|speak (up )?automatically|announce automatically|অটো মোড|নিজে থেকে বলো|ব্যস্ত জায়গা/.test(q)) return setMode('auto');\n"
     "  if (/quiet mode|silent mode|only when i ask|speak only when|stop announcing|শান্ত মোড|চুপচাপ মোড|জিজ্ঞাসা করলে বলো/.test(q)) return setMode('quiet');\n"
     "  if (/read (what i wrote|what i typed|my code|the code|the screen|the document|this page on (the )?screen|what is written|what's written)|read aloud what|স্ক্রিনের লেখা পড়|কোড পড়|যা লিখেছি পড়/.test(q)) return eyeReadScreen();\n"

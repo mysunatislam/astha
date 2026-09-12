@@ -647,9 +647,13 @@ function readText() {
   // No camera yet? Start it and go straight into reading mode; the user never has to type or paste anything.
   if (!state.source) {
     state.pendingRead = true;
-    announce('Starting the camera. Hold the page in front of the phone.', 'ক্যামেরা চালু করছি। পৃষ্ঠাটি ফোনের সামনে ধরুন।', 'ocr');
+    announce(typeof cloudReady === 'function' && cloudReady() ? 'Starting camera to read text, blackboard or screen.' : 'Starting the camera. Hold the page in front of the phone.',
+             typeof cloudReady === 'function' && cloudReady() ? 'লেখা, ব্ল্যাকবোর্ড বা স্ক্রিন পড়ার জন্য ক্যামেরা চালু করছি।' : 'ক্যামেরা চালু করছি। পৃষ্ঠাটি ফোনের সামনে ধরুন।', 'ocr');
     toggleCamera();
     return;
+  }
+  if (typeof cloudReady === 'function' && cloudReady() && typeof cloudReadLive === 'function') {
+    return cloudReadLive();
   }
   if (state.source !== 'camera') return readStillOnce();
   if (reading.active) return stopReading();
@@ -1075,11 +1079,26 @@ function sttLang() {
 // ---- Motion: how things move, entirely on-device ------------------------------
 // Boxes from the fast detector are tracked per class across frames (largest box per class).
 // Horizontal drift gives left/right; box growth gives "coming closer" / "moving away".
+const REAL_MOBILE_AGENTS = new Set([
+  'person', 'car', 'truck', 'bus', 'motorcycle', 'bicycle',
+  'dog', 'cat', 'horse', 'sheep', 'cow', 'elephant', 'bear', 'bird'
+]);
 const motion = { tracks: new Map(), said: new Map() };
 function trackMotion(objs, frame) {
   const now = Date.now();
   const best = new Map();
-  objs.forEach(o => { if (!o.bbox) return; const a = o.bbox[2] * o.bbox[3]; const b = best.get(o.id); if (!b || a > b.bbox[2] * b.bbox[3]) best.set(o.id, o); });
+  // ONLY real mobile agents (people, vehicles, animals) are tracked for motion.
+  // Inanimate objects (mouse, keyboard, cup, laptop, etc.) MUST NEVER be tracked as moving,
+  // preventing false motion alarms when the user tilts or moves the camera over a desk.
+  objs.forEach(o => {
+    if (!o.bbox || !REAL_MOBILE_AGENTS.has(o.id)) {
+      o.motion = null;
+      return;
+    }
+    const a = o.bbox[2] * o.bbox[3];
+    const b = best.get(o.id);
+    if (!b || a > b.bbox[2] * b.bbox[3]) best.set(o.id, o);
+  });
   for (const [id, o] of best) {
     const cx = (o.bbox[0] + o.bbox[2] / 2) / frame.width;
     const area = (o.bbox[2] * o.bbox[3]) / (frame.width * frame.height);
@@ -1095,7 +1114,14 @@ function trackMotion(objs, frame) {
     } else { tr.vx = 0; tr.grow = 0; }
     o.motion = motionOf(tr);
   }
-  objs.forEach(o => { const b = best.get(o.id); if (b && o !== b) o.motion = b.motion; });
+  objs.forEach(o => {
+    if (!REAL_MOBILE_AGENTS.has(o.id)) {
+      o.motion = null;
+      return;
+    }
+    const b = best.get(o.id);
+    if (b && o !== b) o.motion = b.motion;
+  });
   for (const [id, tr] of motion.tracks) if (now - tr.t > 3000) motion.tracks.delete(id);
 }
 function motionOf(tr) {
@@ -1118,7 +1144,7 @@ function motionPhrase(m, bn) {
 // Live narration of movement. One object at a time, throttled per object; something coming
 // closer fast, or any hazard class approaching, jumps the queue and is spoken as a warning.
 function narrateMotion(now) {
-  const moving = worldSorted().filter(o => o.motion && o.src === 'coco' && o.score >= 0.55);
+  const moving = worldSorted().filter(o => o.motion && o.src === 'coco' && o.score >= 0.55 && REAL_MOBILE_AGENTS.has(o.id));
   if (!moving.length) return false;
   const urgent = moving.find(o => o.motion.dir === 'toward' && (o.motion.fast || (VOCAB_BY_ID[o.id] || {}).hz));
   const due = o => { const s = motion.said.get(o.id); return !s || s.dir !== o.motion.dir || now - s.t > 8000; };
@@ -1138,7 +1164,7 @@ function narrateMotion(now) {
 // "Is anything moving?" — works in quiet mode too, because the user asked.
 function describeMotionNow() {
   if (withCamera(describeMotionNow)) return;
-  const moving = worldSorted().filter(o => o.motion);
+  const moving = worldSorted().filter(o => o.motion && REAL_MOBILE_AGENTS.has(o.id));
   if (!moving.length) return announce('Nothing is moving right now.', 'এখন কিছু নড়ছে না।', 'vision');
   const en = moving.slice(0, 3).map(o => `${labelWithArticle(o.id)} ${t('pos_' + o.pos)} is ${motionPhrase(o.motion, false)}`).join('; ') + '.';
   const bn = moving.slice(0, 3).map(o => `${tBn('pos_' + o.pos)} ${labelBn(o.id)} ${motionPhrase(o.motion, true)}`).join('; ') + '।';
@@ -1150,7 +1176,7 @@ function describeMotionNow() {
 const INTENTS = [
   { id: 'motion', run: () => describeMotionNow(), kw: ['moving', 'is anything moving', 'who is coming', 'what is coming', 'approaching', 'movement', 'নড়ছে', 'কে আসছে', 'কী আসছে', 'কাছে আসছে', 'নড়াচড়া', 'ke ashche', 'norche', 'nore'] },
   // Keywords cover English, Bangla script, and romanised Bangla ("amar phone kothay").
-  { id: 'read', run: () => readText(), kw: ['read', 'reading', 'book', 'page', 'letter', 'label', 'text', 'পড়', 'পড়ো', 'লেখা', 'বই', 'রিড', 'বুক', 'পেজ', 'পৃষ্ঠা', 'poro', 'pore', 'boi', 'lekha', 'porhe', 'shonao'] },
+  { id: 'read', run: () => readText(), kw: ['read', 'reading', 'book', 'page', 'letter', 'label', 'text', 'blackboard', 'whiteboard', 'board', 'chalkboard', 'screen', 'sign', 'poster', 'পড়', 'পড়ো', 'লেখা', 'বই', 'রিড', 'বুক', 'পেজ', 'পৃষ্ঠা', 'ব্ল্যাকবোর্ড', 'বোর্ড', 'স্ক্রিন', 'হোয়াইটবোর্ড', 'poro', 'pore', 'boi', 'lekha', 'porhe', 'shonao'] },
   { id: 'identify', run: () => identifyObject(), kw: ['what is this', "what's this", 'what is it', "what's it", 'what is that', "what's that", 'what am i looking at', 'what am i seeing', 'what am i holding', 'what do i have', 'what do i hold', 'what is in my hand', "what's in my hand", "what's this called", 'what is this called', 'tell me what this is', 'tell me what it is', 'tell me what that is', 'what object is this', 'what object is it', 'what do you call this', 'identify', 'which brand', 'what phone', 'which phone', 'কী এটা', 'এটা কী', 'এটি কী', 'এটা কি', 'কী দেখছি', 'আমি কী দেখছি', 'কী দেখতে পাচ্ছ', 'আমার হাতে কী', 'আমার হাতে কি', 'কী জিনিস', 'এটা কী জিনিস', 'এটা কি জিনিস', 'হোয়াট ইজ দিস', 'আইডেন্টিফাই', 'কোন ফোন', 'eta ki', 'eita ki', 'ki eta', 'ki dekhchi', 'ki dekhsi', 'hate ki', 'amar hate ki', 'kon phone'] },
   { id: 'describe', run: () => describeScene(), kw: ['describe', 'what do you see', 'what can you see', 'what is in front', "what's in front", 'whats in front', 'what is around', 'whats around', 'surroundings', 'look around', 'scene', 'tell me what', 'what is there', 'চারপাশ', 'সামনে কী', 'কী দেখছ', 'কী দেখছো', 'কী আছে', 'দেখো', 'ডেসক্রাইব', 'বর্ণনা', 'samne ki', 'ki dekhcho', 'ki dekhso', 'charpash', 'ki ache', 'dekho'] },
   { id: 'visual_qa', run: q => handleVisualQA(q), kw: ['can you see', 'can you seem', 'do you see', 'did you see', 'can you find', 'is there a', 'is there an', 'is there', 'is my', 'are my', 'check for', 'look for', 'দেখতে পাচ্ছ', 'দেখতে পাচ্ছো', 'দেখছ', 'দেখছো', 'তুমি কি', 'খুঁজে পাচ্ছ', 'খুঁজে পাচ্ছো', 'dekhcho', 'dekhso', 'dekhchi'] },
@@ -2433,13 +2459,18 @@ const EdgeAndStairsDetector = {
   async evaluate(frame, cocoObjs) {
     if (!frame) return null;
 
-    // 1. Context suppression: If desk, table, keyboard, laptop, monitor, or TV is present,
-    // suppress stairs and high-stage drop-off alerts completely (they are false alarms caused by keyboard/desk rows)
-    const deskItems = new Set(['desk', 'dining table', 'keyboard', 'laptop', 'mouse', 'tv', 'monitor', 'bed', 'couch']);
-    if (cocoObjs && cocoObjs.some(o => deskItems.has(o.id) && o.score >= 0.25)) {
+    // 0. If Online AI (Gemini) is active, do not trigger false alarm emergency edge/stairs alerts from geometry gradients
+    if (typeof cloudReady === 'function' && cloudReady()) {
       return null;
     }
-    if (typeof state !== 'undefined' && state.lastCocoPreds && state.lastCocoPreds.some(o => deskItems.has(o.id) && o.score >= 0.25)) {
+
+    // 1. Context suppression: If desk, table, keyboard, laptop, monitor, chair, book, mouse, or TV is present,
+    // suppress stairs and high-stage drop-off alerts completely (they are false alarms caused by keyboard/desk rows)
+    const deskItems = new Set(['desk', 'dining table', 'keyboard', 'laptop', 'mouse', 'tv', 'monitor', 'bed', 'couch', 'chair', 'book', 'cell phone']);
+    if (cocoObjs && cocoObjs.some(o => deskItems.has(o.id) && o.score >= 0.20)) {
+      return null;
+    }
+    if (typeof state !== 'undefined' && state.lastCocoPreds && state.lastCocoPreds.some(o => deskItems.has(o.id) && o.score >= 0.20)) {
       return null;
     }
 

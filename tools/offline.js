@@ -661,6 +661,16 @@ const OfflinePack = {
 // ---- Voice routing for the new abilities ----
 function nounAfter(q, re) { const m = q.match(re); if (!m) return ''; return q.slice(m.index + m[0].length).replace(/[?!.,।]/g, '').replace(/\b(please|now|for me|quickly)\b/g, '').trim(); }
 function offlineRoute(query, q) {
+  // If Gemini Online AI is active and ready, DO NOT intercept visual questions,
+  // scene descriptions, room reasoning, blackboard reading, or searches with rigid offline logic!
+  // Route them to Gemini and the main agentic loop!
+  if (typeof cloudReady === 'function' && cloudReady()) {
+    if (Seeker.active && /\b(found it|got it|i have it|i got it|i see it|thanks|thank you)\b|পেয়েছি|পেয়ে গেছি|হয়েছে|peyechi/.test(q)) { Seeker.stop('found'); announce('Great.', 'বাহ, ভালো।', 'voice'); return true; }
+    if (Seeker.active && /\b(stop (looking|searching|guiding)|cancel|never mind|forget it)\b|খোঁজা বন্ধ|থাক/.test(q)) { Seeker.stop('user'); return true; }
+    if (/prepare (for |me for )?offline|download (the |all )?models|work offline|go offline|make (it|astha) work without internet|অফলাইন/.test(q)) { OfflinePack.prepare(); return true; }
+    if (/\b(am i|are we|are you) (online|offline|connected)\b|is there internet|do (i|we) have internet|ইন্টারনেট আছে|নেট আছে/.test(q)) { announce('You are connected to the internet and Gemini Online AI is active with your free pass.', 'আপনি ইন্টারনেটে যুক্ত আছেন এবং ফ্রি পাসসহ জেমিনি অনলাইন এআই চালু আছে।', 'system'); return true; }
+    return false;
+  }
   if (Seeker.active && /\b(found it|got it|i have it|i got it|i see it|thanks|thank you)\b|পেয়েছি|পেয়ে গেছি|হয়েছে|peyechi/.test(q)) { Seeker.stop('found'); announce('Great.', 'বাহ, ভালো।', 'voice'); return true; }
   if (Seeker.active && /\b(stop (looking|searching|guiding)|cancel|never mind|forget it)\b|খোঁজা বন্ধ|থাক/.test(q)) { Seeker.stop('user'); return true; }
   const guide = q.match(/\b(guide me to|take me to|lead me to|walk me to|navigate (me )?to|bring me to|how do i get to|help me reach)\s+(the |my |a |an )?/);
