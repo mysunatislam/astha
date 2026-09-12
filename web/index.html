@@ -6208,8 +6208,17 @@ function eyeBoot() {
        heavy understanding goes to the cloud with a strict "never invent"
        instruction. The key is stored only in this browser.
    ===================================================================== */
-const cloud = { key: '', model: 'gemini-flash-latest', models: ['gemini-flash-latest', 'gemini-3.5-flash', 'gemini-3-flash-preview'], lastCallAt: 0, lastVerifyAt: 0, badKeyWarned: false };
+const cloud = { key: '', model: 'gemini-2.0-flash', models: ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-flash-8b'], lastCallAt: 0, lastVerifyAt: 0, badKeyWarned: false };
 const serverCloud = { checked: false, available: false };
+
+function promptGeminiKey() {
+  const current = cloud.key || '';
+  const input = window.prompt('Enter your Google Gemini API Key to activate high-accuracy Online AI (Get a free key at https://aistudio.google.com):', current);
+  if (input !== null) {
+    setGeminiKey(input.trim());
+    if ($('gemini-key')) $('gemini-key').value = input.trim();
+  }
+}
 
 // ---- 20-Day Free Subscription / Pass & Dual-Engine Mode Controller ----
 const Subscription = {
@@ -6264,8 +6273,14 @@ const Subscription = {
     if (!silent) {
       if (mode === 'gemini') {
         const days = this.getDaysRemaining();
-        announce(`Online AI mode active. ${days} days free pass remaining. Gemini reasoning is enabled for blackboard reading, stairs, and memory.`,
-                 `অনলাইন এআই মোড চালু। ফ্রি পাসের ${bnDigits(days)} দিন বাকি। ব্ল্যাকবোর্ড, সিঁড়ি ও মেমরির জন্য জেমিনি সক্রিয়।`, 'system');
+        if (!cloud.key && !serverCloud.available) {
+          announce(`Switched to Online AI mode. Your 20-day pass has ${days} days remaining. Please enter your Gemini API key to activate high-accuracy vision.`,
+                   `অনলাইন এআই মোড নির্বাচন করা হয়েছে। আপনার ফ্রি পাসের ${bnDigits(days)} দিন বাকি। হাই-অ্যাকুরেসি জেমিনি ভিশন চালু করতে আপনার জেমিনি কী দিন।`, 'system');
+          setTimeout(() => promptGeminiKey(), 800);
+        } else {
+          announce(`Online AI mode active. ${days} days free pass remaining. Gemini 2.0 Flash is enabled for blackboard reading, stairs, and memory.`,
+                   `অনলাইন এআই মোড চালু। ফ্রি পাসের ${bnDigits(days)} দিন বাকি। ব্ল্যাকবোর্ড, সিঁড়ি ও মেমরির জন্য জেমিনি ২.০ ফ্ল্যাশ সক্রিয়।`, 'system');
+        }
       } else {
         announce('Switched to On-Device Offline mode. All vision and voice processing stay on this phone without internet.',
                  'অন-ডিভাইস অফলাইন মোড চালু হয়েছে। ইন্টারনেট ছাড়াই সব এই ফোনে চলবে।', 'system');
@@ -6300,8 +6315,8 @@ function setGeminiKey(v, silent) {
   cloud.key = (v || '').trim(); cloud.badKeyWarned = false;
   try { localStorage.setItem('astha.gemini', cloud.key); } catch (e) {}
   updateCloudBadge();
-  if (!silent) announce(cloud.key ? 'Cloud reasoning is on. My descriptions will be much more accurate now.' : 'Cloud reasoning is off. I am using the on-device models only.',
-    cloud.key ? 'ক্লাউড রিজনিং চালু। এখন আমার বর্ণনা অনেক নিখুঁত হবে।' : 'ক্লাউড রিজনিং বন্ধ। শুধু ডিভাইসের মডেল ব্যবহার করছি।', 'system');
+  if (!silent) announce(cloud.key ? 'Gemini 2.0 Flash is connected. High-accuracy scene understanding, blackboard reading and memory are active.' : 'Cloud reasoning is off. I am using the on-device models only.',
+    cloud.key ? 'জেমিনি ২.০ ফ্ল্যাশ সংযুক্ত হয়েছে। হাই-অ্যাকুরেসি দৃশ্য বর্ণনা, ব্ল্যাকবোর্ড পড়া ও মেমরি সক্রিয়।' : 'ক্লাউড রিজনিং বন্ধ। শুধু ডিভাইসের মডেল ব্যবহার করছি।', 'system');
 }
 function updateCloudBadge() {
   const b = $('cloud-pill'); if (!b) return;
@@ -6309,26 +6324,35 @@ function updateCloudBadge() {
   if (mode === 'offline') {
     b.textContent = '📱 On-device offline';
     b.className = 'pill';
+    b.onclick = null;
+    b.style.cursor = 'default';
     return;
   }
   const days = typeof Subscription !== 'undefined' ? Subscription.getDaysRemaining() : 20;
   if (typeof Subscription !== 'undefined' && !Subscription.isTrialActive()) {
     b.textContent = 'Free pass expired';
     b.className = 'pill warn';
+    b.onclick = null;
+    b.style.cursor = 'default';
     return;
   }
   if (serverCloud.available) {
-    b.textContent = `✨ Online AI (${days}d pass · server)`;
+    b.textContent = `✨ Online AI (${days}d · Server)`;
     b.className = 'pill ok';
+    b.onclick = null;
+    b.style.cursor = 'default';
   } else if (cloud.key) {
-    b.textContent = `✨ Online AI (${days}d pass · key)`;
+    b.textContent = `✨ Online AI (${days}d · Key active)`;
     b.className = 'pill ok';
-  } else if (serverCloud.checked) {
-    b.textContent = `✨ Online AI (${days}d pass)`;
-    b.className = 'pill ok';
+    b.onclick = () => promptGeminiKey();
+    b.style.cursor = 'pointer';
+    b.title = 'Click to view or change your Gemini API key';
   } else {
-    b.textContent = `✨ Online AI (${days}d pass)`;
-    b.className = 'pill';
+    b.textContent = `⚠️ Enter Gemini Key (${days}d pass)`;
+    b.className = 'pill warn';
+    b.onclick = () => promptGeminiKey();
+    b.style.cursor = 'pointer';
+    b.title = 'Click to enter your Gemini API key (Free at https://aistudio.google.com)';
   }
 }
 // Learn once at boot whether Astha's own server has a Gemini key configured, so the badge and
@@ -6342,11 +6366,11 @@ async function refreshCloudStatus() {
   serverCloud.checked = true;
   updateCloudBadge();
 }
-function frameToJpeg(frame, maxW = 896) {
+function frameToJpeg(frame, maxW = 800) {
   const s = Math.min(1, maxW / frame.width);
   const c = document.createElement('canvas'); c.width = Math.round(frame.width * s); c.height = Math.round(frame.height * s);
   c.getContext('2d').drawImage(frame, 0, 0, c.width, c.height);
-  return c.toDataURL('image/jpeg', 0.78).split(',')[1];
+  return c.toDataURL('image/jpeg', 0.72).split(',')[1];
 }
 const ASTHA_SYSTEM = 'You are Astha, a warm and precise visual companion for a blind user in Bangladesh. Speak as "I". Be concrete: colours, materials, printed text, positions (left, ahead, right) and rough distance. Never invent anything you cannot actually see; if unsure, say you are not sure. Do not describe people as animals or objects; say "a person" when a human is visible. Keep spoken answers to one to three short sentences unless transcribing. Return only the requested JSON. "bn" must be natural spoken Bangla with the same meaning as "en".';
 const CLOUD_PROMPTS = {
@@ -6377,7 +6401,7 @@ If no target item is clearly placed on a surface, return JSON:
 // preferences is only a fallback for when that server is unreachable or has none configured.
 async function gemini(task, frame, opts = {}) {
   cloud.lastCallAt = Date.now();
-  const image = frame ? frameToJpeg(frame, opts.maxW || 896) : undefined;
+  const image = frame ? frameToJpeg(frame, opts.maxW || 800) : undefined;
   if (serverCloud.available) {
     try {
       const res = await fetch(apiUrl('/api/vision'), {
@@ -6404,7 +6428,13 @@ async function gemini(task, frame, opts = {}) {
     } catch (e) { throw new Error('network'); }
     if (res.status === 404) { lastErr = new Error('model ' + model + ' not found'); continue; }
     if (res.status === 400 || res.status === 403) { if (!cloud.badKeyWarned) { cloud.badKeyWarned = true; announce('Your personal Gemini key was rejected. Check it in Your preferences.', 'আপনার ব্যক্তিগত জেমিনি কী গ্রহণ হয়নি। প্রেফারেন্সে দেখুন।', 'system'); } throw new Error('bad key'); }
-    if (res.status === 429) throw new Error('rate limit');
+    if (res.status === 429) {
+      if (!opts.isRetry) {
+        await new Promise(r => setTimeout(r, 1800));
+        return await gemini(task, frame, { ...opts, isRetry: true });
+      }
+      throw new Error('rate limit');
+    }
     if (!res.ok) throw new Error('Gemini ' + res.status);
     const data = await res.json();
     const text = ((((data.candidates || [])[0] || {}).content || {}).parts || []).map(p => p.text || '').join('');
