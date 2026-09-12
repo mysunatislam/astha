@@ -949,6 +949,12 @@ const SiriVoice = {
 
       rec.onerror = (ev) => {
         if (ev.error === 'no-speech') return;
+        if (ev.error === 'network') {
+          // The browser recogniser needs the internet; the one-tap microphone falls back to Whisper on the phone.
+          this.stop(true);
+          if (Date.now() - (this.netWarnAt || 0) > 60000) { this.netWarnAt = Date.now(); announce('No internet for hands-free listening. Tap the microphone and I will listen on this phone.', 'হ্যান্ডস-ফ্রি শোনার জন্য ইন্টারনেট নেই। মাইক্রোফোন চাপুন, আমি এই ফোনেই শুনব।', 'voice'); }
+          return;
+        }
         if (ev.error === 'not-allowed' || ev.error === 'service-not-allowed') {
           console.warn('Microphone permission blocked or service not allowed');
           this.stop(true);

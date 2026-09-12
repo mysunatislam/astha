@@ -12,6 +12,8 @@ vocab = (HERE / "vocab.js").read_text(encoding="utf-8")
 css = (HERE / "styles.css").read_text(encoding="utf-8")
 module = (HERE / "module.js").read_text(encoding="utf-8")
 agent_js = (HERE / "agent.js").read_text(encoding="utf-8")
+perceive_js = (HERE / "perceive.js").read_text(encoding="utf-8")
+offline_js = (HERE / "offline.js").read_text(encoding="utf-8")
 
 def rep(old, new, count=1):
     global html
@@ -261,6 +263,7 @@ rep("    const ranked = scoreEmbedding(emb).filter(r => r.id !== '_bg' && !VOCAB
 rep("      state.lastCocoPreds = objs;\n      ingest(objs.concat(",
     "      state.lastCocoPreds = objs;\n"
     "      if (typeof trackMotion === 'function') trackMotion(objs, frame); // left/right/closer/away per object, on-device\n"
+    "      if (typeof perceptionHook === 'function') perceptionHook(objs, frame); // distance, scene graph, toy/screen rules, depth\n"
     "      // ---- AUTOMATIC REAL-TIME ACTIVE SAFETY GUARDIAN (ZERO COMMAND NEEDED) ----\n"
     "      let handledEmergency = false;\n"
     "      if (typeof ApproachVelocityTracker !== 'undefined') {\n"
@@ -410,7 +413,7 @@ rep("const q = query.toLowerCase().replace(/^(?:hey\\s+)?astha[,.!\\s]*/i, '')",
 
 # ---- Round 1 memory: approved object events with time and confidence ----
 rep("    const partsEn = fresh.slice(0, 3).map(o => `${labelWithArticle(o.id)} ${t('pos_' + o.pos)}`);\n    const partsBn = fresh.slice(0, 3).map(o => `${tBn('pos_' + o.pos)} ${labelBn(o.id)}`);\n    const msgEn = t('new_object', { list: joinList(partsEn, false) });\n    const msgBn = tBn('new_object', { list: joinList(partsBn, true) });",
-    "    const partsEn = fresh.slice(0, 3).map(o => `${objLabelWithArticle(o)} ${t('pos_' + o.pos)}`);\n    const partsBn = fresh.slice(0, 3).map(o => `${tBn('pos_' + o.pos)} ${objLabelBn(o)}`);\n    let msgEn = t('new_object', { list: joinList(partsEn, false) });\n    let msgBn = tBn('new_object', { list: joinList(partsBn, true) });\n"
+    "    const dEn = o => (typeof distPhrase === 'function' && distPhrase(o, false)) ? ', ' + distPhrase(o, false) : '';\n    const dBn = o => (typeof distPhrase === 'function' && distPhrase(o, true)) ? ', ' + distPhrase(o, true) : '';\n    const partsEn = fresh.slice(0, 3).map(o => `${objLabelWithArticle(o)} ${t('pos_' + o.pos)}${dEn(o)}`);\n    const partsBn = fresh.slice(0, 3).map(o => `${tBn('pos_' + o.pos)} ${objLabelBn(o)}${dBn(o)}`);\n    let msgEn = t('new_object', { list: joinList(partsEn, false) });\n    let msgBn = tBn('new_object', { list: joinList(partsBn, true) });\n"
     "    // Approved object events: offer to remember a confident personal item, never save silently.\n"
     "    const keep = fresh.find(o => (VOCAB_BY_ID[o.id] || {}).personal && o.score >= 0.7 && now - (state.lastRememberOffer || 0) > 45000);\n"
     "    if (keep && !privacyMode) { state.lastRememberOffer = now; state.rememberCandidate = keep.id; msgEn += ` Say “remember this” to save where your ${objLabel(keep)} is.`; msgBn += ` আপনার ${objLabelBn(keep)} কোথায় আছে মনে রাখতে বলুন “এটা মনে রাখো”।`; }")
@@ -445,7 +448,7 @@ rep('    <!-- AI Model Diagnostics -->',
 rep("function describeScene() {\n  if (withCamera(describeScene)) return;", "function describeScene(skipCloud) {\n  if (withCamera(describeScene)) return;\n  if (cloudReady() && !skipCloud) return cloudDescribe();")
 # Auto mode: the cloud checks the frame before Astha speaks about new on-device detections; stricter thresholds otherwise.
 rep("const fresh = worldSorted().filter(o => (state.announced.get(o.id) || 0) < now - 10000 && o.score >= (o.src === 'coco' ? 0.55 : 0.28));",
-    "const fresh = worldSorted().filter(o => (state.announced.get(o.id) || 0) < now - 10000 && o.score >= (o.src === 'coco' ? (STRICT_COCO.has(o.id) ? 0.75 : 0.65) : 0.3));")
+    "const fresh = worldSorted().filter(o => (state.announced.get(o.id) || 0) < now - 10000 && o.score >= (o.src === 'coco' ? (STRICT_COCO.has(o.id) ? 0.75 : 0.65) : 0.3) && !(o.flags && (o.flags.doubtful || o.flags.onScreen)));")
 rep("    setCaption(t('new_title'), msgEn, 'vision', null, msgBn);\n    speak(msgEn, msgBn);\n    heartPointAt(fresh[0]);",
     "    if (cloudReady()) { cloudVerifyAndSpeak(fresh, msgEn, msgBn); return; }\n    setCaption(t('new_title'), msgEn, 'vision', null, msgBn);\n    speak(msgEn, msgBn);\n    heartPointAt(fresh[0]);")
 # Still-image reading through the cloud when available
@@ -520,14 +523,23 @@ rep('</script>\n</body>\n</html>',
     '</script>\n<script src="config.js"></script>\n<script src="backend.js"></script>\n</body>\n</html>')
 
 
+# ---- Offline companion: no narration while a search is guiding; route the new voice abilities ----
+rep("  if (state.listening || reader.active || asthaSpeaking()) return;\n  // Movement first",
+    "  if (state.listening || reader.active || asthaSpeaking() || state.seeking) return;\n  // Movement first")
+rep("  if (/computer|code|programming|teach|summar|explain|navigate|guide me|কম্পিউটার|কোড|ব্যাখ্যা|সারাংশ|পথ দেখাও/.test(q))\n"
+    "    return announce('That feature needs a future integration. I can describe an image, read text, and recall your saved object or room notes.', 'এই সুবিধা এখনও যুক্ত হয়নি। ছবি বর্ণনা, লেখা পড়া ও সংরক্ষিত নোট মনে করতে পারি।');\n",
+    "  if (typeof offlineRoute === 'function' && offlineRoute(query, q)) return;\n"
+    "  if (/\\b(programming|teach me|explain (this|that) code)\\b|প্রোগ্রামিং|শেখাও/.test(q) && !/screen|স্ক্রিন/.test(q))\n"
+    "    return announce('I can read what is on your screen, describe your surroundings, read text, find your things and guide you to them.', 'আমি আপনার স্ক্রিনের লেখা পড়তে, চারপাশ বর্ণনা করতে, লেখা পড়তে, জিনিস খুঁজতে ও সেখানে নিয়ে যেতে পারি।');\n")
+
 # ---- module + boot ----
-rep("\n(function boot() {", module.rstrip("\n") + "\n" + eye_js.rstrip("\n") + "\n" + cloud_js.rstrip("\n") + "\n" + agent_js.rstrip("\n") + "\n\n(function boot() {")
+rep("\n(function boot() {", module.rstrip("\n") + "\n" + eye_js.rstrip("\n") + "\n" + cloud_js.rstrip("\n") + "\n" + agent_js.rstrip("\n") + "\n" + perceive_js.rstrip("\n") + "\n" + offline_js.rstrip("\n") + "\n\n(function boot() {")
 rep("  renderSpatialLayout();\n  enhancementBoot();\n})();", "  renderSpatialLayout();\n  enhancementBoot();\n  companionBoot();\n  eyeBoot();\n  cloudBoot();\n})();")
 
 # ---- boot(): expose it instead of self-invoking, so backend.js can run it after sign-in ----
 rep('(function boot() {', 'window.__asthaBoot = function boot() {')
 rep('  companionBoot();\n  eyeBoot();\n  cloudBoot();\n})();',
-    '  companionBoot();\n  eyeBoot();\n  cloudBoot();\n  refreshMemory();\n  refreshRooms();\n'
+    '  companionBoot();\n  eyeBoot();\n  cloudBoot();\n  offlineBoot();\n  refreshMemory();\n  refreshRooms();\n'
     '  // Warm the on-device detector while the page settles (cached weights + WebGL shader compile),\n'
     '  // so the first "describe" or camera start does not begin with a silent wait. Skipped on data-saver.\n'
     "  setTimeout(() => { if (typeof loadCoco === 'function' && engine.coco.status === 'idle' && !(navigator.connection && navigator.connection.saveData)) loadCoco().catch(() => {}); }, 1200);\n"

@@ -11,3 +11,4 @@ server/.env
 bin/
 .DS_Store
 Thumbs.db
+.claude/
