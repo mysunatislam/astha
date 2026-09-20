@@ -12,3 +12,5 @@ bin/
 .DS_Store
 Thumbs.db
 .claude/
+release-artifacts/
+*.zip

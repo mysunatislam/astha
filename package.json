@@ -7,6 +7,15 @@
     "build": "python tools/build.py",
     "start": "node server/index.js",
     "dev": "node --watch server/index.js",
-    "install:server": "npm --prefix server install"
+    "install:server": "npm --prefix server install",
+    "cap:sync": "python tools/build.py && npx cap sync",
+    "android:open": "npx cap open android",
+    "ios:open": "npx cap open ios"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.2",
+    "@capacitor/cli": "^8.5.2",
+    "@capacitor/core": "^8.5.2",
+    "@capacitor/ios": "^8.5.2"
   }
 }

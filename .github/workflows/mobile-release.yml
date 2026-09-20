@@ -1,0 +1,142 @@
+﻿name: Mobile Build & Release (Android & iOS)
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-android:
+    name: Build Android APK
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'microsoft'
+          java-version: '21'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Node Dependencies
+        run: npm ci || npm install
+
+      - name: Build Web Bundle
+        run: python tools/build.py
+
+      - name: Sync Capacitor Android
+        run: npx cap sync android
+
+      - name: Build Android Release APK
+        working-directory: android
+        run: |
+          chmod +x ./gradlew
+          ./gradlew assembleRelease
+
+      - name: Upload Android Release APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: astha-android-release-apk
+          path: android/app/build/outputs/apk/release/app-release.apk
+
+  build-ios:
+    name: Build & Package iOS App
+    runs-on: macos-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Node Dependencies
+        run: npm ci || npm install
+
+      - name: Build Web Bundle
+        run: python tools/build.py
+
+      - name: Sync Capacitor iOS
+        run: npx cap sync ios
+
+      - name: Archive iOS Xcode Project
+        run: |
+          zip -r astha-ios-project.zip ios/
+
+      - name: Upload iOS Project Archive
+        uses: actions/upload-artifact@v4
+        with:
+          name: astha-ios-project-zip
+          path: astha-ios-project.zip
+
+  publish-release:
+    name: Publish GitHub Release
+    needs: [build-android, build-ios]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Download Android Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: astha-android-release-apk
+          path: release-assets/
+
+      - name: Download iOS Artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: astha-ios-project-zip
+          path: release-assets/
+
+      - name: Rename Release Files
+        run: |
+          mv release-assets/app-release.apk release-assets/astha-v1.1.0-release.apk
+          mv release-assets/astha-ios-project.zip release-assets/astha-v1.1.0-ios-project.zip
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          files: |
+            release-assets/astha-v1.1.0-release.apk
+            release-assets/astha-v1.1.0-ios-project.zip
+          name: Release ${{ github.ref_name }}
+          body: |
+            ## 📱 Astha Native Mobile Releases (Android & iOS)
+
+            ### 🤖 Android
+            - **Signed Release APK**: `astha-v1.1.0-release.apk`
+            - Built with Capacitor 8, AGP 8, Java 21, and Android SDK API 36.
+            - Includes real-time camera vision, Bangla/English voice, haptic feedback, and offline AI models.
+
+            ### 🍎 iOS
+            - **Complete Xcode Project**: `astha-v1.1.0-ios-project.zip`
+            - Compatible with iOS 14+ / Swift Package Manager.
+            - Ready to open directly in Xcode (`ios/App/App.xcodeproj`).
