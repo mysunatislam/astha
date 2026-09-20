@@ -8,7 +8,7 @@ import { createUser, findByPhone, verifyPasscode, signToken, authMiddleware } fr
 import { memoryRouter } from './memory.js';
 import { ragRouter } from './rag.js';
 import { agentRouter } from './agent.js';
-import { callGemini } from './gemini.js';
+import { callGemini, hasCloudAI } from './gemini.js';
 import { synthesize } from './tts.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -28,7 +28,7 @@ app.use(cookieParser());
 app.use(express.json({ limit: '12mb' })); // camera frames as base64 JPEG can be a few MB
 
 // ---- Health ----
-app.get('/api/health', (req, res) => res.json({ ok: true, name: 'Astha', name_bn: 'আস্থা', cloud: !!process.env.GEMINI_API_KEY }));
+app.get('/api/health', (req, res) => res.json({ ok: true, name: 'Astha', name_bn: 'আস্থা', cloud: hasCloudAI() }));
 
 // ---- Auth: name + a spoken passcode, no email required ----
 app.post('/api/auth/signup', (req, res) => {
@@ -76,7 +76,7 @@ app.use('/api', authMiddleware, agentRouter);
 app.post('/api/vision', authMiddleware, async (req, res) => {
   const { task, image, prompt, maxTokens } = req.body || {};
   try {
-    const result = await callGemini({ task, customPrompt: prompt, imageBase64: image, maxTokens });
+    const result = await callGemini({ task, customPrompt: prompt, imageBase64: image, maxTokens, userId: req.user?.id || 'astha-user' });
     res.json(result);
   } catch (e) {
     console.error('vision error:', e.code || e.message, e.stack);

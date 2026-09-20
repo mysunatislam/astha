@@ -29,8 +29,97 @@ function parseJsonLoose(text) {
   return { en: (text || '').trim(), bn: '' };
 }
 
-export async function callGemini({ task, customPrompt, imageBase64, apiKey, maxTokens = 900 }) {
-  const key = apiKey || process.env.GEMINI_API_KEY;
+const MAIRA_ENDPOINT = process.env.MAIRA_API_URL || 'https://api.recommender.gigalogy.com/v1/maira/ask';
+const DEFAULT_MAIRA_PROFILE = process.env.MAIRA_PROFILE_ID || '7edb5168-fafd-432c-80e9-de59acc9d0a2';
+
+export function hasCloudAI() {
+  const hasMaira = Boolean(process.env.PROJECT_KEY && (process.env.API_KEY || (process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY.startsWith('gAAAAA'))));
+  const hasGemini = Boolean(process.env.GEMINI_API_KEY && !process.env.GEMINI_API_KEY.startsWith('gAAAAA'));
+  return hasMaira || hasGemini;
+}
+
+export async function callMaira({ task, customPrompt, imageBase64, apiKey, projectKey, gptProfileId, userId = 'astha-user' }) {
+  const pKey = projectKey || process.env.PROJECT_KEY;
+  const aKey = apiKey || process.env.API_KEY || process.env.GEMINI_API_KEY;
+  if (!pKey || !aKey) {
+    const e = new Error('no_key');
+    e.code = 'no_key';
+    throw e;
+  }
+  const promptText = customPrompt || (typeof PROMPTS[task] === 'function' ? PROMPTS[task]() : PROMPTS[task]);
+  if (!promptText) {
+    const e = new Error('unknown_task');
+    e.code = 'bad_request';
+    throw e;
+  }
+
+  const images = [];
+  if (imageBase64) {
+    const dataUrl = imageBase64.startsWith('data:') ? imageBase64 : `data:image/jpeg;base64,${imageBase64}`;
+    images.push({
+      file_content: dataUrl,
+      filename: 'frame.jpg'
+    });
+  }
+
+  const query = `${SYSTEM}\n\nTask: ${promptText}`;
+  const body = {
+    user_id: userId,
+    query,
+    conversation_type: 'question',
+    gpt_profile_id: gptProfileId || DEFAULT_MAIRA_PROFILE,
+    images
+  };
+
+  let res;
+  try {
+    res = await fetch(MAIRA_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'project-key': pKey,
+        'api-key': aKey,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(body)
+    });
+  } catch (e) {
+    const err = new Error('network');
+    err.code = 'network';
+    throw err;
+  }
+
+  if (res.status === 401 || res.status === 403) {
+    const err = new Error('bad_key');
+    err.code = 'bad_key';
+    throw err;
+  }
+  if (res.status === 429) {
+    const err = new Error('rate_limit');
+    err.code = 'rate_limit';
+    throw err;
+  }
+  if (!res.ok) {
+    const err = new Error('maira_' + res.status);
+    err.code = 'upstream';
+    throw err;
+  }
+
+  const data = await res.json();
+  const text = data?.detail?.response || '';
+  return parseJsonLoose(text);
+}
+
+export async function callGemini(options = {}) {
+  const { task, customPrompt, imageBase64, apiKey, projectKey, maxTokens = 900, userId } = options;
+  const key = apiKey || process.env.API_KEY || process.env.GEMINI_API_KEY;
+  const pKey = projectKey || process.env.PROJECT_KEY;
+
+  // If Gigalogy Maira credentials are present (project-key and api-key starting with gAAAAA... or API_KEY env),
+  // dispatch directly to Maira AI engine.
+  if (pKey && (process.env.API_KEY || (key && key.startsWith('gAAAAA')))) {
+    return callMaira({ task, customPrompt, imageBase64, apiKey: key, projectKey: pKey, userId });
+  }
+
   if (!key) { const e = new Error('no_key'); e.code = 'no_key'; throw e; }
   const promptText = customPrompt || (typeof PROMPTS[task] === 'function' ? PROMPTS[task]() : PROMPTS[task]);
   if (!promptText) { const e = new Error('unknown_task'); e.code = 'bad_request'; throw e; }
@@ -59,3 +148,6 @@ export async function callGemini({ task, customPrompt, imageBase64, apiKey, maxT
   }
   throw lastErr || new Error('gemini_unavailable');
 }
+
+export const callCloudAI = callGemini;
+

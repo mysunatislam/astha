@@ -6213,7 +6213,7 @@ const serverCloud = { checked: false, available: false };
 
 function promptGeminiKey() {
   const current = cloud.key || '';
-  const input = window.prompt('Enter your Google Gemini API Key to activate high-accuracy Online AI (Get a free key at https://aistudio.google.com):', current);
+  const input = window.prompt('Enter your AI API Key (Google Gemini or Gigalogy Maira) to activate high-accuracy Online AI:', current);
   if (input !== null) {
     setGeminiKey(input.trim());
     if ($('gemini-key')) $('gemini-key').value = input.trim();
@@ -6315,8 +6315,11 @@ function setGeminiKey(v, silent) {
   cloud.key = (v || '').trim(); cloud.badKeyWarned = false;
   try { localStorage.setItem('astha.gemini', cloud.key); } catch (e) {}
   updateCloudBadge();
-  if (!silent) announce(cloud.key ? 'Gemini 2.0 Flash is connected. High-accuracy scene understanding, blackboard reading and memory are active.' : 'Cloud reasoning is off. I am using the on-device models only.',
-    cloud.key ? 'জেমিনি ২.০ ফ্ল্যাশ সংযুক্ত হয়েছে। হাই-অ্যাকুরেসি দৃশ্য বর্ণনা, ব্ল্যাকবোর্ড পড়া ও মেমরি সক্রিয়।' : 'ক্লাউড রিজনিং বন্ধ। শুধু ডিভাইসের মডেল ব্যবহার করছি।', 'system');
+  const isMaira = cloud.key.startsWith('gAAAAA');
+  const engineName = isMaira ? 'Gigalogy Maira AI' : 'Gemini 2.0 Flash';
+  const engineNameBn = isMaira ? 'মায়রা এআই' : 'জেমিনি ২.০ ফ্ল্যাশ';
+  if (!silent) announce(cloud.key ? `${engineName} is connected. High-accuracy scene understanding, blackboard reading and memory are active.` : 'Cloud reasoning is off. I am using the on-device models only.',
+    cloud.key ? `${engineNameBn} সংযুক্ত হয়েছে। হাই-অ্যাকুরেসি দৃশ্য বর্ণনা, ব্ল্যাকবোর্ড পড়া ও মেমরি সক্রিয়।` : 'ক্লাউড রিজনিং বন্ধ। শুধু ডিভাইসের মডেল ব্যবহার করছি।', 'system');
 }
 function updateCloudBadge() {
   const b = $('cloud-pill'); if (!b) return;
@@ -6342,17 +6345,18 @@ function updateCloudBadge() {
     b.onclick = null;
     b.style.cursor = 'default';
   } else if (cloud.key) {
-    b.textContent = `✨ Online AI (${days}d · Key active)`;
+    const isMaira = cloud.key.startsWith('gAAAAA');
+    b.textContent = `✨ Online AI (${days}d · ${isMaira ? 'Maira' : 'Key'} active)`;
     b.className = 'pill ok';
     b.onclick = () => promptGeminiKey();
     b.style.cursor = 'pointer';
-    b.title = 'Click to view or change your Gemini API key';
+    b.title = 'Click to view or change your API key';
   } else {
-    b.textContent = `⚠️ Enter Gemini Key (${days}d pass)`;
+    b.textContent = `⚠️ Enter API Key (${days}d pass)`;
     b.className = 'pill warn';
     b.onclick = () => promptGeminiKey();
     b.style.cursor = 'pointer';
-    b.title = 'Click to enter your Gemini API key (Free at https://aistudio.google.com)';
+    b.title = 'Click to enter your API key (Gemini or Maira)';
   }
 }
 // Learn once at boot whether Astha's own server has a Gemini key configured, so the badge and
@@ -6416,6 +6420,53 @@ async function gemini(task, frame, opts = {}) {
     } catch (e) { if (String(e.message) === 'rate limit') throw e; /* network error reaching our own server: fall through */ }
   }
   if (!cloud.key) { const e = new Error('no cloud reasoning available'); e.noCloud = true; throw e; }
+
+  // Direct client call to Gigalogy Maira AI if personal Maira key is provided
+  if (cloud.key.startsWith('gAAAAA')) {
+    try {
+      const pKey = 'A4flRx22as_RidCuFpwIUzCplIk2I2nu7zAMSVIugMo=';
+      const images = image ? [{ file_content: `data:image/jpeg;base64,${image}`, filename: 'frame.jpg' }] : [];
+      const mairaBody = {
+        user_id: 'astha-browser-user',
+        query: `${ASTHA_SYSTEM}\n\nTask: ${task}`,
+        conversation_type: 'question',
+        gpt_profile_id: '7edb5168-fafd-432c-80e9-de59acc9d0a2',
+        images
+      };
+      const mRes = await fetch('https://api.recommender.gigalogy.com/v1/maira/ask', {
+        method: 'POST',
+        headers: {
+          'project-key': pKey,
+          'api-key': cloud.key,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(mairaBody)
+      });
+      if (mRes.ok) {
+        const mData = await mRes.json();
+        return parseJsonLoose(mData?.detail?.response || '');
+      }
+      if (mRes.status === 401 || mRes.status === 403) {
+        if (!cloud.badKeyWarned) {
+          cloud.badKeyWarned = true;
+          announce('Your personal Maira API key was rejected. Check it in Your preferences.', 'আপনার ব্যক্তিগত মায়রা এআই কী গ্রহণ হয়নি। প্রেফারেন্সে দেখুন।', 'system');
+        }
+        throw new Error('bad key');
+      }
+      if (mRes.status === 429) {
+        if (!opts.isRetry) {
+          await new Promise(r => setTimeout(r, 1800));
+          return await gemini(task, frame, { ...opts, isRetry: true });
+        }
+        throw new Error('rate limit');
+      }
+      if (!mRes.ok) throw new Error('Maira ' + mRes.status);
+    } catch (e) {
+      if (/bad key|rate limit/.test(String(e))) throw e;
+      throw new Error('Maira unavailable');
+    }
+  }
+
   const parts = [{ text: task }];
   if (image) parts.push({ inline_data: { mime_type: 'image/jpeg', data: image } });
   const body = { system_instruction: { parts: [{ text: ASTHA_SYSTEM }] }, contents: [{ role: 'user', parts }], generationConfig: { temperature: 0.2, response_mime_type: 'application/json', max_output_tokens: opts.maxTokens || 900 } };

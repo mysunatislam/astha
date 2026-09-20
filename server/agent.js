@@ -1,7 +1,7 @@
-﻿// Autonomous Agent Engine with Tool Orchestration, Planning, and Verification Loop
+// Autonomous Agent Engine with Tool Orchestration, Planning, and Verification Loop
 import { Router } from 'express';
 import { nanoid } from 'nanoid';
-import { callGemini } from './gemini.js';
+import { callGemini, hasCloudAI } from './gemini.js';
 import { searchRAG, formatRagContextForPrompt } from './rag.js';
 import { all, get, run } from './db.js';
 
@@ -299,12 +299,12 @@ agentRouter.post('/agent/plan', async (req, res) => {
     const ragContext = formatRagContextForPrompt(ragData);
 
     let plan = null;
-    if (process.env.GEMINI_API_KEY) {
+    if (hasCloudAI()) {
       try {
         const prompt = PLANNER_PROMPT(goal, ragContext, image ? 'Camera frame provided' : 'No frame');
-        plan = await callGemini({ customPrompt: prompt, imageBase64: image });
+        plan = await callGemini({ customPrompt: prompt, imageBase64: image, userId: req.user?.id || 'astha-user' });
       } catch (err) {
-        console.warn('Gemini planner fallback to heuristic:', err.message);
+        console.warn('Planner fallback to heuristic:', err.message);
       }
     }
 
@@ -333,12 +333,12 @@ agentRouter.post('/agent/evaluate', async (req, res) => {
 
   try {
     let evaluation = null;
-    if (process.env.GEMINI_API_KEY) {
+    if (hasCloudAI()) {
       try {
         const prompt = EVALUATOR_PROMPT(step, toolOutput, goal || 'General task');
-        evaluation = await callGemini({ customPrompt: prompt });
+        evaluation = await callGemini({ customPrompt: prompt, userId: req.user?.id || 'astha-user' });
       } catch (err) {
-        console.warn('Gemini evaluator fallback to heuristic:', err.message);
+        console.warn('Evaluator fallback to heuristic:', err.message);
       }
     }
 
@@ -365,11 +365,12 @@ agentRouter.post('/agent/run', async (req, res) => {
 
     // 2. Plan generation
     let plan = null;
-    if (process.env.GEMINI_API_KEY) {
+    if (hasCloudAI()) {
       try {
         plan = await callGemini({
           customPrompt: PLANNER_PROMPT(goal, ragContext, image ? 'Camera frame provided' : 'No frame'),
-          imageBase64: image
+          imageBase64: image,
+          userId: req.user?.id || 'astha-user'
         });
       } catch (e) {
         console.warn('Planner fallback to heuristic:', e.message);
@@ -388,11 +389,12 @@ agentRouter.post('/agent/run', async (req, res) => {
       planSteps: plan.steps
     };
 
-    if (process.env.GEMINI_API_KEY) {
+    if (hasCloudAI()) {
       try {
         response = await callGemini({
           customPrompt: SYNTHESIZER_PROMPT(goal, plan.steps, combinedFindings),
-          imageBase64: image
+          imageBase64: image,
+          userId: req.user?.id || 'astha-user'
         });
       } catch (e) {
         console.warn('Synthesizer fallback:', e.message);
