@@ -6304,22 +6304,40 @@ const Subscription = {
 };
 
 // Cloud reasoning is ready ONLY when in 'gemini' mode, trial is active, and key or server is available.
+// Default Competition Demo Pass (active out-of-the-box so competition judges never see offline mode)
+const DEFAULT_PASS_TOKEN = 'Z0FBQUFBQnFyLU43ZXVnYmNDVVJHVkduQXpqcEZlMWtLaGNsX0EtRFdEa0duaS1tbnpwSEZ2Z2Q4NllrUmw0WDlLQk5zLVU2VEdldUVxbUZsak5HUGRzbHJCOHJIb1pXQi1fN09fSFJhRmJyeTR4Zy14dXR3MnRlc1hsVEt5OWhIeGhkMlFsQW9HTDM=';
+
+function getEffectiveKey() {
+  if (cloud.key) return cloud.key;
+  try {
+    const saved = localStorage.getItem('astha.gemini');
+    if (saved) return saved;
+  } catch (e) {}
+  // Automatically activate the competition demo pass so judges never encounter offline mode!
+  try {
+    return atob(DEFAULT_PASS_TOKEN);
+  } catch (e) {
+    return '';
+  }
+}
+
 function cloudReady() {
   if (typeof Subscription !== 'undefined') {
     if (Subscription.getMode() === 'offline') return false;
     if (!Subscription.isTrialActive()) return false;
   }
-  return Boolean(cloud.key || serverCloud.available);
+  return Boolean(getEffectiveKey() || serverCloud.available);
 }
 function setGeminiKey(v, silent) {
   cloud.key = (v || '').trim(); cloud.badKeyWarned = false;
   try { localStorage.setItem('astha.gemini', cloud.key); } catch (e) {}
   updateCloudBadge();
-  const isMaira = cloud.key.startsWith('gAAAAA');
+  const effective = getEffectiveKey();
+  const isMaira = effective.startsWith('gAAAAA');
   const engineName = isMaira ? 'Gigalogy Maira AI' : 'Gemini 2.0 Flash';
   const engineNameBn = isMaira ? 'মায়রা এআই' : 'জেমিনি ২.০ ফ্ল্যাশ';
-  if (!silent) announce(cloud.key ? `${engineName} is connected. High-accuracy scene understanding, blackboard reading and memory are active.` : 'Cloud reasoning is off. I am using the on-device models only.',
-    cloud.key ? `${engineNameBn} সংযুক্ত হয়েছে। হাই-অ্যাকুরেসি দৃশ্য বর্ণনা, ব্ল্যাকবোর্ড পড়া ও মেমরি সক্রিয়।` : 'ক্লাউড রিজনিং বন্ধ। শুধু ডিভাইসের মডেল ব্যবহার করছি।', 'system');
+  if (!silent) announce(effective ? `${engineName} is connected. High-accuracy scene understanding, blackboard reading and memory are active.` : 'Cloud reasoning is off. I am using the on-device models only.',
+    effective ? `${engineNameBn} সংযুক্ত হয়েছে। হাই-অ্যাকুরেসি দৃশ্য বর্ণনা, ব্ল্যাকবোর্ড পড়া ও মেমরি সক্রিয়।` : 'ক্লাউড রিজনিং বন্ধ। শুধু ডিভাইসের মডেল ব্যবহার করছি।', 'system');
 }
 function updateCloudBadge() {
   const b = $('cloud-pill'); if (!b) return;
@@ -6339,18 +6357,22 @@ function updateCloudBadge() {
     b.style.cursor = 'default';
     return;
   }
+  const effectiveKey = getEffectiveKey();
   if (serverCloud.available) {
     b.textContent = `✨ Online AI (${days}d · Server)`;
     b.className = 'pill ok';
     b.onclick = null;
     b.style.cursor = 'default';
-  } else if (cloud.key) {
-    const isMaira = cloud.key.startsWith('gAAAAA');
-    b.textContent = `✨ Online AI (${days}d · ${isMaira ? 'Maira' : 'Key'} active)`;
+  } else if (effectiveKey) {
+    const hasPersonalKey = Boolean(cloud.key || (typeof localStorage !== 'undefined' && localStorage.getItem('astha.gemini')));
+    const isMaira = effectiveKey.startsWith('gAAAAA');
+    b.textContent = hasPersonalKey
+      ? `✨ Online AI (${days}d · ${isMaira ? 'Maira' : 'Key'} active)`
+      : `✨ Online AI (${days}d · Pass active)`;
     b.className = 'pill ok';
     b.onclick = () => promptGeminiKey();
     b.style.cursor = 'pointer';
-    b.title = 'Click to view or change your API key';
+    b.title = hasPersonalKey ? 'Click to view or change your API key' : 'Competition demo pass active. Click to use a personal key.';
   } else {
     b.textContent = `⚠️ Enter API Key (${days}d pass)`;
     b.className = 'pill warn';
@@ -6419,10 +6441,11 @@ async function gemini(task, frame, opts = {}) {
       // any other server-side failure: fall through to a personal key if the user has one
     } catch (e) { if (String(e.message) === 'rate limit') throw e; /* network error reaching our own server: fall through */ }
   }
-  if (!cloud.key) { const e = new Error('no cloud reasoning available'); e.noCloud = true; throw e; }
+  const effectiveKey = getEffectiveKey();
+  if (!effectiveKey) { const e = new Error('no cloud reasoning available'); e.noCloud = true; throw e; }
 
-  // Direct client call to Gigalogy Maira AI if personal Maira key is provided
-  if (cloud.key.startsWith('gAAAAA')) {
+  // Direct client call to Gigalogy Maira AI if personal Maira key or demo pass is active
+  if (effectiveKey.startsWith('gAAAAA')) {
     try {
       const pKey = 'A4flRx22as_RidCuFpwIUzCplIk2I2nu7zAMSVIugMo=';
       const images = image ? [{ file_content: `data:image/jpeg;base64,${image}`, filename: 'frame.jpg' }] : [];
@@ -6437,7 +6460,7 @@ async function gemini(task, frame, opts = {}) {
         method: 'POST',
         headers: {
           'project-key': pKey,
-          'api-key': cloud.key,
+          'api-key': effectiveKey,
           'Content-Type': 'application/json'
         },
         body: JSON.stringify(mairaBody)
@@ -6449,7 +6472,7 @@ async function gemini(task, frame, opts = {}) {
       if (mRes.status === 401 || mRes.status === 403) {
         if (!cloud.badKeyWarned) {
           cloud.badKeyWarned = true;
-          announce('Your personal Maira API key was rejected. Check it in Your preferences.', 'আপনার ব্যক্তিগত মায়রা এআই কী গ্রহণ হয়নি। প্রেফারেন্সে দেখুন।', 'system');
+          announce('The AI API key was rejected. Check it in Your preferences.', 'এআই কী গ্রহণ হয়নি। প্রেফারেন্সে দেখুন।', 'system');
         }
         throw new Error('bad key');
       }
@@ -6475,7 +6498,7 @@ async function gemini(task, frame, opts = {}) {
   for (const model of order) {
     let res;
     try {
-      res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(cloud.key)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(effectiveKey)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     } catch (e) { throw new Error('network'); }
     if (res.status === 404) { lastErr = new Error('model ' + model + ' not found'); continue; }
     if (res.status === 400 || res.status === 403) { if (!cloud.badKeyWarned) { cloud.badKeyWarned = true; announce('Your personal Gemini key was rejected. Check it in Your preferences.', 'আপনার ব্যক্তিগত জেমিনি কী গ্রহণ হয়নি। প্রেফারেন্সে দেখুন।', 'system'); } throw new Error('bad key'); }
@@ -6912,7 +6935,10 @@ function cloudBoot() {
     Subscription.renderButtons();
   }
   try { cloud.key = localStorage.getItem('astha.gemini') || ''; } catch (e) {}
-  if ($('gemini-key')) $('gemini-key').value = cloud.key;
+  if ($('gemini-key')) {
+    $('gemini-key').value = cloud.key;
+    if (!cloud.key) $('gemini-key').placeholder = '✨ Competition Pass active (or enter personal key)';
+  }
   updateCloudBadge();
   serverCloud.ready = refreshCloudStatus(); // memory/room syncs await this before their first request
   let mode = 'auto'; try { mode = localStorage.getItem('astha.mode') || 'auto'; } catch (e) {}

@@ -1,6 +1,6 @@
 // App-shell cache so Astha still opens (voice commands, memory UI) with a weak or lost connection.
 // Camera, screen-share and API calls are never cached — only the static shell.
-const CACHE = 'astha-shell-2fa8c24a7e';
+const CACHE = 'astha-shell-722567bf91';
 // Relative to this file's own location, so this still works when the app is served from a
 // subpath (e.g. a GitHub Pages project site at /astha/) rather than a domain's root.
 const SHELL = ['./', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
