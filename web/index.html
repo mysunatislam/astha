@@ -853,7 +853,7 @@
         <button class="btn small accent" id="load-models-btn" onclick="loadAllModels()" data-i18n="engine_load">Load models</button>
       </div>
       <div class="engine-row">
-        <div><div class="name" data-i18n="engine_coco">Object detector</div><div class="sub" data-i18n="engine_coco_sub">COCO-SSD · 80 classes · bounding boxes</div><div class="progress" hidden><i id="prog-coco"></i></div></div>
+        <div><div class="name" data-i18n="engine_coco">Object detector</div><div class="sub" id="engine-coco-sub" data-i18n="engine_coco_sub">YOLO26n (STAL) · 80 classes · WebGPU</div><div class="progress" hidden><i id="prog-coco"></i></div></div>
         <span class="pill" id="state-coco" data-i18n="state_idle">Not loaded</span>
       </div>
       <div class="engine-row">
@@ -976,7 +976,9 @@
   <span data-i18n="footer">Astha — Voice-Led AI Visual Companion.</span>
 </footer>
 
-<!-- TensorFlow.js + COCO-SSD -->
+<!-- ONNX Runtime Web (WebGPU + WASM SIMD acceleration for YOLO26n) -->
+<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.21.0/dist/ort.webgpu.min.js"></script>
+<!-- TensorFlow.js + COCO-SSD (Fallback Detector) -->
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"></script>
 <!-- Tesseract.js -->
@@ -1016,7 +1018,7 @@ const I18N = {
     mic_hint: 'Ask in Bangla or English: “What is in front of me?”, “Read this”, “Where is my charger?”',
     auto_narrate: 'Narrate new objects automatically while the camera is on',
     engine_title: 'On-device AI engine', engine_load: 'Load models',
-    engine_coco: 'Object detector', engine_coco_sub: 'COCO-SSD · 80 classes · bounding boxes',
+    engine_coco: 'Object detector', engine_coco_sub: 'YOLO26n (STAL) · 80 classes · WebGPU',
     engine_clip: 'Open-vocabulary recognizer', engine_clip_sub: 'CLIP ViT-B/32 · {n} everyday objects · zero-shot',
     engine_ocr: 'Text reader', engine_ocr_sub: 'Tesseract OCR · English + Bangla',
     state_idle: 'Not loaded', state_loading: 'Loading…', state_ready: 'Ready', state_error: 'Failed',
@@ -1106,7 +1108,7 @@ const I18N = {
     mic_hint: 'বাংলা বা ইংরেজিতে জিজ্ঞাসা করুন: “সামনে কী আছে?”, “এটা পড়ো”, “আমার চার্জার কোথায়?”',
     auto_narrate: 'ক্যামেরা চালু থাকলে নতুন বস্তু স্বয়ংক্রিয়ভাবে বলুন',
     engine_title: 'অন-ডিভাইস এআই ইঞ্জিন', engine_load: 'মডেল লোড করুন',
-    engine_coco: 'বস্তু শনাক্তকারী', engine_coco_sub: 'COCO-SSD · ৮০ শ্রেণি · বাউন্ডিং বক্স',
+    engine_coco: 'বস্তু শনাক্তকারী', engine_coco_sub: 'YOLO26n (STAL) · ৮০ শ্রেণি · WebGPU',
     engine_clip: 'ওপেন-ভোকাবুলারি শনাক্তকারী', engine_clip_sub: 'CLIP ViT-B/32 · {n}টি দৈনন্দিন বস্তু · জিরো-শট',
     engine_ocr: 'লেখা পাঠক', engine_ocr_sub: 'Tesseract OCR · ইংরেজি + বাংলা',
     state_idle: 'লোড হয়নি', state_loading: 'লোড হচ্ছে…', state_ready: 'প্রস্তুত', state_error: 'ব্যর্থ',
@@ -1740,6 +1742,201 @@ async function ensureVisionModels() {
   return ok;
 }
 
+const COCO_CLASSES = [
+  'person', 'bicycle', 'car', 'motorcycle', 'airplane', 'bus', 'train', 'truck', 'boat', 'traffic light',
+  'fire hydrant', 'stop sign', 'parking meter', 'bench', 'bird', 'cat', 'dog', 'horse', 'sheep', 'cow',
+  'elephant', 'bear', 'zebra', 'giraffe', 'backpack', 'umbrella', 'handbag', 'tie', 'suitcase', 'frisbee',
+  'skis', 'snowboard', 'sports ball', 'kite', 'baseball bat', 'baseball glove', 'skateboard', 'surfboard',
+  'tennis racket', 'bottle', 'wine glass', 'cup', 'fork', 'knife', 'spoon', 'bowl', 'banana', 'apple',
+  'sandwich', 'orange', 'broccoli', 'carrot', 'hot dog', 'pizza', 'donut', 'cake', 'chair', 'couch',
+  'potted plant', 'bed', 'dining table', 'toilet', 'tv', 'laptop', 'mouse', 'remote', 'keyboard', 'cell phone',
+  'microwave', 'oven', 'toaster', 'sink', 'refrigerator', 'book', 'clock', 'vase', 'scissors', 'teddy bear',
+  'hair drier', 'toothbrush'
+];
+
+class YoloDetector {
+  constructor() {
+    this.session = null;
+    this.provider = 'wasm';
+    this.modelSize = 640;
+    this.inputCanvas = document.createElement('canvas');
+    this.inputCanvas.width = 640;
+    this.inputCanvas.height = 640;
+    this.inputCtx = this.inputCanvas.getContext('2d', { willReadFrequently: true });
+    this.floatBuffer = new Float32Array(3 * 640 * 640);
+  }
+
+  static async openDb() {
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open('astha-models', 1);
+      req.onupgradeneeded = () => req.result.createObjectStore('weights');
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  }
+
+  static async getCachedModel(key) {
+    try {
+      const db = await YoloDetector.openDb();
+      return new Promise((resolve) => {
+        const tx = db.transaction('weights', 'readonly');
+        const req = tx.objectStore('weights').get(key);
+        req.onsuccess = () => resolve(req.result || null);
+        req.onerror = () => resolve(null);
+      });
+    } catch (e) { return null; }
+  }
+
+  static async setCachedModel(key, buffer) {
+    try {
+      const db = await YoloDetector.openDb();
+      return new Promise((resolve) => {
+        const tx = db.transaction('weights', 'readwrite');
+        tx.objectStore('weights').put(buffer, key);
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => resolve(false);
+      });
+    } catch (e) {}
+  }
+
+  async load() {
+    if (typeof ort === 'undefined') {
+      throw new Error('ONNX Runtime Web (ort) library not loaded');
+    }
+
+    const hasWebGPU = typeof navigator !== 'undefined' && !!navigator.gpu;
+    const providers = hasWebGPU ? ['webgpu', 'wasm'] : ['wasm'];
+
+    let modelBuffer = await YoloDetector.getCachedModel('yolo26n-onnx');
+    if (!modelBuffer) {
+      const urls = [
+        'models/yolo26n.onnx',
+        'https://huggingface.co/onnx-community/yolo26n-ONNX/resolve/main/onnx/model_int8.onnx'
+      ];
+      let fetched = null;
+      for (const u of urls) {
+        try {
+          const res = await fetch(u);
+          if (res.ok) {
+            fetched = await res.arrayBuffer();
+            break;
+          }
+        } catch (e) {
+          console.warn('YOLO fetch attempt failed for:', u, e);
+        }
+      }
+      if (!fetched) throw new Error('Could not download YOLO26n ONNX model');
+      modelBuffer = fetched;
+      YoloDetector.setCachedModel('yolo26n-onnx', modelBuffer).catch(() => {});
+    }
+
+    const sessionOpts = {
+      executionProviders: providers,
+      graphOptimizationLevel: 'all',
+    };
+    this.session = await ort.InferenceSession.create(modelBuffer, sessionOpts);
+    this.provider = providers[0];
+    console.log(`[Astha Vision] YOLO26n initialized on backend: ${this.provider.toUpperCase()}`);
+    return this;
+  }
+
+  async detect(frame, maxDetections = 12, confThreshold = 0.38) {
+    if (!this.session) return [];
+
+    const fw = frame.width || frame.videoWidth;
+    const fh = frame.height || frame.videoHeight;
+    if (!fw || !fh) return [];
+
+    this.inputCtx.drawImage(frame, 0, 0, 640, 640);
+    const imgData = this.inputCtx.getImageData(0, 0, 640, 640);
+    const data = imgData.data;
+
+    const N = 640 * 640;
+    const buf = this.floatBuffer;
+    for (let i = 0; i < N; i++) {
+      const p = i * 4;
+      buf[i] = data[p] / 255.0;           // R
+      buf[N + i] = data[p + 1] / 255.0;   // G
+      buf[2 * N + i] = data[p + 2] / 255.0; // B
+    }
+
+    const inputName = this.session.inputNames[0] || 'pixel_values';
+    const tensor = new ort.Tensor('float32', buf, [1, 3, 640, 640]);
+    const results = await this.session.run({ [inputName]: tensor });
+
+    const detections = [];
+
+    // Format A: Dual-tensor end-to-end [logits: 1x300x80, pred_boxes: 1x300x4]
+    if (results.logits && results.pred_boxes) {
+      const logitsData = results.logits.data;
+      const boxesData = results.pred_boxes.data;
+      const numQueries = results.logits.dims[1] || 300;
+      const numClasses = results.logits.dims[2] || 80;
+
+      for (let i = 0; i < numQueries; i++) {
+        let maxLogit = -Infinity;
+        let bestClass = -1;
+        const offset = i * numClasses;
+        for (let c = 0; c < numClasses; c++) {
+          const l = logitsData[offset + c];
+          if (l > maxLogit) {
+            maxLogit = l;
+            bestClass = c;
+          }
+        }
+        const score = 1 / (1 + Math.exp(-maxLogit));
+        if (score >= confThreshold) {
+          const bOffset = i * 4;
+          const cx = boxesData[bOffset];
+          const cy = boxesData[bOffset + 1];
+          const bw = boxesData[bOffset + 2];
+          const bh = boxesData[bOffset + 3];
+
+          const x = Math.max(0, (cx - bw / 2) * fw);
+          const y = Math.max(0, (cy - bh / 2) * fh);
+          const w = Math.min(fw - x, bw * fw);
+          const h = Math.min(fh - y, bh * fh);
+
+          detections.push({
+            bbox: [x, y, w, h],
+            class: COCO_CLASSES[bestClass] || ('class_' + bestClass),
+            score: score
+          });
+        }
+      }
+    } else {
+      // Format B: Single-tensor end-to-end [1, 300, 6]
+      const outTensor = results[this.session.outputNames[0]];
+      const dims = outTensor ? outTensor.dims : [];
+      const d = outTensor ? outTensor.data : [];
+      if (dims.length === 3 && dims[2] === 6) {
+        const count = dims[1];
+        const sx = fw / 640;
+        const sy = fh / 640;
+        for (let i = 0; i < count; i++) {
+          const off = i * 6;
+          const sc = d[off + 4];
+          if (sc >= confThreshold) {
+            const x1 = d[off] * sx;
+            const y1 = d[off + 1] * sy;
+            const x2 = d[off + 2] * sx;
+            const y2 = d[off + 3] * sy;
+            const cid = Math.round(d[off + 5]);
+            detections.push({
+              bbox: [x1, y1, Math.max(0, x2 - x1), Math.max(0, y2 - y1)],
+              class: COCO_CLASSES[cid] || ('class_' + cid),
+              score: sc
+            });
+          }
+        }
+      }
+    }
+
+    detections.sort((a, b) => b.score - a.score);
+    return detections.slice(0, maxDetections);
+  }
+}
+
 let cocoPromise = null;
 async function waitForCocoSsd(timeoutMs = 10000) {
   const start = Date.now();
@@ -1750,27 +1947,50 @@ async function waitForCocoSsd(timeoutMs = 10000) {
   return cocoSsd;
 }
 const COCO_CACHE_URL = 'indexeddb://astha-coco-ssd-lite';
+
 function loadCoco() {
   if (cocoPromise) return cocoPromise;
   setEngineState('coco', 'loading');
-  // The first download is ~20 MB; on a phone that is a long silence, so say what is happening.
   const slowNotice = setTimeout(() => {
     if (engine.coco.status === 'loading') announce('Still loading the vision model. The first time takes up to a minute; after that it opens instantly.', 'ভিশন মডেল এখনো লোড হচ্ছে। প্রথমবার এক মিনিট পর্যন্ত লাগতে পারে; এরপর সাথে সাথে খুলবে।', 'system');
   }, 12000);
   cocoPromise = (async () => {
     try {
+      // 1. Attempt YOLO26n first (STAL small-target detector with WebGPU/WASM)
+      try {
+        const yolo = new YoloDetector();
+        await yolo.load();
+        engine.coco.model = yolo;
+        engine.coco.type = 'yolo26n';
+        setEngineState('coco', 'ready');
+        if ($('engine-coco-sub')) $('engine-coco-sub').textContent = 'YOLO26n (STAL) · 80 classes · ' + yolo.provider.toUpperCase();
+        logEvent('Vision detector: YOLO26n (' + yolo.provider.toUpperCase() + ')');
+        return;
+      } catch (yoloErr) {
+        console.warn('[Astha Vision] YOLO26n init failed, falling back to COCO-SSD:', yoloErr);
+      }
+
+      // 2. Fallback to COCO-SSD
       const lib = (typeof cocoSsd !== 'undefined') ? cocoSsd : await waitForCocoSsd();
       let model = null;
-      // Second visit onwards the weights are already in this browser's IndexedDB: no download, no wait.
       try { model = await lib.load({ base: 'lite_mobilenet_v2', modelUrl: COCO_CACHE_URL }); } catch (e) { model = null; }
       if (!model) {
         model = await lib.load({ base: 'lite_mobilenet_v2' });
         try { if (model.model && model.model.save) await model.model.save(COCO_CACHE_URL); } catch (e) { console.warn('coco cache save failed', e); }
       }
       engine.coco.model = model;
+      engine.coco.type = 'coco-ssd';
       setEngineState('coco', 'ready');
-    } catch (e) { console.error('COCO-SSD failed', e); setEngineState('coco', 'error'); cocoPromise = null; throw e; }
-    finally { clearTimeout(slowNotice); }
+      if ($('engine-coco-sub')) $('engine-coco-sub').textContent = 'COCO-SSD · 80 classes · WebGL';
+      logEvent('Vision detector: COCO-SSD (Fallback)');
+    } catch (e) {
+      console.error('All vision detectors failed', e);
+      setEngineState('coco', 'error');
+      cocoPromise = null;
+      throw e;
+    } finally {
+      clearTimeout(slowNotice);
+    }
   })();
   return cocoPromise;
 }
@@ -1840,16 +2060,17 @@ function captureFrame(maxW = 640) {
 }
 
 async function runCoco(frame) {
-  if (engine.coco.status !== 'ready') return [];
-  const preds = await engine.coco.model.detect(frame, 10);
+  if (engine.coco.status !== 'ready' || !engine.coco.model) return [];
+  const confThresh = (engine.coco.type === 'yolo26n') ? 0.38 : 0.50;
+  const preds = await engine.coco.model.detect(frame, 12, confThresh);
   const area = frame.width * frame.height;
-  return preds.filter(p => p.score >= 0.5 && COCO_TO_ID[p.class]).map(p => ({
+  return preds.filter(p => p.score >= confThresh && COCO_TO_ID[p.class]).map(p => ({
     id: COCO_TO_ID[p.class],
     score: p.score,
     bbox: p.bbox,
     pos: posFromX(p.bbox[0] + p.bbox[2] / 2, frame.width),
     prox: proxFromArea((p.bbox[2] * p.bbox[3]) / area),
-    src: 'coco',
+    src: engine.coco.type || 'coco',
   }));
 }
 
