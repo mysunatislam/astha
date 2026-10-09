@@ -14,7 +14,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 FILES = ("index.html", "backend.js", "config.js", "sw.js", "manifest.webmanifest")
-ASSETS = ("icons/icon-192.png", "icons/icon-512.png", "models/yolov8n.onnx")
+ASSETS = ("icons/icon-192.png", "icons/icon-512.png", "models/yolo26n.onnx")
 
 def git(checkout, *args):
     return subprocess.check_output(["git", "-C", str(checkout), *args], text=True).strip()
