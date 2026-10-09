@@ -53,7 +53,6 @@ jobs:
     env:
       ASTHA_VERSION_CODE: ${{ inputs.version_code || vars.ASTHA_ANDROID_VERSION_CODE }}
       ASTHA_VERSION_NAME: ${{ inputs.version_name || github.ref_name }}
-      ASTHA_ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/astha-upload.jks
       ASTHA_ANDROID_KEYSTORE_BASE64: ${{ secrets.ASTHA_ANDROID_KEYSTORE_BASE64 }}
       ASTHA_ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ASTHA_ANDROID_KEYSTORE_PASSWORD }}
       ASTHA_ANDROID_KEY_ALIAS: ${{ secrets.ASTHA_ANDROID_KEY_ALIAS }}
@@ -78,6 +77,8 @@ jobs:
           packages: 'platform-tools platforms;android-36 build-tools;36.0.0'
           log-accepted-android-sdk-licenses: false
       - name: Validate release metadata and restore upload keystore
+        env:
+          ASTHA_ANDROID_KEYSTORE_PATH: ${{ runner.temp }}/astha-upload.jks
         run: |
           python - <<'PY'
           import base64, os, pathlib, re
@@ -102,6 +103,7 @@ jobs:
           path.chmod(0o600)
           with open(os.environ['GITHUB_ENV'], 'a', encoding='utf-8') as output:
               output.write('ASTHA_VERSION_NAME=' + name + '\n')
+              output.write('ASTHA_ANDROID_KEYSTORE_PATH=' + str(path) + '\n')
           PY
       - name: Build web assets and sync Android
         run: |
@@ -142,7 +144,7 @@ jobs:
           retention-days: 14
       - name: Remove temporary upload keystore
         if: always()
-        run: rm -f -- "$ASTHA_ANDROID_KEYSTORE_PATH"
+        run: rm -f -- "$RUNNER_TEMP/astha-upload.jks"
 
   build-ios-simulator:
     name: Unsigned iOS simulator compilation (not an IPA)
