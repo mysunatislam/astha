@@ -1,0 +1,14 @@
+.git
+**/node_modules
+**/.env
+**/.env.*
+**/*.db
+**/*.db-*
+**/*.jks
+**/*.keystore
+**/*.log
+android
+ios
+tests
+work
+release-artifacts

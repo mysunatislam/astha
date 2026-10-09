@@ -4,18 +4,26 @@
   "version": "1.0.0",
   "description": "Astha -- a Bangla-first, voice-led AI visual companion for blind and low-vision users.",
   "scripts": {
+    "check": "node tools/check.mjs",
+    "test": "node --test tests/*.test.mjs tests/test_*.mjs",
     "build": "python tools/build.py",
     "start": "node server/index.js",
     "dev": "node --watch server/index.js",
-    "install:server": "npm --prefix server install",
+    "install:server": "npm --prefix server ci",
     "cap:sync": "python tools/build.py && npx cap sync",
+    "capacitor:copy:after": "node tools/prune-mobile-assets.mjs",
     "android:open": "npx cap open android",
     "ios:open": "npx cap open ios"
   },
   "dependencies": {
-    "@capacitor/android": "^8.5.2",
-    "@capacitor/cli": "^8.5.2",
-    "@capacitor/core": "^8.5.2",
-    "@capacitor/ios": "^8.5.2"
+    "@capacitor/android": "8.5.2",
+    "@capacitor/core": "8.5.2",
+    "@capacitor/ios": "8.5.2"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "8.5.2"
+  },
+  "overrides": {
+    "xcode": { "uuid": "11.1.1" }
   }
 }

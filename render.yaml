@@ -1,10 +1,10 @@
 # Deploy to Render (render.com): "New +" -> "Blueprint" -> point at this repo.
-# Free tier works; the disk keeps the SQLite database across restarts.
+# Persistent SQLite needs an eligible paid service. Review cost and origin before deployment.
 services:
   - type: web
     name: astha
     env: docker
-    plan: free
+    plan: starter
     dockerfilePath: ./Dockerfile
     envVars:
       - key: JWT_SECRET
@@ -13,6 +13,12 @@ services:
         sync: false
       - key: NODE_ENV
         value: production
+      # Render terminates TLS before the app. Enter the exact external HTTPS origin.
+      # Keep forwarded-header trust disabled until the deployed ingress hop count is verified.
+      - key: PUBLIC_ORIGIN
+        sync: false
+      - key: TRUST_PROXY_HOPS
+        value: "0"
       - key: DB_PATH
         value: /data/astha.db
     disk:
