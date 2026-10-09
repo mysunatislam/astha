@@ -6,8 +6,15 @@
        heavy understanding goes to the cloud with a strict "never invent"
        instruction. The key is stored only in this browser.
    ===================================================================== */
-const cloud = { key: '', model: 'gemini-2.0-flash', models: ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-flash-8b'], lastCallAt: 0, lastVerifyAt: 0, badKeyWarned: false };
+const cloud = { key: '', model: 'gemini-3.6-flash', models: ['gemini-3.6-flash'], lastCallAt: 0, lastVerifyAt: 0, badKeyWarned: false };
 const serverCloud = { checked: false, available: false };
+
+function configuredClientModels() {
+  const models = window.ASTHA_GEMINI_MODELS;
+  if (Array.isArray(models) && models.length > 0 && models.length <= 3 &&
+      models.every(id => typeof id === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,99}$/.test(id))) return [...new Set(models)];
+  return ['gemini-3.6-flash'];
+}
 
 function promptGeminiKey() {
   const current = cloud.key || '';
@@ -18,92 +25,47 @@ function promptGeminiKey() {
   }
 }
 
-// ---- 20-Day Free Subscription / Pass & Dual-Engine Mode Controller ----
+// ---- Engine preference; account entitlement is not inferred in the browser ----
 const Subscription = {
-  TRIAL_DAYS: 20,
-  START_KEY: 'astha.sub_start',
-  MODE_KEY: 'astha.ai_mode', // 'gemini' | 'offline'
-
+  MODE_KEY: 'astha.ai_mode',
   init() {
-    let start = localStorage.getItem(this.START_KEY);
-    if (!start) {
-      start = String(Date.now());
-      try { localStorage.setItem(this.START_KEY, start); } catch (e) {}
-    }
-    let mode = localStorage.getItem(this.MODE_KEY);
-    if (!mode) {
-      mode = 'gemini';
-      try { localStorage.setItem(this.MODE_KEY, mode); } catch (e) {}
-    }
+    try { if (!localStorage.getItem(this.MODE_KEY)) localStorage.setItem(this.MODE_KEY, 'offline'); } catch (e) {}
     this.renderButtons();
-    return { start: parseInt(start, 10), mode };
+    return { mode: this.getMode() };
   },
-
-  getDaysRemaining() {
-    let start = parseInt(localStorage.getItem(this.START_KEY) || '0', 10);
-    if (!start) {
-      start = Date.now();
-      try { localStorage.setItem(this.START_KEY, String(start)); } catch (e) {}
-    }
-    const elapsedDays = (Date.now() - start) / (1000 * 60 * 60 * 24);
-    const remaining = Math.max(0, Math.ceil(this.TRIAL_DAYS - elapsedDays));
-    return remaining;
-  },
-
-  isTrialActive() {
-    if (cloud.key) return true; // personal key is always active
-    return this.getDaysRemaining() > 0;
-  },
-
   getMode() {
-    try {
-      const saved = localStorage.getItem(this.MODE_KEY);
-      if (saved === 'offline') return 'offline';
-    } catch (e) {}
-    return 'gemini';
+    try { if (localStorage.getItem(this.MODE_KEY) === 'gemini') return 'gemini'; } catch (e) {}
+    return 'offline';
   },
-
   setMode(mode, silent) {
-    if (mode !== 'offline' && mode !== 'gemini') mode = 'gemini';
-    try { localStorage.setItem(this.MODE_KEY, mode); } catch (e) {}
-    updateCloudBadge();
-    this.renderButtons();
-    if (!silent) {
-      if (mode === 'gemini') {
-        const days = this.getDaysRemaining();
-        if (!cloud.key && !serverCloud.available) {
-          announce(`Switched to Online AI mode. Your 20-day pass has ${days} days remaining. Please enter your Gemini API key to activate high-accuracy vision.`,
-                   `অনলাইন এআই মোড নির্বাচন করা হয়েছে। আপনার ফ্রি পাসের ${bnDigits(days)} দিন বাকি। হাই-অ্যাকুরেসি জেমিনি ভিশন চালু করতে আপনার জেমিনি কী দিন।`, 'system');
-          setTimeout(() => promptGeminiKey(), 800);
-        } else {
-          announce(`Online AI mode active. ${days} days free pass remaining. Gemini 2.0 Flash is enabled for blackboard reading, stairs, and memory.`,
-                   `অনলাইন এআই মোড চালু। ফ্রি পাসের ${bnDigits(days)} দিন বাকি। ব্ল্যাকবোর্ড, সিঁড়ি ও মেমরির জন্য জেমিনি ২.০ ফ্ল্যাশ সক্রিয়।`, 'system');
-        }
-      } else {
-        announce('Switched to On-Device Offline mode. All vision and voice processing stay on this phone without internet.',
-                 'অন-ডিভাইস অফলাইন মোড চালু হয়েছে। ইন্টারনেট ছাড়াই সব এই ফোনে চলবে।', 'system');
-      }
+    if (mode !== 'gemini') mode = 'offline';
+    if (mode === 'gemini' && !requestRemoteConsent()) return;
+    if (mode === 'offline') {
+      remoteProcessingConsent = false;
+      if (typeof SiriVoice !== 'undefined') { SiriVoice.enabled = false; SiriVoice.stop(true); }
+      if (typeof stopAllSpeech === 'function') stopAllSpeech();
     }
+    try { localStorage.setItem(this.MODE_KEY, mode); } catch (e) {}
+    updateCloudBadge(); this.renderButtons();
+    if (mode === 'gemini') {
+      const session = typeof window.ASTHA_REFRESH_SESSION === 'function' ? window.ASTHA_REFRESH_SESSION() : Promise.resolve();
+      Promise.resolve(session).then(() => refreshCloudStatus()).catch(() => updateCloudBadge());
+    }
+    if (!silent) announce(mode === 'gemini'
+      ? 'Online processing is permitted for this session. Requests use your configured server or personal key; unavailable services fall back to this phone.'
+      : 'On-device mode selected. Remote processing is off; each feature needs its downloaded model and a local voice.',
+      mode === 'gemini'
+      ? 'এই সেশনে অনলাইন প্রসেসিংয়ের অনুমতি দেওয়া হয়েছে। কনফিগার করা সার্ভার বা ব্যক্তিগত কী ব্যবহার হবে; পরিষেবা না পেলে এই ফোনের মডেল ব্যবহার করব।'
+      : 'ডিভাইস মোড নির্বাচিত। অনলাইন প্রসেসিং বন্ধ; প্রতিটি সুবিধার জন্য ডাউনলোড করা মডেল ও স্থানীয় কণ্ঠ দরকার।', 'system');
   },
-
   renderButtons() {
     const mode = this.getMode();
-    const gBtn = $('btn-mode-gemini');
-    const oBtn = $('btn-mode-offline');
-    if (gBtn) {
-      gBtn.setAttribute('aria-pressed', mode === 'gemini');
-      gBtn.classList.toggle('active', mode === 'gemini');
-    }
-    if (oBtn) {
-      oBtn.setAttribute('aria-pressed', mode === 'offline');
-      oBtn.classList.toggle('active', mode === 'offline');
+    for (const [id, value] of [['btn-mode-gemini', 'gemini'], ['btn-mode-offline', 'offline']]) {
+      const button = $(id);
+      if (button) { button.setAttribute('aria-pressed', mode === value); button.classList.toggle('active', mode === value); }
     }
   }
 };
-
-// Cloud reasoning is ready ONLY when in 'gemini' mode, trial is active, and key or server is available.
-// Default Competition Demo Pass (active out-of-the-box so competition judges never see offline mode)
-const DEFAULT_PASS_TOKEN = 'Z0FBQUFBQnFyLU43ZXVnYmNDVVJHVkduQXpqcEZlMWtLaGNsX0EtRFdEa0duaS1tbnpwSEZ2Z2Q4NllrUmw0WDlLQk5zLVU2VEdldUVxbUZsak5HUGRzbHJCOHJIb1pXQi1fN09fSFJhRmJyeTR4Zy14dXR3MnRlc1hsVEt5OWhIeGhkMlFsQW9HTDM=';
 
 function getEffectiveKey() {
   if (cloud.key) return cloud.key;
@@ -111,20 +73,17 @@ function getEffectiveKey() {
     const saved = localStorage.getItem('astha.gemini');
     if (saved) return saved;
   } catch (e) {}
-  // Automatically activate the competition demo pass so judges never encounter offline mode!
-  try {
-    return atob(DEFAULT_PASS_TOKEN);
-  } catch (e) {
-    return '';
-  }
+  return '';
 }
 
 function cloudReady() {
+  if (!remoteProcessingAllowed()) return false;
   if (typeof Subscription !== 'undefined') {
     if (Subscription.getMode() === 'offline') return false;
-    if (!Subscription.isTrialActive()) return false;
   }
-  return Boolean(getEffectiveKey() || serverCloud.available);
+  const key = getEffectiveKey();
+  const configuredPersonalKey = key && (!key.startsWith('gAAAAA') || window.ASTHA_MAIRA_PROJECT_KEY);
+  return Boolean(serverCloud.available || configuredPersonalKey);
 }
 function setGeminiKey(v, silent) {
   cloud.key = (v || '').trim(); cloud.badKeyWarned = false;
@@ -132,58 +91,28 @@ function setGeminiKey(v, silent) {
   updateCloudBadge();
   const effective = getEffectiveKey();
   const isMaira = effective.startsWith('gAAAAA');
-  const engineName = isMaira ? 'Gigalogy Maira AI' : 'Gemini 2.0 Flash';
-  const engineNameBn = isMaira ? 'মায়রা এআই' : 'জেমিনি ২.০ ফ্ল্যাশ';
-  if (!silent) announce(effective ? `${engineName} is connected. High-accuracy scene understanding, blackboard reading and memory are active.` : 'Cloud reasoning is off. I am using the on-device models only.',
-    effective ? `${engineNameBn} সংযুক্ত হয়েছে। হাই-অ্যাকুরেসি দৃশ্য বর্ণনা, ব্ল্যাকবোর্ড পড়া ও মেমরি সক্রিয়।` : 'ক্লাউড রিজনিং বন্ধ। শুধু ডিভাইসের মডেল ব্যবহার করছি।', 'system');
+  const engineName = isMaira ? 'Gigalogy Maira AI' : 'Gemini';
+  const engineNameBn = isMaira ? 'মায়রা এআই' : 'জেমিনি';
+  if (!silent) announce(effective ? `${engineName} key saved. The connection will be checked on your next request.` : 'Personal key cleared. I will use the configured server or on-device models.',
+    effective ? `${engineNameBn} কী সংরক্ষিত। পরের অনুরোধে সংযোগ পরীক্ষা হবে।` : 'ব্যক্তিগত কী মুছে ফেলা হয়েছে। কনফিগার করা সার্ভার বা ডিভাইসের মডেল ব্যবহার করব।', 'system');
 }
 function updateCloudBadge() {
   const b = $('cloud-pill'); if (!b) return;
-  const mode = typeof Subscription !== 'undefined' ? Subscription.getMode() : 'gemini';
-  if (mode === 'offline') {
-    b.textContent = '📱 On-device offline';
-    b.className = 'pill';
-    b.onclick = null;
-    b.style.cursor = 'default';
-    return;
-  }
-  const days = typeof Subscription !== 'undefined' ? Subscription.getDaysRemaining() : 20;
-  if (typeof Subscription !== 'undefined' && !Subscription.isTrialActive()) {
-    b.textContent = 'Free pass expired';
-    b.className = 'pill warn';
-    b.onclick = null;
-    b.style.cursor = 'default';
-    return;
-  }
-  const effectiveKey = getEffectiveKey();
-  if (serverCloud.available) {
-    b.textContent = `✨ Online AI (${days}d · Server)`;
-    b.className = 'pill ok';
-    b.onclick = null;
-    b.style.cursor = 'default';
-  } else if (effectiveKey) {
-    const hasPersonalKey = Boolean(cloud.key || (typeof localStorage !== 'undefined' && localStorage.getItem('astha.gemini')));
-    const isMaira = effectiveKey.startsWith('gAAAAA');
-    b.textContent = hasPersonalKey
-      ? `✨ Online AI (${days}d · ${isMaira ? 'Maira' : 'Key'} active)`
-      : `✨ Online AI (${days}d · Pass active)`;
-    b.className = 'pill ok';
-    b.onclick = () => promptGeminiKey();
-    b.style.cursor = 'pointer';
-    b.title = hasPersonalKey ? 'Click to view or change your API key' : 'Competition demo pass active. Click to use a personal key.';
-  } else {
-    b.textContent = `⚠️ Enter API Key (${days}d pass)`;
-    b.className = 'pill warn';
-    b.onclick = () => promptGeminiKey();
-    b.style.cursor = 'pointer';
-    b.title = 'Click to enter your API key (Gemini or Maira)';
-  }
+  b.onclick = null; b.style.cursor = 'default';
+  if (Subscription.getMode() === 'offline') { b.textContent = 'On-device mode'; b.className = 'pill'; return; }
+  if (!remoteProcessingConsent) { b.textContent = 'Online: consent required'; b.className = 'pill warn'; return; }
+  const key = getEffectiveKey();
+  const personalConfigured = key && (!key.startsWith('gAAAAA') || window.ASTHA_MAIRA_PROJECT_KEY);
+  b.textContent = serverCloud.available ? 'Cloud configured (server)'
+    : personalConfigured ? 'Cloud configured (personal key)'
+    : 'Cloud unavailable; on-device fallback';
+  b.className = 'pill ' + (serverCloud.available || personalConfigured ? '' : 'warn');
 }
 // Learn once at boot whether Astha's own server has a Gemini key configured, so the badge and
 // cloudReady() are accurate before the first camera action ever calls /api/vision.
 async function refreshCloudStatus() {
   try {
-    const r = await fetch(apiUrl('/api/health'), { credentials: 'include' });
+    const r = await fetch(apiUrl('/api/health'), { credentials: 'include', signal: deadlineSignal(5000) });
     serverCloud.reachable = r.ok;
     if (r.ok) { const d = await r.json(); serverCloud.available = !!d.cloud; }
   } catch (e) { serverCloud.reachable = false; /* offline; personal key (if any) still works */ }
@@ -224,6 +153,7 @@ If no target item is clearly placed on a surface, return JSON:
 // server holds the real Gemini key and is tried first; a personal key pasted into Your
 // preferences is only a fallback for when that server is unreachable or has none configured.
 async function gemini(task, frame, opts = {}) {
+  if (!remoteProcessingAllowed()) { const e = new Error('remote processing disabled'); e.noCloud = true; throw e; }
   cloud.lastCallAt = Date.now();
   const image = frame ? frameToJpeg(frame, opts.maxW || 800) : undefined;
   if (serverCloud.available) {
@@ -231,6 +161,7 @@ async function gemini(task, frame, opts = {}) {
       const res = await fetch(apiUrl('/api/vision'), {
         method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ task: 'custom', prompt: task, image, maxTokens: opts.maxTokens || 900 }),
+        signal: deadlineSignal(30000, opts.signal),
       });
       if (res.ok) { serverCloud.available = true; serverCloud.checked = true; return await res.json(); }
       if (res.status === 401) { serverCloud.checked = true; serverCloud.available = false; /* not signed in yet; fall through */ }
@@ -242,10 +173,11 @@ async function gemini(task, frame, opts = {}) {
   const effectiveKey = getEffectiveKey();
   if (!effectiveKey) { const e = new Error('no cloud reasoning available'); e.noCloud = true; throw e; }
 
-  // Direct client call to Gigalogy Maira AI if personal Maira key or demo pass is active
+  // Direct client call only with an explicitly configured personal Maira project.
   if (effectiveKey.startsWith('gAAAAA')) {
     try {
-      const pKey = 'A4flRx22as_RidCuFpwIUzCplIk2I2nu7zAMSVIugMo=';
+      const pKey = String(window.ASTHA_MAIRA_PROJECT_KEY || '').trim();
+      if (!pKey) { const e = new Error('Maira project not configured'); e.noCloud = true; throw e; }
       const images = image ? [{ file_content: `data:image/jpeg;base64,${image}`, filename: 'frame.jpg' }] : [];
       const mairaBody = {
         user_id: 'astha-browser-user',
@@ -261,7 +193,8 @@ async function gemini(task, frame, opts = {}) {
           'api-key': effectiveKey,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(mairaBody)
+        body: JSON.stringify(mairaBody),
+        signal: deadlineSignal(30000, opts.signal)
       });
       if (mRes.ok) {
         const mData = await mRes.json();
@@ -291,12 +224,14 @@ async function gemini(task, frame, opts = {}) {
   const parts = [{ text: task }];
   if (image) parts.push({ inline_data: { mime_type: 'image/jpeg', data: image } });
   const body = { system_instruction: { parts: [{ text: ASTHA_SYSTEM }] }, contents: [{ role: 'user', parts }], generationConfig: { temperature: 0.2, response_mime_type: 'application/json', max_output_tokens: opts.maxTokens || 900 } };
+  cloud.models = configuredClientModels();
+  if (!cloud.models.includes(cloud.model)) cloud.model = cloud.models[0];
   const order = [cloud.model, ...cloud.models.filter(m => m !== cloud.model)];
   let lastErr = null;
   for (const model of order) {
     let res;
     try {
-      res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(effectiveKey)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(effectiveKey)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: deadlineSignal(30000, opts.signal) });
     } catch (e) { throw new Error('network'); }
     if (res.status === 404) { lastErr = new Error('model ' + model + ' not found'); continue; }
     if (res.status === 400 || res.status === 403) { if (!cloud.badKeyWarned) { cloud.badKeyWarned = true; announce('Your personal Gemini key was rejected. Check it in Your preferences.', 'আপনার ব্যক্তিগত জেমিনি কী গ্রহণ হয়নি। প্রেফারেন্সে দেখুন।', 'system'); } throw new Error('bad key'); }
@@ -351,7 +286,7 @@ async function cloudIdentify() {
       announce(r.en, r.bn, 'vision'); playEarcon('confirm'); haptic('CONFIRM');
       heartFlash({ x: 0.5, y: 0.5, mode: 'lock', label: r.name || '' }); logEvent('Cloud identified: ' + (r.name || ''));
       if (typeof autoRecordMemory === 'function' && r.name) {
-        autoRecordMemory({ item: r.name, location: 'Held in front of camera', source: 'Identified object', score: 0.95 });
+        autoRecordMemory({ item: r.name, location: 'Held in front of camera', source: 'Identified object', score: null });
       }
     } catch (e) {
       cloudFail(e);
@@ -492,7 +427,7 @@ async function cloudVisualQA(query, frame, history = '') {
           item: r.item,
           location: (r.surface ? 'On ' + r.surface : '') + (r.room_hint ? ' in ' + r.room_hint : (r.surface ? '' : 'In front of you')),
           source: 'Visual question answer',
-          score: 0.95
+          score: null
         });
       }
       return r;
@@ -534,14 +469,14 @@ async function cloudRecordPlacement(query, frame, rooms) {
         heartFlash({ x: 0.5, y: 0.5, mode: 'lock', label: r.item || 'Item' });
         logEvent('Remembered: ' + (r.item || 'item') + ' on ' + (r.surface || 'surface'));
         if (typeof autoRecordMemory === 'function' && r.item) {
-          const locStr = `on the ${r.surface || 'table'} in the ${r.room || 'reading room'}`;
+          const locStr = r.surface ? `on the ${r.surface}${r.room ? ' in the ' + r.room : ''}` : (r.room ? `in the ${r.room}` : 'Physical location unconfirmed');
           autoRecordMemory({
             item: r.item,
             location: locStr,
             room: r.room || null,
             furniture: r.surface || null,
             source: 'Voice placement observation',
-            score: 0.98
+            score: null, approved: true
           });
         }
         return r;
@@ -599,6 +534,26 @@ function answerYesNo(q) {
 
 // ---- Owner ID: face (face-api) and an experimental voice check (Meyda) -------
 const owner = { faceReady: false, faceLoading: null, face: null, voice: null, verifiedAt: 0, lock: false, lastAutoCheck: 0, meydaReady: null };
+function ownerNamespace() {
+  const id = window.ASTHA_LOCAL_ACCOUNT_ID || window.ASTHA_ACCOUNT_ID;
+  return 'astha.owner.v2.' + (typeof id === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(id) ? id : 'device');
+}
+function refreshOwnerContext() {
+  const key = ownerNamespace();
+  if (owner.context === key) return key;
+  owner.context = key; owner.face = null; owner.voice = null; owner.lock = false;
+  owner.verifiedAt = 0; owner.lastAutoCheck = 0;
+  // Old global biometric records have no trustworthy account owner; never import them.
+  try {
+    const face = JSON.parse(localStorage.getItem(key + '.face') || 'null');
+    if (Array.isArray(face) && face.length === 128 && face.every(Number.isFinite)) owner.face = face;
+    const voice = JSON.parse(localStorage.getItem(key + '.voice') || 'null');
+    if (voice && Array.isArray(voice.mean) && Array.isArray(voice.sd) && voice.mean.length > 1 && voice.mean.length <= 256 && voice.sd.length === voice.mean.length && voice.mean.every(Number.isFinite) && voice.sd.every(v => Number.isFinite(v) && v >= 0)) owner.voice = voice;
+    owner.lock = !!owner.face && localStorage.getItem(key + '.lock') === '1';
+  } catch (e) {}
+  renderOwner(); return key;
+}
+function ownerContextCurrent(key) { return key === ownerNamespace() && key === owner.context && !privacyMode && !privacyTransition; }
 function loadScript(src) { return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = () => rej(new Error('load ' + src)); document.head.appendChild(s); }); }
 async function loadFaceLib() {
   if (owner.faceReady) return true;
@@ -618,6 +573,8 @@ async function faceDescriptor(frame) {
 }
 function faceDistance(a, b) { let s = 0; for (let i = 0; i < a.length; i++) s += (a[i] - b[i]) ** 2; return Math.sqrt(s); }
 async function enrollOwnerFace() {
+  const accountKey = refreshOwnerContext();
+  if (!ownerContextCurrent(accountKey)) return;
   if (withCamera(enrollOwnerFace)) return;
   try { await loadFaceLib(); } catch (e) { return announce('I could not load the face model. Check the internet connection.', 'ফেস মডেল লোড হয়নি। ইন্টারনেট দেখুন।', 'system'); }
   announce('Look at the camera for three seconds. I am learning your face.', 'তিন সেকেন্ড ক্যামেরার দিকে তাকান। আমি আপনার মুখ শিখছি।', 'system');
@@ -629,21 +586,25 @@ async function enrollOwnerFace() {
   }
   if (!samples.length) return announce('I could not find a face. Hold the phone at arm\'s length facing you and try again.', 'কোনো মুখ পাইনি। ফোনটি হাত বাড়িয়ে নিজের দিকে ধরে আবার চেষ্টা করুন।', 'system');
   const avg = samples[0].map((_, i) => samples.reduce((s, d) => s + d[i], 0) / samples.length);
+  if (!ownerContextCurrent(accountKey)) return;
   owner.face = avg; owner.verifiedAt = Date.now();
-  try { localStorage.setItem('astha.owner.face', JSON.stringify(avg)); } catch (e) {}
+  try { localStorage.setItem(accountKey + '.face', JSON.stringify(avg)); } catch (e) {}
   renderOwner(); playEarcon('confirm');
   announce('Done. I will recognise your face from now on.', 'হয়ে গেছে। এখন থেকে আপনার মুখ চিনব।', 'system'); logEvent('Owner face enrolled');
 }
 async function verifyOwnerFace(silent) {
+  const accountKey = refreshOwnerContext();
+  if (!ownerContextCurrent(accountKey)) return false;
   if (!owner.face) { if (!silent) announce('You have not shown me your face yet. Say “remember my face”.', 'এখনো আপনার মুখ শেখাননি। বলুন “আমার মুখ মনে রাখো”।', 'system'); return false; }
   if (withCamera(() => verifyOwnerFace(silent))) return false;
   try { await loadFaceLib(); } catch (e) { return false; }
   let ok = false, best = 9;
   for (let i = 0; i < 3 && !ok; i++) {
     const frame = captureFrame(640); if (!frame) break;
-    try { const d = await faceDescriptor(frame); if (d) { const dist = faceDistance(d, owner.face); best = Math.min(best, dist); ok = dist < 0.5; } } catch (e) {}
+    try { const d = await faceDescriptor(frame); if (!ownerContextCurrent(accountKey)) return false; if (d) { const dist = faceDistance(d, owner.face); best = Math.min(best, dist); ok = dist < 0.5; } } catch (e) {}
     if (!ok) await new Promise(r => setTimeout(r, 500));
   }
+  if (!ownerContextCurrent(accountKey)) return false;
   if (ok) { owner.verifiedAt = Date.now(); renderOwner(); if (!silent) { playEarcon('confirm'); announce('It is you. Welcome back.', 'হ্যাঁ, আপনি। স্বাগতম।', 'system'); } }
   else if (!silent) announce(best < 9 ? 'That face does not match the owner.' : 'I cannot see a face clearly. Face the camera in good light.', best < 9 ? 'এই মুখ মালিকের সাথে মেলে না।' : 'মুখ স্পষ্ট দেখছি না। আলোতে ক্যামেরার দিকে তাকান।', 'system');
   return ok;
@@ -665,18 +626,23 @@ async function captureVoiceprint(seconds) {
 }
 function voiceDistance(a, b) { let s = 0; for (let i = 1; i < a.mean.length; i++) s += Math.abs(a.mean[i] - b.mean[i]) / (a.sd[i] + 1e-3); return s / (a.mean.length - 1); }
 async function enrollOwnerVoice() {
+  const accountKey = refreshOwnerContext();
+  if (!ownerContextCurrent(accountKey)) return;
   announce('After the chime, speak naturally for five seconds. For example, tell me what you did today.', 'শব্দের পর পাঁচ সেকেন্ড স্বাভাবিকভাবে কথা বলুন। যেমন আজ কী করলেন বলুন।', 'system');
   await new Promise(r => setTimeout(r, 4500)); playEarcon('confirm');
   try {
     const vp = await captureVoiceprint(5);
+    if (!ownerContextCurrent(accountKey)) return;
     if (!vp) return announce('I did not hear enough speech. Try again in a quieter place.', 'যথেষ্ট কথা শুনিনি। একটু নীরব জায়গায় আবার চেষ্টা করুন।', 'system');
-    owner.voice = vp; try { localStorage.setItem('astha.owner.voice', JSON.stringify(vp)); } catch (e) {}
+    owner.voice = vp; try { localStorage.setItem(accountKey + '.voice', JSON.stringify(vp)); } catch (e) {}
     renderOwner(); playEarcon('confirm'); announce('Thank you. I have a voiceprint for you now. It is experimental, so your face is the main check.', 'ধন্যবাদ। আপনার কণ্ঠের ছাপ রাখলাম। এটি পরীক্ষামূলক, তাই মুখই প্রধান পরিচয়।', 'system'); logEvent('Owner voice enrolled');
   } catch (e) { announce('I could not use the microphone for the voice check.', 'কণ্ঠ পরীক্ষার জন্য মাইক্রোফোন পাইনি।', 'system'); }
 }
 async function verifyOwnerVoice() {
+  const accountKey = refreshOwnerContext();
+  if (!ownerContextCurrent(accountKey)) return null;
   if (!owner.voice) return null;
-  try { const vp = await captureVoiceprint(2.5); if (!vp) return null; const d = voiceDistance(owner.voice, vp); return { match: d < 1.1, distance: d }; } catch (e) { return null; }
+  try { const vp = await captureVoiceprint(2.5); if (!vp || !ownerContextCurrent(accountKey)) return null; const d = voiceDistance(owner.voice, vp); return { match: d < 1.1, distance: d }; } catch (e) { return null; }
 }
 function ownerVerified() { return Date.now() - owner.verifiedAt < 10 * 60 * 1000; }
 // Gate for commands when the owner lock is on: face first; voice check as a fallback.
@@ -688,20 +654,26 @@ function ownerGate(query) {
   return false;
 }
 async function ownerItsMe() {
+  const accountKey = refreshOwnerContext();
+  if (!ownerContextCurrent(accountKey)) return;
   const faceOk = await verifyOwnerFace(true);
+  if (!ownerContextCurrent(accountKey)) return;
   if (faceOk) { playEarcon('confirm'); return announce('It is you. Unlocked.', 'হ্যাঁ, আপনি। আনলক হয়েছে।', 'system'); }
   if (owner.voice) {
     announce('Say a few words so I can check your voice.', 'কয়েকটি কথা বলুন, আপনার কণ্ঠ মিলিয়ে দেখি।', 'system');
     await new Promise(r => setTimeout(r, 2500)); playEarcon('confirm');
     const v = await verifyOwnerVoice();
+    if (!ownerContextCurrent(accountKey)) return;
     if (v && v.match) { owner.verifiedAt = Date.now(); renderOwner(); playEarcon('confirm'); return announce('Your voice matches. Unlocked.', 'আপনার কণ্ঠ মিলেছে। আনলক হয়েছে।', 'system'); }
     return announce('I could not confirm your voice. Please face the camera instead.', 'কণ্ঠ নিশ্চিত হয়নি। ক্যামেরার দিকে তাকান।', 'system');
   }
   announce('I could not recognise you. Face the camera in good light, or say “remember my face” to enrol.', 'আপনাকে চিনতে পারিনি। আলোতে ক্যামেরার দিকে তাকান, বা বলুন “আমার মুখ মনে রাখো”।', 'system');
 }
 function toggleOwnerLock() {
+  const accountKey = refreshOwnerContext();
+  if (!ownerContextCurrent(accountKey)) return;
   if (!owner.face && !owner.lock) return announce('Show me your face first: say “remember my face”.', 'আগে আপনার মুখ দেখান: বলুন “আমার মুখ মনে রাখো”।', 'system');
-  owner.lock = !owner.lock; try { localStorage.setItem('astha.owner.lock', owner.lock ? '1' : '0'); } catch (e) {}
+  owner.lock = !owner.lock; try { localStorage.setItem(accountKey + '.lock', owner.lock ? '1' : '0'); } catch (e) {}
   renderOwner(); playEarcon('click');
   announce(owner.lock ? 'Owner lock is on. I will only take commands after I recognise you.' : 'Owner lock is off.', owner.lock ? 'মালিক লক চালু। আপনাকে চিনলেই কেবল নির্দেশ মানব।' : 'মালিক লক বন্ধ।', 'system');
 }
@@ -713,7 +685,7 @@ function renderOwner() {
 }
 // Keep the owner verified quietly while a face is in view (auto-refresh every 20 s).
 async function ownerAutoCheck() {
-  if (!owner.face || !owner.faceReady || state.source !== 'camera' || state.busy) return;
+  if (privacyMode || privacyTransition || !owner.face || !owner.faceReady || state.source !== 'camera' || state.busy) return;
   const now = Date.now(); if (now - owner.lastAutoCheck < 20000 || ownerVerified() && now - owner.verifiedAt < 5 * 60 * 1000) return;
   owner.lastAutoCheck = now;
   if (!state.lastCocoPreds.some(o => o.id === 'person')) return;
@@ -735,13 +707,13 @@ function cloudBoot() {
   try { cloud.key = localStorage.getItem('astha.gemini') || ''; } catch (e) {}
   if ($('gemini-key')) {
     $('gemini-key').value = cloud.key;
-    if (!cloud.key) $('gemini-key').placeholder = '✨ Competition Pass active (or enter personal key)';
+    if (!cloud.key) $('gemini-key').placeholder = 'Optional personal key; otherwise the configured server or on-device models';
   }
   updateCloudBadge();
   serverCloud.ready = refreshCloudStatus(); // memory/room syncs await this before their first request
   let mode = 'auto'; try { mode = localStorage.getItem('astha.mode') || 'auto'; } catch (e) {}
   setMode(mode, true);
-  try { const f = localStorage.getItem('astha.owner.face'); if (f) owner.face = JSON.parse(f); const v = localStorage.getItem('astha.owner.voice'); if (v) owner.voice = JSON.parse(v); owner.lock = localStorage.getItem('astha.owner.lock') === '1'; } catch (e) {}
+  refreshOwnerContext();
   renderOwner(); secureBanner();
   if (owner.face) loadFaceLib().catch(() => {});
 }

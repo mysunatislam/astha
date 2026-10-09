@@ -1,17 +1,45 @@
-// Sign-in gate: shown until the browser has a valid session; then the whole companion app
-// (defined in the big inline <script> from index.html) is started via window.__asthaBoot().
-// This file is a classic script, loaded after that one, so it shares the same top-level scope
-// and can call the app's own functions (announce, apiSend, etc.) directly.
+// Authentication establishes the account namespace before companion memory can load/sync.
 (function () {
   let mode = 'signup';
+  let booted = false;
+  let sessionGeneration = 0;
+  let logoutPending = false;
+  const LAST_ACCOUNT = 'astha.last_account.v2';
+  const PENDING_LOGOUT = 'astha.logout_pending.v2';
+  const validId = id => typeof id === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(id);
+  const text = (en, bn) => typeof uiLang !== 'undefined' && uiLang === 'bn' ? bn : en;
+  window.ASTHA_ACCOUNT_ID = null;
+  window.ASTHA_LOCAL_ACCOUNT_ID = null;
+  function pendingLogout() {
+    try { return logoutPending || localStorage.getItem(PENDING_LOGOUT) === '1'; } catch (e) { return logoutPending; }
+  }
+
+  async function authFetch(path, options = {}) {
+    return fetch(apiUrl(path), { ...options, credentials: 'include', signal: deadlineSignal(5000) });
+  }
+  window.ASTHA_CLEAR_ACCOUNT = function ({ logout = false } = {}) {
+    sessionGeneration += 1;
+    if (logout) logoutPending = true;
+    try { localStorage.removeItem(LAST_ACCOUNT); if (logout) localStorage.setItem(PENDING_LOGOUT, '1'); } catch (e) {}
+    window.ASTHA_ACCOUNT_ID = null;
+    window.ASTHA_LOCAL_ACCOUNT_ID = null;
+    if (typeof refreshOwnerContext === 'function') refreshOwnerContext();
+    if (typeof LocalStore !== 'undefined') { clearTimeout(LocalStore.timer); LocalStore.loadedKey = null; }
+    if (typeof state !== 'undefined') {
+      state.memory = []; state.spatialHome = []; state.log = [];
+      if (typeof renderMemory === 'function') renderMemory();
+      if (typeof renderSpatialLayout === 'function') renderSpatialLayout();
+      if (typeof renderLog === 'function') renderLog();
+    }
+  };
 
   function setAuthTab(next) {
-    mode = next;
-    document.getElementById('auth-tab-signup').setAttribute('aria-pressed', next === 'signup');
-    document.getElementById('auth-tab-login').setAttribute('aria-pressed', next === 'login');
-    document.getElementById('auth-name-field').hidden = next === 'login';
-    document.getElementById('auth-name').required = next === 'signup';
-    document.getElementById('auth-submit').textContent = next === 'signup' ? 'Create my account' : 'Log in';
+    mode = next === 'login' ? 'login' : 'signup';
+    document.getElementById('auth-tab-signup').setAttribute('aria-pressed', mode === 'signup');
+    document.getElementById('auth-tab-login').setAttribute('aria-pressed', mode === 'login');
+    document.getElementById('auth-name-field').hidden = mode === 'login';
+    document.getElementById('auth-name').required = mode === 'signup';
+    document.getElementById('auth-submit').textContent = mode === 'signup' ? text('Create my account', 'অ্যাকাউন্ট তৈরি করুন') : text('Log in', 'প্রবেশ করুন');
     document.getElementById('auth-status').textContent = '';
   }
   window.setAuthTab = setAuthTab;
@@ -22,57 +50,104 @@
     const passcode = document.getElementById('auth-passcode').value.trim();
     const status = document.getElementById('auth-status');
     const submitBtn = document.getElementById('auth-submit');
-    if (!phone || passcode.length < 4) { status.textContent = 'Enter your phone number and a 4 to 8 digit passcode.'; return; }
+    const normalized = passcode.replace(/[০-৯]/g, digit => String(digit.charCodeAt(0) - '০'.charCodeAt(0))).replace(/\s/g, '');
+    if (!phone || (mode === 'signup' ? !/^[0-9]{4,8}$/.test(normalized) : passcode.length < 4 || passcode.length > 128)) {
+      status.textContent = text('Enter your phone number and passcode. New passcodes need 4 to 8 digits.', 'ফোন নম্বর ও পাসকোড দিন। নতুন পাসকোডে ৪ থেকে ৮টি সংখ্যা লাগবে।'); return;
+    }
     submitBtn.disabled = true;
-    status.textContent = mode === 'signup' ? 'Creating your account…' : 'Signing in…';
+    const generation = ++sessionGeneration;
+    status.textContent = text('Signing in…', 'প্রবেশ করা হচ্ছে…');
     try {
-      const res = await fetch(apiUrl('/api/auth/' + mode), {
-        method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+      const res = await authFetch('/api/auth/' + mode, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(mode === 'signup' ? { name, phone, passcode } : { phone, passcode }),
       });
       const data = await res.json();
+      if (generation !== sessionGeneration) return;
       if (!res.ok) {
-        status.textContent = {
-          phone_taken: 'That phone number already has an account. Try Log in instead.',
-          invalid_credentials: 'Phone number or passcode is not right.',
-          name_phone_and_passcode_required: 'Please fill in every field.',
-        }[data.error] || 'Something went wrong. Please try again.';
-        return;
+        const errors = {
+          phone_taken: text('That phone number already has an account. Try Log in.', 'এই নম্বরে অ্যাকাউন্ট আছে। প্রবেশ করুন।'),
+          invalid_credentials: text('Phone number or passcode is not right.', 'ফোন নম্বর বা পাসকোড ঠিক নয়।'),
+          invalid_auth_input: text('Check the name, phone number and passcode.', 'নাম, ফোন নম্বর ও পাসকোড যাচাই করুন।'),
+          auth_rate_limit: text('Too many attempts. Please try again later.', 'অনেকবার চেষ্টা করা হয়েছে। পরে আবার চেষ্টা করুন।'),
+        };
+        status.textContent = errors[data.error] || text('Something went wrong. Try again.', 'সমস্যা হয়েছে। আবার চেষ্টা করুন।'); return;
       }
-      await enterApp();
+      const me = await authFetch('/api/auth/me');
+      if (generation !== sessionGeneration) return;
+      if (!me.ok) throw new Error('Session not confirmed');
+      const verified = await me.json();
+      if (generation !== sessionGeneration) return;
+      logoutPending = false;
+      try { localStorage.removeItem(PENDING_LOGOUT); } catch (e) {}
+      await enterApp(verified, generation);
     } catch (e) {
-      status.textContent = 'Could not reach the Astha server. Check your connection and try again.';
+      status.textContent = text('Could not confirm your session. Check your connection and try again.', 'প্রবেশ নিশ্চিত করা যায়নি। সংযোগ দেখে আবার চেষ্টা করুন।');
     } finally { submitBtn.disabled = false; }
   }
   window.submitAuth = submitAuth;
 
-  async function enterApp() {
-    let me = null;
-    try { const r = await fetch(apiUrl('/api/auth/me'), { credentials: 'include' }); if (r.ok) me = await r.json(); } catch (e) {}
+  async function enterApp(me = null, generation = sessionGeneration) {
+    if (generation !== sessionGeneration) return;
+    const pending = pendingLogout();
+    if (pending && me) return;
+    const verified = validId(me?.id) ? me.id : null;
+    let localAccount = verified;
+    if (!localAccount && !pending) {
+      try { const last = localStorage.getItem(LAST_ACCOUNT); if (validId(last)) localAccount = last; } catch (e) {}
+    }
+    if (booted && localAccount !== window.ASTHA_LOCAL_ACCOUNT_ID) {
+      if (verified) try { localStorage.setItem(LAST_ACCOUNT, verified); } catch (e) {}
+      if (typeof stopAllSpeech === 'function') stopAllSpeech();
+      location.reload(); return;
+    }
+    window.ASTHA_ACCOUNT_ID = verified;
+    window.ASTHA_LOCAL_ACCOUNT_ID = localAccount;
+    if (typeof refreshOwnerContext === 'function') refreshOwnerContext();
+    if (verified) try { localStorage.setItem(LAST_ACCOUNT, verified); } catch (e) {}
     document.getElementById('auth-gate').hidden = true;
-    if (typeof window.__asthaBoot === 'function') window.__asthaBoot();
+    if (!booted && typeof window.__asthaBoot === 'function') { booted = true; window.__asthaBoot(); }
+    else if (verified) {
+      if (typeof refreshMemory === 'function') refreshMemory();
+      if (typeof refreshRooms === 'function') refreshRooms();
+    }
     const row = document.getElementById('account-row');
-    if (row && me) row.textContent = 'Signed in as ' + me.name + (me.phone ? ' · ' + me.phone : '') + '.';
+    if (row) row.textContent = me ? text('Signed in as ', 'প্রবেশ করেছেন: ') + me.name + '.' : text('Local mode. Account sync is unavailable.', 'স্থানীয় মোড। অ্যাকাউন্টের সাথে সমন্বয় বন্ধ।');
   }
 
   async function boot() {
+    let generation = sessionGeneration;
     try {
-      const r = await fetch(apiUrl('/api/auth/me'), { credentials: 'include' });
-      if (r.ok) { await enterApp(); return; }
-      // Auto-authenticate as guest so the app works instantly without manual typing
-      const g = await fetch(apiUrl('/api/auth/guest'), { method: 'POST', credentials: 'include' });
-      if (g.ok) { await enterApp(); return; }
-    } catch (e) {
-      // Offline or standalone mode: boot immediately
-    }
-    await enterApp();
+      if (pendingLogout()) {
+        const logout = await authFetch('/api/auth/logout', { method: 'POST' });
+        if (generation !== sessionGeneration) return;
+        if (!logout.ok) { await enterApp(null, generation); return; }
+        logoutPending = false;
+        try { localStorage.removeItem(PENDING_LOGOUT); } catch (e) {}
+      }
+      const r = await authFetch('/api/auth/me');
+      if (generation !== sessionGeneration) return;
+      if (r.ok) { await enterApp(await r.json(), generation); return; }
+      if (r.status === 401) { window.ASTHA_CLEAR_ACCOUNT(); generation = sessionGeneration; }
+      if (r.status === 401) {
+        const guest = await authFetch('/api/auth/guest', { method: 'POST' });
+        if (generation !== sessionGeneration) return;
+        if (guest.ok) {
+          const me = await authFetch('/api/auth/me');
+          if (generation !== sessionGeneration) return;
+          if (me.ok) { await enterApp(await me.json(), generation); return; }
+        }
+      }
+    } catch (e) { /* Offline namespaces may load; they never count as verified accounts. */ }
+    await enterApp(null, generation);
   }
-
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
   else boot();
-
-  // Service worker: app-shell caching so Astha still opens with a weak connection.
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => { navigator.serviceWorker.register('./sw.js').catch(() => {}); });
-  }
+  window.ASTHA_REFRESH_SESSION = boot;
+  window.addEventListener('online', () => {
+    if (typeof remoteProcessingAllowed !== 'function' || remoteProcessingAllowed()) boot();
+  });
+  if ('serviceWorker' in navigator) window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js').catch(() => {});
+  });
 })();

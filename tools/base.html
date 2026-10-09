@@ -516,7 +516,14 @@
       </select>
     </div>
 
-    <!-- Voice Delivery Selector (UI stays in English, spoken voice in Bangla or English) -->
+    <div class="flex items-center gap-1">
+      <label for="ui-language" class="sr-only" data-i18n="ui_language">Interface language</label>
+      <select id="ui-language" class="select-dropdown" onchange="setUiLanguage(this.value)" aria-label="Interface language">
+        <option value="bn" lang="bn">বাংলা</option><option value="en" lang="en">English</option>
+      </select>
+    </div>
+
+    <!-- Voice Delivery Selector (independent of the interface language) -->
     <div class="segmented" role="group" aria-label="Voice Delivery" title="Voice Delivery Language">
       <button id="voice-lang-en" onclick="setVoiceLanguage('en')" aria-pressed="false" title="Voice output spoken in English">Voice: English</button>
       <button id="voice-lang-bn" onclick="setVoiceLanguage('bn')" aria-pressed="true" title="Voice output spoken in Bangla (বাংলা)">Voice: বাংলা</button>
@@ -795,7 +802,7 @@
         <h3 data-i18n="spatial_title">Calibrated Home Layout</h3>
         <button class="btn small accent" onclick="startHomeCalibration()" data-i18n="spatial_calibrate_btn">+ Calibrate Room</button>
       </div>
-      <p class="help" data-i18n="spatial_help">Learned room boundaries and key landmark positions guide you safely through your home.</p>
+      <p class="help" data-i18n="spatial_help">Room notes describe landmarks; they cannot confirm a safe path or your position.</p>
       <div class="list" id="spatial-list"><p class="empty-note" data-i18n="spatial_empty">No rooms calibrated yet. Tap '+ Calibrate Room' to begin.</p></div>
     </div>
 
@@ -889,6 +896,7 @@ const I18N = {
   en: {
     brand: 'Astha', badge_clinical: 'AI Visual Companion',
     tagline: 'Real-time AI visual companion for blind and low-vision users',
+    ui_language: 'Interface language',
     voice_on: 'Voice on', voice_off: 'Voice off', hw_panel: 'Hardware panel',
     viewport_empty: 'Start the camera, upload a photo, or pick a demo scene.',
     ready_title: 'Astha is ready',
@@ -907,7 +915,7 @@ const I18N = {
     shield_off: 'Off — tap to watch for obstacles continuously', shield_on: 'On — watching for obstacles',
     scene_noodles: 'Noodles', scene_pc: 'RGB PC', scene_tube: 'Glue tube', scene_clothes: 'Blue shirt', scene_cocksheet: 'Cocksheet',
     calib_title: 'Home Layout Calibration',
-    spatial_title: 'Calibrated Home Layout', spatial_calibrate_btn: '+ Calibrate Room', spatial_help: 'Learned room boundaries and key landmark positions guide you safely through your home.', spatial_empty: 'No rooms calibrated yet. Tap \'+ Calibrate Room\' to begin.',
+    spatial_title: 'Calibrated Home Layout', spatial_calibrate_btn: '+ Calibrate Room', spatial_help: 'Room notes describe landmarks; they cannot confirm a safe path or your position.', spatial_empty: 'No rooms calibrated yet. Tap \'+ Calibrate Room\' to begin.',
     clothes_title: 'Clothes & Color',
     log_calib: 'Calibrated room: {r}', log_clothes: 'Clothes: {c} {g}',
     ocr_heading: 'Text found (Tesseract OCR)',
@@ -979,6 +987,7 @@ const I18N = {
   bn: {
     brand: 'আস্থা', badge_clinical: 'এআই সঙ্গী',
     tagline: 'দৃষ্টিহীন ও স্বল্পদৃষ্টি মানুষের জন্য রিয়েল-টাইম এআই সঙ্গী',
+    ui_language: 'ইন্টারফেসের ভাষা',
     voice_on: 'কণ্ঠস্বর চালু', voice_off: 'কণ্ঠস্বর বন্ধ', hw_panel: 'হার্ডওয়্যার প্যানেল',
     viewport_empty: 'ক্যামেরা চালু করুন, ছবি আপলোড করুন, অথবা একটি ডেমো দৃশ্য বেছে নিন।',
     ready_title: 'আস্থা প্রস্তুত',
@@ -997,7 +1006,7 @@ const I18N = {
     shield_off: 'বন্ধ — সারাক্ষণ বাধা পর্যবেক্ষণে চাপুন', shield_on: 'চালু — বাধা পর্যবেক্ষণ চলছে',
     scene_noodles: 'নুডলস', scene_pc: 'আরজিবি পিসি', scene_tube: 'আঠার টিউব', scene_clothes: 'নীল শার্ট', scene_cocksheet: 'ককশিট',
     calib_title: 'হোম লেআউট ক্যালিব্রেশন',
-    spatial_title: 'ক্যালিব্রেট করা হোম লেআউট', spatial_calibrate_btn: '+ ঘর ক্যালিব্রেট করুন', spatial_help: 'ঘরের শেখা সীমানা ও ল্যান্ডমার্ক ঘরের ভেতরে নিরাপদ পথপ্রদর্শন করে।', spatial_empty: 'এখনো কোনো ঘর ক্যালিব্রেট করা হয়নি। শুরু করতে \'ঘর ক্যালিব্রেট করুন\' চাপুন।',
+    spatial_title: 'ক্যালিব্রেট করা হোম লেআউট', spatial_calibrate_btn: '+ ঘর ক্যালিব্রেট করুন', spatial_help: 'ঘরের নোট ল্যান্ডমার্ক বর্ণনা করে; নিরাপদ পথ বা আপনার অবস্থান নিশ্চিত করে না।', spatial_empty: 'এখনো কোনো ঘর ক্যালিব্রেট করা হয়নি। শুরু করতে \'ঘর ক্যালিব্রেট করুন\' চাপুন।',
     clothes_title: 'পোশাক ও রঙ',
     log_calib: 'ক্যালিব্রেট করা হয়েছে: {r}', log_clothes: 'পোশাক: {c} {g}',
     ocr_heading: 'পাওয়া লেখা (টেসেরাক্ট ওসিয়ার)',
@@ -1068,13 +1077,20 @@ const I18N = {
   }
 };
 
-let lang = 'en'; // UI is permanently in clean, high-contrast English
-let voiceLang = 'bn'; // Voice delivery: 'bn' (Bangla) or 'en' (English)
-try { voiceLang = localStorage.getItem('astha.voice_lang') || 'bn'; } catch (e) {}
+let uiLang = 'bn'; // Interface and voice language are independent preferences.
+let lang = uiLang; // Retained for existing locale-aware presentation code.
+let voiceLang = 'bn';
+try {
+  const savedUi = localStorage.getItem('astha.ui_lang');
+  if (savedUi === 'bn' || savedUi === 'en') uiLang = savedUi;
+  lang = uiLang;
+  const savedVoice = localStorage.getItem('astha.voice_lang');
+  if (savedVoice === 'bn' || savedVoice === 'en') voiceLang = savedVoice;
+} catch (e) {}
 
-// Visual UI translations are ALWAYS English
+// Resolve existing interface strings with a safe English fallback.
 function t(key, params) {
-  let s = I18N.en[key] ?? key;
+  let s = I18N[uiLang]?.[key] ?? I18N.en[key] ?? key;
   if (params) for (const k in params) s = s.split('{' + k + '}').join(params[k]);
   return s;
 }
@@ -1295,8 +1311,13 @@ cropCanvas.width = 224; cropCanvas.height = 224;
 /* =====================================================================
    6. UI & Language State
    ===================================================================== */
+function setUiLanguage(next) {
+  uiLang = next === 'en' ? 'en' : 'bn'; lang = uiLang;
+  try { localStorage.setItem('astha.ui_lang', uiLang); } catch (e) {}
+  applyLanguage();
+}
 function setVoiceLanguage(next, silent) {
-  voiceLang = next;
+  voiceLang = next === 'en' ? 'en' : 'bn';
   updateVoiceSupport();
   try { localStorage.setItem('astha.voice_lang', voiceLang); } catch (e) {}
   if ($('voice-lang-bn')) $('voice-lang-bn').setAttribute('aria-pressed', voiceLang === 'bn');
@@ -1312,7 +1333,8 @@ function setVoiceLanguage(next, silent) {
 }
 
 function applyLanguage() {
-  document.documentElement.lang = 'en';
+  document.documentElement.lang = uiLang;
+  if ($('ui-language')) { $('ui-language').value = uiLang; $('ui-language').setAttribute('aria-label', t('ui_language')); }
   document.title = t('brand') + ' — ' + t('tagline');
   document.querySelectorAll('[data-i18n]').forEach(el => {
     const key = el.dataset.i18n;
@@ -2076,9 +2098,7 @@ function afterLiveUpdate() {
     }
     if (!worldSorted().some(isHazard)) showHazard(false);
   }
-  if (typeof trackItemPlacementOnFurniture === 'function') {
-    trackItemPlacementOnFurniture(captureFrame(640), state.lastCocoPreds);
-  }
+  // Personal memories are saved only by an explicit remember or placement request.
   if (!state.narrate) return;
   if (state.listening || reader.active || asthaSpeaking()) return;
   const fresh = worldSorted().filter(o => (state.announced.get(o.id) || 0) < now - 12000 && now - o.first < 2500 && o.score >= (o.src === 'coco' ? 0.55 : 0.28));
@@ -2583,8 +2603,9 @@ function updateVoiceSupport() {
 function makeUtterance(text, language) {
   const u = new SpeechSynthesisUtterance(text);
   const matches = voices.filter(v => v.lang.toLowerCase().startsWith(language));
-  const selected = privacyMode ? matches.find(v => v.localService) : matches[0];
-  if (privacyMode && !selected) return null;
+  const localOnly = !remoteProcessingAllowed();
+  const selected = localOnly ? matches.find(v => v.localService) : matches[0];
+  if (localOnly && !selected) return null;
   if (selected) u.voice = selected;
   u.lang = language === 'bn' ? 'bn-BD' : 'en-US';
   u.rate = Number($('speech-rate').value) || 1;
@@ -3163,7 +3184,7 @@ function enhancementBoot() {
     $('font-select').value = savedFont;
 
     const savedVoice = localStorage.getItem('astha.voice_lang') || 'bn';
-    voiceLang = savedVoice;
+    if (savedVoice === 'bn' || savedVoice === 'en') voiceLang = savedVoice;
     if ($('voice-lang-bn')) $('voice-lang-bn').setAttribute('aria-pressed', voiceLang === 'bn');
     if ($('voice-lang-en')) $('voice-lang-en').setAttribute('aria-pressed', voiceLang === 'en');
 

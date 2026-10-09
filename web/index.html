@@ -577,7 +577,14 @@
       </select>
     </div>
 
-    <!-- Voice Delivery Selector (UI stays in English, spoken voice in Bangla or English) -->
+    <div class="flex items-center gap-1">
+      <label for="ui-language" class="sr-only" data-i18n="ui_language">Interface language</label>
+      <select id="ui-language" class="select-dropdown" onchange="setUiLanguage(this.value)" aria-label="Interface language">
+        <option value="bn" lang="bn">বাংলা</option><option value="en" lang="en">English</option>
+      </select>
+    </div>
+
+    <!-- Voice Delivery Selector (independent of the interface language) -->
     <div class="segmented" role="group" aria-label="Voice Delivery" title="Voice Delivery Language">
       <button id="voice-lang-en" onclick="setVoiceLanguage('en')" aria-pressed="false" title="Voice output spoken in English">Voice: English</button>
       <button id="voice-lang-bn" onclick="setVoiceLanguage('bn')" aria-pressed="true" title="Voice output spoken in Bangla (বাংলা)">Voice: বাংলা</button>
@@ -602,7 +609,7 @@
   <!-- ================= Companion Main View ================= -->
   <section class="stack">
     <div class="card companion">
-      <p class="prototype-note"><strong>Astha AI Companion</strong> · Voice-activated visual assistant. Speak naturally or ask questions anytime.</p>
+      <p class="prototype-note"><strong>Astha AI Companion</strong> · Experimental visual assistance. Use your usual mobility aid; Astha cannot confirm a safe path. আস্থা নিরাপদ পথ নিশ্চিত করতে পারে না।</p>
       <p class="prototype-note" id="secure-banner" hidden style="border-color:var(--danger)"><strong>This page is open on an insecure address.</strong> Chrome will ask for the microphone and camera every time and may block them. Open it as <code>http://localhost:8765</code> or over HTTPS. On Android, use Chrome's port forwarding (chrome://inspect on the computer) so the phone sees localhost, or a Cloudflare tunnel.</p>
       <!-- Accessible Microphone Area -->
       <div class="mic-area">
@@ -612,8 +619,8 @@
         <span class="mic-label" id="mic-label" data-i18n="mic_idle">Tap to speak</span>
         <span class="mic-hint" data-i18n="mic_hint">Ask in Bangla or English: “What is in front of me?”, “Read this”, “Where is my charger?”</span>
         <button class="chip-btn" id="hf-btn" onclick="toggleHandsFree()" aria-pressed="false" title="Keep listening for “Astha, …”">🎧 <span id="hf-label">Hands-free: off</span></button>
-        <div class="segmented" role="group" aria-label="AI Engine Mode" title="Switch between Online AI (Gemini with 20d Free Pass) and On-Device Offline Mode">
-          <button id="btn-mode-gemini" onclick="Subscription.setMode('gemini')" aria-pressed="true">✨ Online AI (20d Pass)</button>
+        <div class="segmented" role="group" aria-label="AI Engine Mode" title="Choose online processing or on-device models">
+          <button id="btn-mode-gemini" onclick="Subscription.setMode('gemini')" aria-pressed="false">✨ Online AI</button>
           <button id="btn-mode-offline" onclick="Subscription.setMode('offline')" aria-pressed="false">📱 Offline</button>
         </div>
         <div class="segmented" role="group" aria-label="Speaking mode" title="Auto: speaks up in busy places. Quiet: speaks only when asked.">
@@ -826,7 +833,7 @@
       <button class="btn small" onclick="signOut()">Sign out</button>
 
       <label class="field" for="gemini-key">Personal Gemini key (optional backup)<input id="gemini-key" type="password" autocomplete="off" placeholder="Leave blank -- the Astha server already provides this" onchange="setGeminiKey(this.value)"></label>
-      <p class="help">Astha's own server holds a Gemini key so describing, identifying, clothes, reading and screen understanding are accurate out of the box, with a strict “never invent” instruction. Paste a personal key here only as a backup for when the server is unreachable.</p>
+      <p class="help">Cloud features require a configured server or your own provider key and your consent. Descriptions can be wrong; verify before acting. A personal key is kept on this browser and should only be used on a device you trust.</p>
       <label class="field" for="speech-rate">Speaking speed<select class="select-dropdown" id="speech-rate" onchange="savePreferences()"><option value="0.8">Slower</option><option value="1" selected>Normal</option><option value="1.2">Faster</option><option value="1.5">Very fast</option></select></label>
       <label class="field" for="description-style">Description length<select class="select-dropdown" id="description-style" onchange="savePreferences()"><option value="short">Short</option><option value="detailed">Detailed</option></select></label>
       <label class="field" for="ocr-language">Reading language<select class="select-dropdown" id="ocr-language" onchange="savePreferences()"><option value="ben+eng">বাংলা + English</option><option value="eng">English</option></select></label>
@@ -835,12 +842,12 @@
       <p id="voice-support" class="help" role="status"></p>
       <p class="help">Hands-free mode keeps the microphone open in this tab and waits for “Astha, …”. Browser speech recognition may use an online service.</p>
       <button class="btn" id="private-btn" aria-pressed="false" onclick="togglePrivateMode()">Privacy mode: off</button>
-      <p id="privacy-status" class="help" role="status">Memory is kept for this session unless you unlock encrypted storage.</p>
+      <p id="privacy-status" class="help" role="status">Notes are saved on this browser and synced to your account when permitted and connected. Browser notes are not encrypted.</p>
     </div>
 
     <div class="card" id="owner-card">
       <div class="card-head"><h2>Owner ID</h2></div>
-      <p class="help">Astha can learn your face and, experimentally, your voice. With Owner lock on she only takes commands after recognising you. Browser permission prompts for the microphone and camera cannot be skipped by voice; keep the page on localhost or HTTPS so they are asked only once.</p>
+      <p class="help">Face and voice matching are experimental convenience controls, not secure authentication. Templates are saved locally for this profile. Camera and microphone access require your browser permission.</p>
       <div class="utility-row"><button class="btn accent" onclick="enrollOwnerFace()">Remember my face</button><button class="btn" onclick="enrollOwnerVoice()">Remember my voice (experimental)</button><button class="btn" onclick="ownerItsMe()">It's me</button><button class="btn" id="owner-lock-btn" aria-pressed="false" onclick="toggleOwnerLock()">Owner lock: off</button></div>
       <p class="help" id="owner-status" role="status"></p>
     </div>
@@ -898,7 +905,7 @@
         <h3 data-i18n="spatial_title">Calibrated Home Layout</h3>
         <button class="btn small accent" onclick="startHomeCalibration()" data-i18n="spatial_calibrate_btn">+ Calibrate Room</button>
       </div>
-      <p class="help" data-i18n="spatial_help">Learned room boundaries and key landmark positions guide you safely through your home.</p>
+      <p class="help" data-i18n="spatial_help">Room notes describe landmarks; they cannot confirm a safe path or your position.</p>
       <div class="list" id="spatial-list"><p class="empty-note" data-i18n="spatial_empty">No rooms calibrated yet. Tap '+ Calibrate Room' to begin.</p></div>
     </div>
 
@@ -992,6 +999,7 @@ const I18N = {
   en: {
     brand: 'Astha', badge_clinical: 'AI Visual Companion',
     tagline: 'Real-time AI visual companion for blind and low-vision users',
+    ui_language: 'Interface language',
     voice_on: 'Voice on', voice_off: 'Voice off', hw_panel: 'Hardware panel',
     viewport_empty: 'Start the camera, upload a photo, or pick a demo scene.',
     ready_title: 'Astha is ready',
@@ -1010,7 +1018,7 @@ const I18N = {
     shield_off: 'Off — tap to watch for obstacles continuously', shield_on: 'On — watching for obstacles',
     scene_noodles: 'Noodles', scene_pc: 'RGB PC', scene_tube: 'Glue tube', scene_clothes: 'Blue shirt', scene_cocksheet: 'Cocksheet',
     calib_title: 'Home Layout Calibration',
-    spatial_title: 'Calibrated Home Layout', spatial_calibrate_btn: '+ Calibrate Room', spatial_help: 'Learned room boundaries and key landmark positions guide you safely through your home.', spatial_empty: 'No rooms calibrated yet. Tap \'+ Calibrate Room\' to begin.',
+    spatial_title: 'Calibrated Home Layout', spatial_calibrate_btn: '+ Calibrate Room', spatial_help: 'Room notes describe landmarks; they cannot confirm a safe path or your position.', spatial_empty: 'No rooms calibrated yet. Tap \'+ Calibrate Room\' to begin.',
     clothes_title: 'Clothes & Color',
     log_calib: 'Calibrated room: {r}', log_clothes: 'Clothes: {c} {g}',
     ocr_heading: 'Text found (Tesseract OCR)',
@@ -1082,6 +1090,7 @@ const I18N = {
   bn: {
     brand: 'আস্থা', badge_clinical: 'এআই সঙ্গী',
     tagline: 'দৃষ্টিহীন ও স্বল্পদৃষ্টি মানুষের জন্য রিয়েল-টাইম এআই সঙ্গী',
+    ui_language: 'ইন্টারফেসের ভাষা',
     voice_on: 'কণ্ঠস্বর চালু', voice_off: 'কণ্ঠস্বর বন্ধ', hw_panel: 'হার্ডওয়্যার প্যানেল',
     viewport_empty: 'ক্যামেরা চালু করুন, ছবি আপলোড করুন, অথবা একটি ডেমো দৃশ্য বেছে নিন।',
     ready_title: 'আস্থা প্রস্তুত',
@@ -1100,7 +1109,7 @@ const I18N = {
     shield_off: 'বন্ধ — সারাক্ষণ বাধা পর্যবেক্ষণে চাপুন', shield_on: 'চালু — বাধা পর্যবেক্ষণ চলছে',
     scene_noodles: 'নুডলস', scene_pc: 'আরজিবি পিসি', scene_tube: 'আঠার টিউব', scene_clothes: 'নীল শার্ট', scene_cocksheet: 'ককশিট',
     calib_title: 'হোম লেআউট ক্যালিব্রেশন',
-    spatial_title: 'ক্যালিব্রেট করা হোম লেআউট', spatial_calibrate_btn: '+ ঘর ক্যালিব্রেট করুন', spatial_help: 'ঘরের শেখা সীমানা ও ল্যান্ডমার্ক ঘরের ভেতরে নিরাপদ পথপ্রদর্শন করে।', spatial_empty: 'এখনো কোনো ঘর ক্যালিব্রেট করা হয়নি। শুরু করতে \'ঘর ক্যালিব্রেট করুন\' চাপুন।',
+    spatial_title: 'ক্যালিব্রেট করা হোম লেআউট', spatial_calibrate_btn: '+ ঘর ক্যালিব্রেট করুন', spatial_help: 'ঘরের নোট ল্যান্ডমার্ক বর্ণনা করে; নিরাপদ পথ বা আপনার অবস্থান নিশ্চিত করে না।', spatial_empty: 'এখনো কোনো ঘর ক্যালিব্রেট করা হয়নি। শুরু করতে \'ঘর ক্যালিব্রেট করুন\' চাপুন।',
     clothes_title: 'পোশাক ও রঙ',
     log_calib: 'ক্যালিব্রেট করা হয়েছে: {r}', log_clothes: 'পোশাক: {c} {g}',
     ocr_heading: 'পাওয়া লেখা (টেসেরাক্ট ওসিয়ার)',
@@ -1171,13 +1180,20 @@ const I18N = {
   }
 };
 
-let lang = 'en'; // UI is permanently in clean, high-contrast English
-let voiceLang = 'bn'; // Voice delivery: 'bn' (Bangla) or 'en' (English)
-try { voiceLang = localStorage.getItem('astha.voice_lang') || 'bn'; } catch (e) {}
+let uiLang = 'bn'; // Interface and voice language are independent preferences.
+let lang = uiLang; // Retained for existing locale-aware presentation code.
+let voiceLang = 'bn';
+try {
+  const savedUi = localStorage.getItem('astha.ui_lang');
+  if (savedUi === 'bn' || savedUi === 'en') uiLang = savedUi;
+  lang = uiLang;
+  const savedVoice = localStorage.getItem('astha.voice_lang');
+  if (savedVoice === 'bn' || savedVoice === 'en') voiceLang = savedVoice;
+} catch (e) {}
 
-// Visual UI translations are ALWAYS English
+// Resolve existing interface strings with a safe English fallback.
 function t(key, params) {
-  let s = I18N.en[key] ?? key;
+  let s = I18N[uiLang]?.[key] ?? I18N.en[key] ?? key;
   if (params) for (const k in params) s = s.split('{' + k + '}').join(params[k]);
   return s;
 }
@@ -1562,8 +1578,13 @@ cropCanvas.width = 224; cropCanvas.height = 224;
 /* =====================================================================
    6. UI & Language State
    ===================================================================== */
+function setUiLanguage(next) {
+  uiLang = next === 'en' ? 'en' : 'bn'; lang = uiLang;
+  try { localStorage.setItem('astha.ui_lang', uiLang); } catch (e) {}
+  applyLanguage();
+}
 function setVoiceLanguage(next, silent) {
-  voiceLang = next;
+  voiceLang = next === 'en' ? 'en' : 'bn';
   updateVoiceSupport();
   if (typeof populateVoices === 'function') populateVoices();
   try { localStorage.setItem('astha.voice_lang', voiceLang); } catch (e) {}
@@ -1580,7 +1601,8 @@ function setVoiceLanguage(next, silent) {
 }
 
 function applyLanguage() {
-  document.documentElement.lang = 'en';
+  document.documentElement.lang = uiLang;
+  if ($('ui-language')) { $('ui-language').value = uiLang; $('ui-language').setAttribute('aria-label', t('ui_language')); }
   document.title = t('brand') + ' — ' + t('tagline');
   document.querySelectorAll('[data-i18n]').forEach(el => {
     const key = el.dataset.i18n;
@@ -2362,9 +2384,7 @@ function afterLiveUpdate() {
     }
     if (!worldSorted().some(isHazard)) showHazard(false);
   }
-  if (typeof trackItemPlacementOnFurniture === 'function') {
-    trackItemPlacementOnFurniture(captureFrame(640), state.lastCocoPreds);
-  }
+  // Personal memories are saved only by an explicit remember or placement request.
   if (!state.narrate) return;
   if (state.listening || reader.active || asthaSpeaking() || state.seeking) return;
   // Movement first: "a person on your left is coming closer" matters more than a new static object.
@@ -2635,7 +2655,7 @@ function identifyObject(skipCloud) {
       heartFlash({ x: 0.5, y: 0.5, mode: 'lock', label: labelText });
       logEvent(t('log_identify', { a: labelText }));
       if (typeof autoRecordMemory === 'function' && labelText) {
-        autoRecordMemory({ item: labelText, location: 'In front of camera', source: 'Identified object', score: 0.95 });
+        autoRecordMemory({ item: labelText, location: 'In front of camera', source: 'Identified object', score: null });
       }
     };
     const ocrTail = ocrText.length >= 3 ? [` The text on it says: “${ocrText.slice(0, 80)}”.`, ` এর গায়ে লেখা: “${ocrText.slice(0, 80)}”।`] : ['', ''];
@@ -2909,8 +2929,9 @@ function updateVoiceSupport() {
 function makeUtterance(text, language) {
   const u = new SpeechSynthesisUtterance(text);
   const matches = voices.filter(v => v.lang.toLowerCase().startsWith(language));
-  const selected = privacyMode ? matches.find(v => v.localService) : pickVoice(matches, language);
-  if (privacyMode && !selected) return null;
+  const localOnly = !remoteProcessingAllowed();
+  const selected = localOnly ? matches.find(v => v.localService) : pickVoice(matches, language);
+  if (localOnly && !selected) return null;
   if (selected) u.voice = selected;
   u.lang = language === 'bn' ? 'bn-BD' : 'en-US';
   u.rate = Number($('speech-rate').value) || 1;
@@ -3533,6 +3554,48 @@ function enhancementBoot() {
 // no-op.
 function apiUrl(path) { return (window.ASTHA_API_BASE || '') + path; }
 
+// Consent lasts only for this page session and is requested by the Online control.
+let remoteProcessingConsent = false;
+function requestRemoteConsent() {
+  if (privacyMode || privacyTransition || navigator.onLine === false) return false;
+  if (remoteProcessingConsent) return true;
+  const en = 'Allow online processing for this session? Camera or screen images, requests and selected personal notes may be sent to Google Gemini or Gigalogy Maira. Spoken text may be sent to Microsoft, and browser voice recognition may use an online service. Choose Cancel to keep processing on this phone. You can turn this off with On-device or Privacy mode.';
+  const bn = 'এই সেশনে অনলাইন প্রসেসিংয়ের অনুমতি দেবেন? ক্যামেরা বা স্ক্রিনের ছবি, অনুরোধ ও নির্বাচিত ব্যক্তিগত নোট Google Gemini বা Gigalogy Maira-তে পাঠানো হতে পারে। শোনানোর লেখা Microsoft-এ এবং ব্রাউজারের কণ্ঠ শনাক্তকরণ অনলাইন পরিষেবায় পাঠানো হতে পারে। এই ফোনে প্রসেসিং রাখতে Cancel চাপুন। ডিভাইস বা গোপনীয়তা মোডে অনুমতি বন্ধ করতে পারবেন।';
+  remoteProcessingConsent = window.confirm((typeof uiLang !== 'undefined' ? uiLang : voiceLang) === 'bn' ? bn : en);
+  return remoteProcessingConsent;
+}
+
+// Keep remote processing consistent across vision, voice and personal-data sync.
+function remoteProcessingAllowed() {
+  if (!remoteProcessingConsent) return false;
+  if ((typeof privacyMode !== 'undefined' && privacyMode) ||
+      (typeof privacyTransition !== 'undefined' && privacyTransition)) return false;
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return false;
+  return !(typeof Subscription !== 'undefined' && Subscription.getMode() === 'offline');
+}
+function personalDataSyncAllowed() {
+  return typeof window.ASTHA_ACCOUNT_ID === 'string' && Boolean(window.ASTHA_ACCOUNT_ID) && remoteProcessingAllowed();
+}
+function isPersonalDataPath(path) { return /^\/api\/(memories|rooms|log)(\/|$)/.test(path); }
+function deadlineSignal(timeoutMs, callerSignal) {
+  let timeoutSignal;
+  if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function') timeoutSignal = AbortSignal.timeout(timeoutMs);
+  else {
+    const timeoutController = new AbortController();
+    setTimeout(() => timeoutController.abort(), timeoutMs);
+    timeoutSignal = timeoutController.signal;
+  }
+  if (!callerSignal) return timeoutSignal;
+  if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.any === 'function') return AbortSignal.any([callerSignal, timeoutSignal]);
+  // Older mobile WebViews still retain caller cancellation and a bounded request.
+  const controller = new AbortController();
+  for (const signal of [callerSignal, timeoutSignal]) {
+    if (signal.aborted) controller.abort(signal.reason);
+    else signal.addEventListener('abort', () => controller.abort(signal.reason), { once: true });
+  }
+  return controller.signal;
+}
+
 const VoiceEchoFilter = {
   recentUtterances: [], // array of { text, words, time }
   recordMachineSpeech(text) {
@@ -3574,12 +3637,15 @@ const VoiceEngine = {
   audioEl: null,
   lastSpokeAt: 0,
   _currentResolve: null,
+  requestController: null, generation: 0,
   get speaking() {
     if (this.mode === 'audio') return !!this.audioEl && !this.audioEl.paused && !this.audioEl.ended;
     if (this.mode === 'synth') return !!(window.speechSynthesis && window.speechSynthesis.speaking);
     return false;
   },
   stop() {
+    this.generation++;
+    if (this.requestController) { this.requestController.abort(); this.requestController = null; }
     this.lastSpokeAt = Date.now();
     if (this._currentResolve) {
       const res = this._currentResolve;
@@ -3612,6 +3678,7 @@ const VoiceEngine = {
   // (voice off, nothing to say, and no fallback voice on this device).
   async speak(text, lang) {
     this.stop();
+    const generation = this.generation;
     if (!state.audio || !text) return false;
     VoiceEchoFilter.recordMachineSpeech(text);
     this.lastSpokeAt = Date.now();
@@ -3619,10 +3686,17 @@ const VoiceEngine = {
     try {
       // With no backend (static hosting, offline) go straight to the device voice instead of
       // paying a failed network round-trip before every sentence.
-      if (typeof backendReachable === 'function' && !backendReachable()) throw offlineError();
-      const res = await fetch(apiUrl('/api/speak?text=' + encodeURIComponent(text) + '&voice=' + voiceKey), { credentials: 'include' });
+      if (!remoteProcessingAllowed() || (typeof backendReachable === 'function' && !backendReachable())) throw offlineError();
+      const controller = new AbortController(); this.requestController = controller;
+      let res;
+      try { res = await fetch(apiUrl('/api/speak?text=' + encodeURIComponent(text) + '&voice=' + voiceKey), { credentials: 'include', signal: deadlineSignal(10000, controller.signal) }); }
+      finally { if (this.requestController === controller) this.requestController = null; }
+      if (generation !== this.generation) return false;
+      if (!remoteProcessingAllowed()) throw offlineError();
       if (res.ok) {
         const blob = await res.blob();
+        if (generation !== this.generation) return false;
+        if (!remoteProcessingAllowed()) throw offlineError();
         const audio = new Audio(URL.createObjectURL(blob));
         const rate = Number($('speech-rate') && $('speech-rate').value) || 1;
         audio.playbackRate = rate;
@@ -3640,6 +3714,7 @@ const VoiceEngine = {
         // fall through to the browser voice if playback itself failed
       }
     } catch (e) { /* offline, signed out, or the server is down: use the local voice instead */ }
+    if (generation !== this.generation) return false;
     if (!window.speechSynthesis) return false;
     const u = makeUtterance(sanitizeForSpeech(text), lang);
     if (!u) return false;
@@ -4337,7 +4412,7 @@ const STOP_TALKING_REGEX = /\b(stop|stop talking|shut up|be quiet|quiet|silence|
 const WAKE_RE = /(^|[\s,.!?])(astha|asta|ashtha|aastha|astar|হে আস্থা|আস্থা|আসথা|আস্তা)(?=$|[\s,.!?])/i;
 
 const SiriVoice = {
-  enabled: true,
+  enabled: false, // Hands-free listening requires an explicit user action each session.
   active: false,
   rec: null,
   restartTimer: null,
@@ -4351,10 +4426,9 @@ const SiriVoice = {
   set on(v) { if (v) this.start(); else this.stop(); },
 
   start() {
-    this.enabled = true;
+    if (!this.enabled || !remoteProcessingAllowed()) return;
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) return;
-    if (privacyMode) return;
     if (this.active && this.rec) return;
     this.active = true;
     this.lastCommandAt = Date.now();
@@ -4392,12 +4466,13 @@ const SiriVoice = {
       this.enabled = false;
       this.stop();
     } else {
+      this.enabled = true;
       this.start();
     }
   },
 
   _listen() {
-    if (!this.active || !this.enabled) return;
+    if (!this.active || !this.enabled || !remoteProcessingAllowed()) { this.stop(true); return; }
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) return;
     if (this.rec) {
@@ -4545,7 +4620,7 @@ const SiriVoice = {
 };
 
 function toggleHandsFree() { SiriVoice.toggle(); }
-function startHandsFree() { SiriVoice.start(); }
+function startHandsFree() { SiriVoice.enabled = true; SiriVoice.start(); }
 function stopHandsFree(silent) { SiriVoice.stop(silent); }
 const hf = SiriVoice;
 
@@ -4866,7 +4941,7 @@ async function handleOnDeviceVisualQA(query) {
           heartFlash({ x: 0.5, y: 0.5, mode: 'lock', label: 'ID Card' });
           recordConversationTurn('assistant', enMsg);
           if (typeof autoRecordMemory === 'function') {
-            autoRecordMemory({ item: 'ID card', location: `on the ${surfaceName} in the ${curRoom}`, room: curRoom, furniture: surfaceName, source: 'On-device OCR check', score: 0.95 });
+            autoRecordMemory({ item: 'ID card', location: `on the ${surfaceName} in the ${curRoom}`, room: curRoom, furniture: surfaceName, source: 'On-device OCR check', score: null });
           }
           return;
         }
@@ -4927,7 +5002,7 @@ async function handleOnDeviceVisualQA(query) {
             room: curRoom,
             furniture: surfaceName,
             source: 'Visual Q&A',
-            score: clipHit ? clipHit.p : (cocoHit ? cocoHit.score : 0.9)
+            score: clipHit ? clipHit.p : (cocoHit ? cocoHit.score : null)
           });
         }
         return;
@@ -5079,7 +5154,7 @@ async function handleOnDevicePlacement(query, statedItem) {
       room: curRoom,
       furniture: furniture,
       source: 'Voice placement observation',
-      score: 0.98
+      score: null, approved: true
     });
 
     const enMsg = `Got it. I see your ${finalItem}. Remembered: keeping your ${finalItem} on the ${furniture} in the ${curRoom}.`;
@@ -5142,7 +5217,7 @@ function stopListening() {
   state.listening = false;
   clearTimeout(listenTimer);
   if (recognizer) { try { recognizer.abort(); } catch (e) {} recognizer = null; }
-  $('mic')?.setAttribute('aria-label', 'Astha listening');
+  $('mic')?.setAttribute('aria-label', t('mic_idle'));
   $('mic')?.setAttribute('aria-pressed', 'false');
   $('mic')?.classList.remove('listening');
   $('mic-label') && ($('mic-label').textContent = t('mic_idle') || 'Microphone idle');
@@ -5157,18 +5232,8 @@ function companionBoot() {
   window.speechSynthesis?.addEventListener('voiceschanged', populateVoices);
   window.addEventListener('pagehide', () => { if (typeof SiriVoice !== 'undefined') SiriVoice.stop(true); });
 
-  // Voice-first activation: start Siri voice recognition on startup
-  setTimeout(() => {
-    if (typeof SiriVoice !== 'undefined') SiriVoice.start();
-  }, 400);
-
-  const unlockAudioAndVoice = () => {
-    if (typeof SiriVoice !== 'undefined' && !SiriVoice.active && SiriVoice.enabled) {
-      SiriVoice.start();
-    }
-  };
-  window.addEventListener('pointerdown', unlockAudioAndVoice, { once: true });
-  window.addEventListener('keydown', unlockAudioAndVoice, { once: true });
+  // The existing Hands-free control (or explicit voice command) grants consent.
+  // Loading the page or interacting with unrelated controls never opens the microphone.
 }
 
 /* =====================================================================
@@ -5181,17 +5246,23 @@ function companionBoot() {
 // health check has said so, skip the network instead of logging a 404 for every sync attempt.
 function backendReachable() { return !(typeof serverCloud !== 'undefined' && serverCloud.checked && serverCloud.reachable === false); }
 function offlineError() { const e = new Error('backend_unreachable'); e.status = 0; e.quiet = true; return e; }
-async function apiGet(path) {
+async function apiGet(path, options = {}) {
+  const accountId = window.ASTHA_ACCOUNT_ID;
+  if (isPersonalDataPath(path) && !personalDataSyncAllowed()) throw offlineError();
   if (typeof serverCloud !== 'undefined' && !serverCloud.checked && serverCloud.ready) await serverCloud.ready;
+  if (isPersonalDataPath(path) && (!personalDataSyncAllowed() || window.ASTHA_ACCOUNT_ID !== accountId)) throw offlineError();
   if (!backendReachable()) throw offlineError();
-  const r = await fetch(apiUrl(path), { credentials: 'include' });
+  const r = await fetch(apiUrl(path), { credentials: 'include', signal: deadlineSignal(10000, options.signal) });
   if (!r.ok) { const e = new Error('http_' + r.status); e.status = r.status; throw e; }
   return r.json();
 }
-async function apiSend(method, path, body) {
+async function apiSend(method, path, body, options = {}) {
+  const accountId = window.ASTHA_ACCOUNT_ID;
+  if (isPersonalDataPath(path) && !personalDataSyncAllowed()) throw offlineError();
   if (typeof serverCloud !== 'undefined' && !serverCloud.checked && serverCloud.ready) await serverCloud.ready;
+  if (isPersonalDataPath(path) && (!personalDataSyncAllowed() || window.ASTHA_ACCOUNT_ID !== accountId)) throw offlineError();
   if (!backendReachable()) throw offlineError();
-  const r = await fetch(apiUrl(path), { method, credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+  const r = await fetch(apiUrl(path), { method, credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined, signal: deadlineSignal(10000, options.signal) });
   if (!r.ok) { const e = new Error('http_' + r.status); e.status = r.status; throw e; }
   return r.json();
 }
@@ -5213,8 +5284,8 @@ async function refreshRooms() {
 // ---- Automatic Memory Recording Engine --------------------------------------
 // Persists every confident visual observation and placed object to personal memory.
 let _recentMemoryDedupe = []; // { item, time }
-async function autoRecordMemory({ item, location, source = 'Camera observation', score = null, room = null, furniture = null }) {
-  if (privacyMode || privacyTransition) return;
+async function autoRecordMemory({ item, location, source = 'Camera observation', score = null, room = null, furniture = null, approved = false }) {
+  if (!approved || privacyMode || privacyTransition) return;
   if (!item || !String(item).trim()) return;
   const cleanItem = String(item).trim().slice(0, 80);
   const now = Date.now();
@@ -5673,7 +5744,7 @@ async function trackItemPlacementOnFurniture(frame, cocoObjs) {
             room: recRoom,
             furniture: r.surface,
             source: 'Auto placement observation',
-            score: 0.96
+            score: null
           });
 
           if (r.en || r.bn) {
@@ -5775,7 +5846,7 @@ async function trackItemPlacementOnFurniture(frame, cocoObjs) {
           room,
           furniture: surface,
           source: 'Auto placement observation',
-          score: item.score || 0.88
+          score: item.score ?? null
         });
 
         const enMsg = `Noted: your ${detectedItemName} is on the ${surface} in the ${room}.`;
@@ -6072,18 +6143,24 @@ async function togglePrivateMode() {
   try {
     stopAllSpeech();
     privacyMode = entering;
-    if (privacyMode) clearPrivateSession();
+    if (privacyMode) {
+      remoteProcessingConsent = false;
+      SiriVoice.enabled = false; SiriVoice.stop(true);
+      clearPrivateSession();
+    }
     $('private-btn').setAttribute('aria-pressed', privacyMode);
     $('private-btn').textContent = 'Privacy mode: ' + (privacyMode ? 'on' : 'off');
     $('privacy-status').textContent = privacyMode
       ? 'New memories, room notes and activity are not saved while this is on. Existing account data is untouched.'
-      : 'Session memory is on and saved to your account.';
+      : 'Notes are saved on this browser; account sync needs permission and a connection. Browser notes are not encrypted.';
     if (!privacyMode) { await refreshMemory(); await refreshRooms(); }
     announce(privacyMode ? 'Privacy mode is on. Nothing new will be saved until you turn it off.' : 'Privacy mode is off.',
       privacyMode ? 'গোপনীয়তা মোড চালু। বন্ধ না করা পর্যন্ত নতুন কিছু সংরক্ষণ হবে না।' : 'গোপনীয়তা মোড বন্ধ।');
   } finally { privacyTransition = false; $('private-btn').disabled = false; }
 }
 async function signOut() {
+  if (typeof window.ASTHA_CLEAR_ACCOUNT === 'function') window.ASTHA_CLEAR_ACCOUNT({ logout: true });
+  if (typeof stopAllSpeech === 'function') stopAllSpeech();
   try { await apiSend('POST', '/api/auth/logout', {}); } catch (e) {}
   location.reload();
 }
@@ -6429,8 +6506,15 @@ function eyeBoot() {
        heavy understanding goes to the cloud with a strict "never invent"
        instruction. The key is stored only in this browser.
    ===================================================================== */
-const cloud = { key: '', model: 'gemini-2.0-flash', models: ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-flash-8b'], lastCallAt: 0, lastVerifyAt: 0, badKeyWarned: false };
+const cloud = { key: '', model: 'gemini-3.6-flash', models: ['gemini-3.6-flash'], lastCallAt: 0, lastVerifyAt: 0, badKeyWarned: false };
 const serverCloud = { checked: false, available: false };
+
+function configuredClientModels() {
+  const models = window.ASTHA_GEMINI_MODELS;
+  if (Array.isArray(models) && models.length > 0 && models.length <= 3 &&
+      models.every(id => typeof id === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,99}$/.test(id))) return [...new Set(models)];
+  return ['gemini-3.6-flash'];
+}
 
 function promptGeminiKey() {
   const current = cloud.key || '';
@@ -6441,92 +6525,47 @@ function promptGeminiKey() {
   }
 }
 
-// ---- 20-Day Free Subscription / Pass & Dual-Engine Mode Controller ----
+// ---- Engine preference; account entitlement is not inferred in the browser ----
 const Subscription = {
-  TRIAL_DAYS: 20,
-  START_KEY: 'astha.sub_start',
-  MODE_KEY: 'astha.ai_mode', // 'gemini' | 'offline'
-
+  MODE_KEY: 'astha.ai_mode',
   init() {
-    let start = localStorage.getItem(this.START_KEY);
-    if (!start) {
-      start = String(Date.now());
-      try { localStorage.setItem(this.START_KEY, start); } catch (e) {}
-    }
-    let mode = localStorage.getItem(this.MODE_KEY);
-    if (!mode) {
-      mode = 'gemini';
-      try { localStorage.setItem(this.MODE_KEY, mode); } catch (e) {}
-    }
+    try { if (!localStorage.getItem(this.MODE_KEY)) localStorage.setItem(this.MODE_KEY, 'offline'); } catch (e) {}
     this.renderButtons();
-    return { start: parseInt(start, 10), mode };
+    return { mode: this.getMode() };
   },
-
-  getDaysRemaining() {
-    let start = parseInt(localStorage.getItem(this.START_KEY) || '0', 10);
-    if (!start) {
-      start = Date.now();
-      try { localStorage.setItem(this.START_KEY, String(start)); } catch (e) {}
-    }
-    const elapsedDays = (Date.now() - start) / (1000 * 60 * 60 * 24);
-    const remaining = Math.max(0, Math.ceil(this.TRIAL_DAYS - elapsedDays));
-    return remaining;
-  },
-
-  isTrialActive() {
-    if (cloud.key) return true; // personal key is always active
-    return this.getDaysRemaining() > 0;
-  },
-
   getMode() {
-    try {
-      const saved = localStorage.getItem(this.MODE_KEY);
-      if (saved === 'offline') return 'offline';
-    } catch (e) {}
-    return 'gemini';
+    try { if (localStorage.getItem(this.MODE_KEY) === 'gemini') return 'gemini'; } catch (e) {}
+    return 'offline';
   },
-
   setMode(mode, silent) {
-    if (mode !== 'offline' && mode !== 'gemini') mode = 'gemini';
-    try { localStorage.setItem(this.MODE_KEY, mode); } catch (e) {}
-    updateCloudBadge();
-    this.renderButtons();
-    if (!silent) {
-      if (mode === 'gemini') {
-        const days = this.getDaysRemaining();
-        if (!cloud.key && !serverCloud.available) {
-          announce(`Switched to Online AI mode. Your 20-day pass has ${days} days remaining. Please enter your Gemini API key to activate high-accuracy vision.`,
-                   `অনলাইন এআই মোড নির্বাচন করা হয়েছে। আপনার ফ্রি পাসের ${bnDigits(days)} দিন বাকি। হাই-অ্যাকুরেসি জেমিনি ভিশন চালু করতে আপনার জেমিনি কী দিন।`, 'system');
-          setTimeout(() => promptGeminiKey(), 800);
-        } else {
-          announce(`Online AI mode active. ${days} days free pass remaining. Gemini 2.0 Flash is enabled for blackboard reading, stairs, and memory.`,
-                   `অনলাইন এআই মোড চালু। ফ্রি পাসের ${bnDigits(days)} দিন বাকি। ব্ল্যাকবোর্ড, সিঁড়ি ও মেমরির জন্য জেমিনি ২.০ ফ্ল্যাশ সক্রিয়।`, 'system');
-        }
-      } else {
-        announce('Switched to On-Device Offline mode. All vision and voice processing stay on this phone without internet.',
-                 'অন-ডিভাইস অফলাইন মোড চালু হয়েছে। ইন্টারনেট ছাড়াই সব এই ফোনে চলবে।', 'system');
-      }
+    if (mode !== 'gemini') mode = 'offline';
+    if (mode === 'gemini' && !requestRemoteConsent()) return;
+    if (mode === 'offline') {
+      remoteProcessingConsent = false;
+      if (typeof SiriVoice !== 'undefined') { SiriVoice.enabled = false; SiriVoice.stop(true); }
+      if (typeof stopAllSpeech === 'function') stopAllSpeech();
     }
+    try { localStorage.setItem(this.MODE_KEY, mode); } catch (e) {}
+    updateCloudBadge(); this.renderButtons();
+    if (mode === 'gemini') {
+      const session = typeof window.ASTHA_REFRESH_SESSION === 'function' ? window.ASTHA_REFRESH_SESSION() : Promise.resolve();
+      Promise.resolve(session).then(() => refreshCloudStatus()).catch(() => updateCloudBadge());
+    }
+    if (!silent) announce(mode === 'gemini'
+      ? 'Online processing is permitted for this session. Requests use your configured server or personal key; unavailable services fall back to this phone.'
+      : 'On-device mode selected. Remote processing is off; each feature needs its downloaded model and a local voice.',
+      mode === 'gemini'
+      ? 'এই সেশনে অনলাইন প্রসেসিংয়ের অনুমতি দেওয়া হয়েছে। কনফিগার করা সার্ভার বা ব্যক্তিগত কী ব্যবহার হবে; পরিষেবা না পেলে এই ফোনের মডেল ব্যবহার করব।'
+      : 'ডিভাইস মোড নির্বাচিত। অনলাইন প্রসেসিং বন্ধ; প্রতিটি সুবিধার জন্য ডাউনলোড করা মডেল ও স্থানীয় কণ্ঠ দরকার।', 'system');
   },
-
   renderButtons() {
     const mode = this.getMode();
-    const gBtn = $('btn-mode-gemini');
-    const oBtn = $('btn-mode-offline');
-    if (gBtn) {
-      gBtn.setAttribute('aria-pressed', mode === 'gemini');
-      gBtn.classList.toggle('active', mode === 'gemini');
-    }
-    if (oBtn) {
-      oBtn.setAttribute('aria-pressed', mode === 'offline');
-      oBtn.classList.toggle('active', mode === 'offline');
+    for (const [id, value] of [['btn-mode-gemini', 'gemini'], ['btn-mode-offline', 'offline']]) {
+      const button = $(id);
+      if (button) { button.setAttribute('aria-pressed', mode === value); button.classList.toggle('active', mode === value); }
     }
   }
 };
-
-// Cloud reasoning is ready ONLY when in 'gemini' mode, trial is active, and key or server is available.
-// Default Competition Demo Pass (active out-of-the-box so competition judges never see offline mode)
-const DEFAULT_PASS_TOKEN = 'Z0FBQUFBQnFyLU43ZXVnYmNDVVJHVkduQXpqcEZlMWtLaGNsX0EtRFdEa0duaS1tbnpwSEZ2Z2Q4NllrUmw0WDlLQk5zLVU2VEdldUVxbUZsak5HUGRzbHJCOHJIb1pXQi1fN09fSFJhRmJyeTR4Zy14dXR3MnRlc1hsVEt5OWhIeGhkMlFsQW9HTDM=';
 
 function getEffectiveKey() {
   if (cloud.key) return cloud.key;
@@ -6534,20 +6573,17 @@ function getEffectiveKey() {
     const saved = localStorage.getItem('astha.gemini');
     if (saved) return saved;
   } catch (e) {}
-  // Automatically activate the competition demo pass so judges never encounter offline mode!
-  try {
-    return atob(DEFAULT_PASS_TOKEN);
-  } catch (e) {
-    return '';
-  }
+  return '';
 }
 
 function cloudReady() {
+  if (!remoteProcessingAllowed()) return false;
   if (typeof Subscription !== 'undefined') {
     if (Subscription.getMode() === 'offline') return false;
-    if (!Subscription.isTrialActive()) return false;
   }
-  return Boolean(getEffectiveKey() || serverCloud.available);
+  const key = getEffectiveKey();
+  const configuredPersonalKey = key && (!key.startsWith('gAAAAA') || window.ASTHA_MAIRA_PROJECT_KEY);
+  return Boolean(serverCloud.available || configuredPersonalKey);
 }
 function setGeminiKey(v, silent) {
   cloud.key = (v || '').trim(); cloud.badKeyWarned = false;
@@ -6555,58 +6591,28 @@ function setGeminiKey(v, silent) {
   updateCloudBadge();
   const effective = getEffectiveKey();
   const isMaira = effective.startsWith('gAAAAA');
-  const engineName = isMaira ? 'Gigalogy Maira AI' : 'Gemini 2.0 Flash';
-  const engineNameBn = isMaira ? 'মায়রা এআই' : 'জেমিনি ২.০ ফ্ল্যাশ';
-  if (!silent) announce(effective ? `${engineName} is connected. High-accuracy scene understanding, blackboard reading and memory are active.` : 'Cloud reasoning is off. I am using the on-device models only.',
-    effective ? `${engineNameBn} সংযুক্ত হয়েছে। হাই-অ্যাকুরেসি দৃশ্য বর্ণনা, ব্ল্যাকবোর্ড পড়া ও মেমরি সক্রিয়।` : 'ক্লাউড রিজনিং বন্ধ। শুধু ডিভাইসের মডেল ব্যবহার করছি।', 'system');
+  const engineName = isMaira ? 'Gigalogy Maira AI' : 'Gemini';
+  const engineNameBn = isMaira ? 'মায়রা এআই' : 'জেমিনি';
+  if (!silent) announce(effective ? `${engineName} key saved. The connection will be checked on your next request.` : 'Personal key cleared. I will use the configured server or on-device models.',
+    effective ? `${engineNameBn} কী সংরক্ষিত। পরের অনুরোধে সংযোগ পরীক্ষা হবে।` : 'ব্যক্তিগত কী মুছে ফেলা হয়েছে। কনফিগার করা সার্ভার বা ডিভাইসের মডেল ব্যবহার করব।', 'system');
 }
 function updateCloudBadge() {
   const b = $('cloud-pill'); if (!b) return;
-  const mode = typeof Subscription !== 'undefined' ? Subscription.getMode() : 'gemini';
-  if (mode === 'offline') {
-    b.textContent = '📱 On-device offline';
-    b.className = 'pill';
-    b.onclick = null;
-    b.style.cursor = 'default';
-    return;
-  }
-  const days = typeof Subscription !== 'undefined' ? Subscription.getDaysRemaining() : 20;
-  if (typeof Subscription !== 'undefined' && !Subscription.isTrialActive()) {
-    b.textContent = 'Free pass expired';
-    b.className = 'pill warn';
-    b.onclick = null;
-    b.style.cursor = 'default';
-    return;
-  }
-  const effectiveKey = getEffectiveKey();
-  if (serverCloud.available) {
-    b.textContent = `✨ Online AI (${days}d · Server)`;
-    b.className = 'pill ok';
-    b.onclick = null;
-    b.style.cursor = 'default';
-  } else if (effectiveKey) {
-    const hasPersonalKey = Boolean(cloud.key || (typeof localStorage !== 'undefined' && localStorage.getItem('astha.gemini')));
-    const isMaira = effectiveKey.startsWith('gAAAAA');
-    b.textContent = hasPersonalKey
-      ? `✨ Online AI (${days}d · ${isMaira ? 'Maira' : 'Key'} active)`
-      : `✨ Online AI (${days}d · Pass active)`;
-    b.className = 'pill ok';
-    b.onclick = () => promptGeminiKey();
-    b.style.cursor = 'pointer';
-    b.title = hasPersonalKey ? 'Click to view or change your API key' : 'Competition demo pass active. Click to use a personal key.';
-  } else {
-    b.textContent = `⚠️ Enter API Key (${days}d pass)`;
-    b.className = 'pill warn';
-    b.onclick = () => promptGeminiKey();
-    b.style.cursor = 'pointer';
-    b.title = 'Click to enter your API key (Gemini or Maira)';
-  }
+  b.onclick = null; b.style.cursor = 'default';
+  if (Subscription.getMode() === 'offline') { b.textContent = 'On-device mode'; b.className = 'pill'; return; }
+  if (!remoteProcessingConsent) { b.textContent = 'Online: consent required'; b.className = 'pill warn'; return; }
+  const key = getEffectiveKey();
+  const personalConfigured = key && (!key.startsWith('gAAAAA') || window.ASTHA_MAIRA_PROJECT_KEY);
+  b.textContent = serverCloud.available ? 'Cloud configured (server)'
+    : personalConfigured ? 'Cloud configured (personal key)'
+    : 'Cloud unavailable; on-device fallback';
+  b.className = 'pill ' + (serverCloud.available || personalConfigured ? '' : 'warn');
 }
 // Learn once at boot whether Astha's own server has a Gemini key configured, so the badge and
 // cloudReady() are accurate before the first camera action ever calls /api/vision.
 async function refreshCloudStatus() {
   try {
-    const r = await fetch(apiUrl('/api/health'), { credentials: 'include' });
+    const r = await fetch(apiUrl('/api/health'), { credentials: 'include', signal: deadlineSignal(5000) });
     serverCloud.reachable = r.ok;
     if (r.ok) { const d = await r.json(); serverCloud.available = !!d.cloud; }
   } catch (e) { serverCloud.reachable = false; /* offline; personal key (if any) still works */ }
@@ -6647,6 +6653,7 @@ If no target item is clearly placed on a surface, return JSON:
 // server holds the real Gemini key and is tried first; a personal key pasted into Your
 // preferences is only a fallback for when that server is unreachable or has none configured.
 async function gemini(task, frame, opts = {}) {
+  if (!remoteProcessingAllowed()) { const e = new Error('remote processing disabled'); e.noCloud = true; throw e; }
   cloud.lastCallAt = Date.now();
   const image = frame ? frameToJpeg(frame, opts.maxW || 800) : undefined;
   if (serverCloud.available) {
@@ -6654,6 +6661,7 @@ async function gemini(task, frame, opts = {}) {
       const res = await fetch(apiUrl('/api/vision'), {
         method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ task: 'custom', prompt: task, image, maxTokens: opts.maxTokens || 900 }),
+        signal: deadlineSignal(30000, opts.signal),
       });
       if (res.ok) { serverCloud.available = true; serverCloud.checked = true; return await res.json(); }
       if (res.status === 401) { serverCloud.checked = true; serverCloud.available = false; /* not signed in yet; fall through */ }
@@ -6665,10 +6673,11 @@ async function gemini(task, frame, opts = {}) {
   const effectiveKey = getEffectiveKey();
   if (!effectiveKey) { const e = new Error('no cloud reasoning available'); e.noCloud = true; throw e; }
 
-  // Direct client call to Gigalogy Maira AI if personal Maira key or demo pass is active
+  // Direct client call only with an explicitly configured personal Maira project.
   if (effectiveKey.startsWith('gAAAAA')) {
     try {
-      const pKey = 'A4flRx22as_RidCuFpwIUzCplIk2I2nu7zAMSVIugMo=';
+      const pKey = String(window.ASTHA_MAIRA_PROJECT_KEY || '').trim();
+      if (!pKey) { const e = new Error('Maira project not configured'); e.noCloud = true; throw e; }
       const images = image ? [{ file_content: `data:image/jpeg;base64,${image}`, filename: 'frame.jpg' }] : [];
       const mairaBody = {
         user_id: 'astha-browser-user',
@@ -6684,7 +6693,8 @@ async function gemini(task, frame, opts = {}) {
           'api-key': effectiveKey,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify(mairaBody)
+        body: JSON.stringify(mairaBody),
+        signal: deadlineSignal(30000, opts.signal)
       });
       if (mRes.ok) {
         const mData = await mRes.json();
@@ -6714,12 +6724,14 @@ async function gemini(task, frame, opts = {}) {
   const parts = [{ text: task }];
   if (image) parts.push({ inline_data: { mime_type: 'image/jpeg', data: image } });
   const body = { system_instruction: { parts: [{ text: ASTHA_SYSTEM }] }, contents: [{ role: 'user', parts }], generationConfig: { temperature: 0.2, response_mime_type: 'application/json', max_output_tokens: opts.maxTokens || 900 } };
+  cloud.models = configuredClientModels();
+  if (!cloud.models.includes(cloud.model)) cloud.model = cloud.models[0];
   const order = [cloud.model, ...cloud.models.filter(m => m !== cloud.model)];
   let lastErr = null;
   for (const model of order) {
     let res;
     try {
-      res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(effectiveKey)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+      res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(effectiveKey)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: deadlineSignal(30000, opts.signal) });
     } catch (e) { throw new Error('network'); }
     if (res.status === 404) { lastErr = new Error('model ' + model + ' not found'); continue; }
     if (res.status === 400 || res.status === 403) { if (!cloud.badKeyWarned) { cloud.badKeyWarned = true; announce('Your personal Gemini key was rejected. Check it in Your preferences.', 'আপনার ব্যক্তিগত জেমিনি কী গ্রহণ হয়নি। প্রেফারেন্সে দেখুন।', 'system'); } throw new Error('bad key'); }
@@ -6774,7 +6786,7 @@ async function cloudIdentify() {
       announce(r.en, r.bn, 'vision'); playEarcon('confirm'); haptic('CONFIRM');
       heartFlash({ x: 0.5, y: 0.5, mode: 'lock', label: r.name || '' }); logEvent('Cloud identified: ' + (r.name || ''));
       if (typeof autoRecordMemory === 'function' && r.name) {
-        autoRecordMemory({ item: r.name, location: 'Held in front of camera', source: 'Identified object', score: 0.95 });
+        autoRecordMemory({ item: r.name, location: 'Held in front of camera', source: 'Identified object', score: null });
       }
     } catch (e) {
       cloudFail(e);
@@ -6915,7 +6927,7 @@ async function cloudVisualQA(query, frame, history = '') {
           item: r.item,
           location: (r.surface ? 'On ' + r.surface : '') + (r.room_hint ? ' in ' + r.room_hint : (r.surface ? '' : 'In front of you')),
           source: 'Visual question answer',
-          score: 0.95
+          score: null
         });
       }
       return r;
@@ -6957,14 +6969,14 @@ async function cloudRecordPlacement(query, frame, rooms) {
         heartFlash({ x: 0.5, y: 0.5, mode: 'lock', label: r.item || 'Item' });
         logEvent('Remembered: ' + (r.item || 'item') + ' on ' + (r.surface || 'surface'));
         if (typeof autoRecordMemory === 'function' && r.item) {
-          const locStr = `on the ${r.surface || 'table'} in the ${r.room || 'reading room'}`;
+          const locStr = r.surface ? `on the ${r.surface}${r.room ? ' in the ' + r.room : ''}` : (r.room ? `in the ${r.room}` : 'Physical location unconfirmed');
           autoRecordMemory({
             item: r.item,
             location: locStr,
             room: r.room || null,
             furniture: r.surface || null,
             source: 'Voice placement observation',
-            score: 0.98
+            score: null, approved: true
           });
         }
         return r;
@@ -7022,6 +7034,26 @@ function answerYesNo(q) {
 
 // ---- Owner ID: face (face-api) and an experimental voice check (Meyda) -------
 const owner = { faceReady: false, faceLoading: null, face: null, voice: null, verifiedAt: 0, lock: false, lastAutoCheck: 0, meydaReady: null };
+function ownerNamespace() {
+  const id = window.ASTHA_LOCAL_ACCOUNT_ID || window.ASTHA_ACCOUNT_ID;
+  return 'astha.owner.v2.' + (typeof id === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(id) ? id : 'device');
+}
+function refreshOwnerContext() {
+  const key = ownerNamespace();
+  if (owner.context === key) return key;
+  owner.context = key; owner.face = null; owner.voice = null; owner.lock = false;
+  owner.verifiedAt = 0; owner.lastAutoCheck = 0;
+  // Old global biometric records have no trustworthy account owner; never import them.
+  try {
+    const face = JSON.parse(localStorage.getItem(key + '.face') || 'null');
+    if (Array.isArray(face) && face.length === 128 && face.every(Number.isFinite)) owner.face = face;
+    const voice = JSON.parse(localStorage.getItem(key + '.voice') || 'null');
+    if (voice && Array.isArray(voice.mean) && Array.isArray(voice.sd) && voice.mean.length > 1 && voice.mean.length <= 256 && voice.sd.length === voice.mean.length && voice.mean.every(Number.isFinite) && voice.sd.every(v => Number.isFinite(v) && v >= 0)) owner.voice = voice;
+    owner.lock = !!owner.face && localStorage.getItem(key + '.lock') === '1';
+  } catch (e) {}
+  renderOwner(); return key;
+}
+function ownerContextCurrent(key) { return key === ownerNamespace() && key === owner.context && !privacyMode && !privacyTransition; }
 function loadScript(src) { return new Promise((res, rej) => { const s = document.createElement('script'); s.src = src; s.onload = res; s.onerror = () => rej(new Error('load ' + src)); document.head.appendChild(s); }); }
 async function loadFaceLib() {
   if (owner.faceReady) return true;
@@ -7041,6 +7073,8 @@ async function faceDescriptor(frame) {
 }
 function faceDistance(a, b) { let s = 0; for (let i = 0; i < a.length; i++) s += (a[i] - b[i]) ** 2; return Math.sqrt(s); }
 async function enrollOwnerFace() {
+  const accountKey = refreshOwnerContext();
+  if (!ownerContextCurrent(accountKey)) return;
   if (withCamera(enrollOwnerFace)) return;
   try { await loadFaceLib(); } catch (e) { return announce('I could not load the face model. Check the internet connection.', 'ফেস মডেল লোড হয়নি। ইন্টারনেট দেখুন।', 'system'); }
   announce('Look at the camera for three seconds. I am learning your face.', 'তিন সেকেন্ড ক্যামেরার দিকে তাকান। আমি আপনার মুখ শিখছি।', 'system');
@@ -7052,21 +7086,25 @@ async function enrollOwnerFace() {
   }
   if (!samples.length) return announce('I could not find a face. Hold the phone at arm\'s length facing you and try again.', 'কোনো মুখ পাইনি। ফোনটি হাত বাড়িয়ে নিজের দিকে ধরে আবার চেষ্টা করুন।', 'system');
   const avg = samples[0].map((_, i) => samples.reduce((s, d) => s + d[i], 0) / samples.length);
+  if (!ownerContextCurrent(accountKey)) return;
   owner.face = avg; owner.verifiedAt = Date.now();
-  try { localStorage.setItem('astha.owner.face', JSON.stringify(avg)); } catch (e) {}
+  try { localStorage.setItem(accountKey + '.face', JSON.stringify(avg)); } catch (e) {}
   renderOwner(); playEarcon('confirm');
   announce('Done. I will recognise your face from now on.', 'হয়ে গেছে। এখন থেকে আপনার মুখ চিনব।', 'system'); logEvent('Owner face enrolled');
 }
 async function verifyOwnerFace(silent) {
+  const accountKey = refreshOwnerContext();
+  if (!ownerContextCurrent(accountKey)) return false;
   if (!owner.face) { if (!silent) announce('You have not shown me your face yet. Say “remember my face”.', 'এখনো আপনার মুখ শেখাননি। বলুন “আমার মুখ মনে রাখো”।', 'system'); return false; }
   if (withCamera(() => verifyOwnerFace(silent))) return false;
   try { await loadFaceLib(); } catch (e) { return false; }
   let ok = false, best = 9;
   for (let i = 0; i < 3 && !ok; i++) {
     const frame = captureFrame(640); if (!frame) break;
-    try { const d = await faceDescriptor(frame); if (d) { const dist = faceDistance(d, owner.face); best = Math.min(best, dist); ok = dist < 0.5; } } catch (e) {}
+    try { const d = await faceDescriptor(frame); if (!ownerContextCurrent(accountKey)) return false; if (d) { const dist = faceDistance(d, owner.face); best = Math.min(best, dist); ok = dist < 0.5; } } catch (e) {}
     if (!ok) await new Promise(r => setTimeout(r, 500));
   }
+  if (!ownerContextCurrent(accountKey)) return false;
   if (ok) { owner.verifiedAt = Date.now(); renderOwner(); if (!silent) { playEarcon('confirm'); announce('It is you. Welcome back.', 'হ্যাঁ, আপনি। স্বাগতম।', 'system'); } }
   else if (!silent) announce(best < 9 ? 'That face does not match the owner.' : 'I cannot see a face clearly. Face the camera in good light.', best < 9 ? 'এই মুখ মালিকের সাথে মেলে না।' : 'মুখ স্পষ্ট দেখছি না। আলোতে ক্যামেরার দিকে তাকান।', 'system');
   return ok;
@@ -7088,18 +7126,23 @@ async function captureVoiceprint(seconds) {
 }
 function voiceDistance(a, b) { let s = 0; for (let i = 1; i < a.mean.length; i++) s += Math.abs(a.mean[i] - b.mean[i]) / (a.sd[i] + 1e-3); return s / (a.mean.length - 1); }
 async function enrollOwnerVoice() {
+  const accountKey = refreshOwnerContext();
+  if (!ownerContextCurrent(accountKey)) return;
   announce('After the chime, speak naturally for five seconds. For example, tell me what you did today.', 'শব্দের পর পাঁচ সেকেন্ড স্বাভাবিকভাবে কথা বলুন। যেমন আজ কী করলেন বলুন।', 'system');
   await new Promise(r => setTimeout(r, 4500)); playEarcon('confirm');
   try {
     const vp = await captureVoiceprint(5);
+    if (!ownerContextCurrent(accountKey)) return;
     if (!vp) return announce('I did not hear enough speech. Try again in a quieter place.', 'যথেষ্ট কথা শুনিনি। একটু নীরব জায়গায় আবার চেষ্টা করুন।', 'system');
-    owner.voice = vp; try { localStorage.setItem('astha.owner.voice', JSON.stringify(vp)); } catch (e) {}
+    owner.voice = vp; try { localStorage.setItem(accountKey + '.voice', JSON.stringify(vp)); } catch (e) {}
     renderOwner(); playEarcon('confirm'); announce('Thank you. I have a voiceprint for you now. It is experimental, so your face is the main check.', 'ধন্যবাদ। আপনার কণ্ঠের ছাপ রাখলাম। এটি পরীক্ষামূলক, তাই মুখই প্রধান পরিচয়।', 'system'); logEvent('Owner voice enrolled');
   } catch (e) { announce('I could not use the microphone for the voice check.', 'কণ্ঠ পরীক্ষার জন্য মাইক্রোফোন পাইনি।', 'system'); }
 }
 async function verifyOwnerVoice() {
+  const accountKey = refreshOwnerContext();
+  if (!ownerContextCurrent(accountKey)) return null;
   if (!owner.voice) return null;
-  try { const vp = await captureVoiceprint(2.5); if (!vp) return null; const d = voiceDistance(owner.voice, vp); return { match: d < 1.1, distance: d }; } catch (e) { return null; }
+  try { const vp = await captureVoiceprint(2.5); if (!vp || !ownerContextCurrent(accountKey)) return null; const d = voiceDistance(owner.voice, vp); return { match: d < 1.1, distance: d }; } catch (e) { return null; }
 }
 function ownerVerified() { return Date.now() - owner.verifiedAt < 10 * 60 * 1000; }
 // Gate for commands when the owner lock is on: face first; voice check as a fallback.
@@ -7111,20 +7154,26 @@ function ownerGate(query) {
   return false;
 }
 async function ownerItsMe() {
+  const accountKey = refreshOwnerContext();
+  if (!ownerContextCurrent(accountKey)) return;
   const faceOk = await verifyOwnerFace(true);
+  if (!ownerContextCurrent(accountKey)) return;
   if (faceOk) { playEarcon('confirm'); return announce('It is you. Unlocked.', 'হ্যাঁ, আপনি। আনলক হয়েছে।', 'system'); }
   if (owner.voice) {
     announce('Say a few words so I can check your voice.', 'কয়েকটি কথা বলুন, আপনার কণ্ঠ মিলিয়ে দেখি।', 'system');
     await new Promise(r => setTimeout(r, 2500)); playEarcon('confirm');
     const v = await verifyOwnerVoice();
+    if (!ownerContextCurrent(accountKey)) return;
     if (v && v.match) { owner.verifiedAt = Date.now(); renderOwner(); playEarcon('confirm'); return announce('Your voice matches. Unlocked.', 'আপনার কণ্ঠ মিলেছে। আনলক হয়েছে।', 'system'); }
     return announce('I could not confirm your voice. Please face the camera instead.', 'কণ্ঠ নিশ্চিত হয়নি। ক্যামেরার দিকে তাকান।', 'system');
   }
   announce('I could not recognise you. Face the camera in good light, or say “remember my face” to enrol.', 'আপনাকে চিনতে পারিনি। আলোতে ক্যামেরার দিকে তাকান, বা বলুন “আমার মুখ মনে রাখো”।', 'system');
 }
 function toggleOwnerLock() {
+  const accountKey = refreshOwnerContext();
+  if (!ownerContextCurrent(accountKey)) return;
   if (!owner.face && !owner.lock) return announce('Show me your face first: say “remember my face”.', 'আগে আপনার মুখ দেখান: বলুন “আমার মুখ মনে রাখো”।', 'system');
-  owner.lock = !owner.lock; try { localStorage.setItem('astha.owner.lock', owner.lock ? '1' : '0'); } catch (e) {}
+  owner.lock = !owner.lock; try { localStorage.setItem(accountKey + '.lock', owner.lock ? '1' : '0'); } catch (e) {}
   renderOwner(); playEarcon('click');
   announce(owner.lock ? 'Owner lock is on. I will only take commands after I recognise you.' : 'Owner lock is off.', owner.lock ? 'মালিক লক চালু। আপনাকে চিনলেই কেবল নির্দেশ মানব।' : 'মালিক লক বন্ধ।', 'system');
 }
@@ -7136,7 +7185,7 @@ function renderOwner() {
 }
 // Keep the owner verified quietly while a face is in view (auto-refresh every 20 s).
 async function ownerAutoCheck() {
-  if (!owner.face || !owner.faceReady || state.source !== 'camera' || state.busy) return;
+  if (privacyMode || privacyTransition || !owner.face || !owner.faceReady || state.source !== 'camera' || state.busy) return;
   const now = Date.now(); if (now - owner.lastAutoCheck < 20000 || ownerVerified() && now - owner.verifiedAt < 5 * 60 * 1000) return;
   owner.lastAutoCheck = now;
   if (!state.lastCocoPreds.some(o => o.id === 'person')) return;
@@ -7158,13 +7207,13 @@ function cloudBoot() {
   try { cloud.key = localStorage.getItem('astha.gemini') || ''; } catch (e) {}
   if ($('gemini-key')) {
     $('gemini-key').value = cloud.key;
-    if (!cloud.key) $('gemini-key').placeholder = '✨ Competition Pass active (or enter personal key)';
+    if (!cloud.key) $('gemini-key').placeholder = 'Optional personal key; otherwise the configured server or on-device models';
   }
   updateCloudBadge();
   serverCloud.ready = refreshCloudStatus(); // memory/room syncs await this before their first request
   let mode = 'auto'; try { mode = localStorage.getItem('astha.mode') || 'auto'; } catch (e) {}
   setMode(mode, true);
-  try { const f = localStorage.getItem('astha.owner.face'); if (f) owner.face = JSON.parse(f); const v = localStorage.getItem('astha.owner.voice'); if (v) owner.voice = JSON.parse(v); owner.lock = localStorage.getItem('astha.owner.lock') === '1'; } catch (e) {}
+  refreshOwnerContext();
   renderOwner(); secureBanner();
   if (owner.face) loadFaceLib().catch(() => {});
 }
@@ -7221,8 +7270,8 @@ const ClientRAG = {
         if (text.includes(t)) score += (t.length >= 4 ? 3 : 1.5);
       }
       const hoursAgo = Math.max(0, (now - new Date(m.time).getTime()) / (1000 * 3600));
-      if (hoursAgo < 2) score += 2;
-      else if (hoursAgo < 24) score += 1;
+      if (score > 0 && hoursAgo < 2) score += 2;
+      else if (score > 0 && hoursAgo < 24) score += 1;
       return { type: 'memory', title: m.item, location: m.location, time: m.time, score };
     }).filter(m => m.score > 0).sort((a, b) => b.score - a.score);
 
@@ -7290,16 +7339,10 @@ AsthaToolRegistry.register('tool_rag_retrieve', 'Retrieves relevant memories and
   const q = args.search_query || '';
   const local = ClientRAG.search(q);
   // Try server RAG if online
-  if (typeof apiUrl === 'function' && serverCloud.available) {
+  if (typeof apiSend === 'function' && remoteProcessingAllowed() && serverCloud.available) {
     try {
-      const r = await fetch(apiUrl('/api/rag/query'), {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: q, limit: 5 })
-      });
-      if (r.ok) {
-        const srv = await r.json();
+      const srv = await apiSend('POST', '/api/rag/query', { query: q, limit: 5 });
+      if (srv) {
         return {
           found: true,
           memories: srv.memories || local.memories,
@@ -7429,23 +7472,25 @@ AsthaToolRegistry.register('tool_spatial_guidance', 'Provides directional alignm
   return { delivered: true, direction: args.direction };
 });
 
-AsthaToolRegistry.register('tool_memory_save', 'Saves a confirmed item location into memory', async (args) => {
+AsthaToolRegistry.register('tool_memory_save', 'Saves a confirmed item location into memory', async (args, ctx) => {
   const item = args.item;
   const loc = args.location;
-  if (!item || !loc) return { saved: false };
+  // Model-generated arguments cannot authorize persistence; the caller must own approval.
+  if (!item || !loc || ctx?.memorySaveApproved !== true) return { saved: false, error: 'explicit_approval_required' };
   if (typeof autoRecordMemory === 'function') {
-    autoRecordMemory({ item, location: loc, source: 'Autonomous Agent Verification', score: 0.95 });
+    const entry = await autoRecordMemory({ item, location: loc, source: 'Approved agent note', score: null, approved: true });
+    return { saved: !!entry, item, location: loc };
   }
-  return { saved: true, item, location: loc };
+  return { saved: false };
 });
 
 AsthaToolRegistry.register('tool_safety_scan', 'Evaluates walking path for stairs, drops, and obstacles', async (args, ctx) => {
   const frame = ctx.frame || captureFrame(640);
-  if (!frame) return { safe: true };
+  if (!frame) return { safe: null, error: 'no_frame' };
   const cocoObjs = await runCoco(frame);
   const hazard = EdgeAndStairsDetector.evaluate(frame, cocoObjs);
   return {
-    safe: !hazard,
+    safe: null, // A camera scan cannot establish a safe walking path.
     hazard: hazard ? hazard.labelEn : null,
     hazard_bn: hazard ? hazard.labelBn : null
   };
@@ -7469,7 +7514,10 @@ const AsthaEvaluator = {
     }
 
     if (step.tool === 'tool_vision_detect') {
-      if (toolOutput.found && toolOutput.confidence >= (step.args.min_confidence || 0.45)) {
+      const target = String(step.args?.target_item || '').toLowerCase().trim();
+      const item = typeof toolOutput.item === 'string' ? toolOutput.item.toLowerCase().trim() : '';
+      const matches = target && item && (target === item || ClientRAG.expandTerms(target).includes(item));
+      if (toolOutput.found === true && matches && Number.isFinite(toolOutput.confidence) && toolOutput.confidence <= 1 && toolOutput.confidence >= (step.args?.min_confidence || 0.45)) {
         return { verified: true, score: toolOutput.confidence, needsCorrection: false };
       }
       // Failure: Target not found in frame -> Autonomous self-correction (pan/tilt guidance)
@@ -7502,7 +7550,13 @@ const AsthaEvaluator = {
       };
     }
 
-    return { verified: true, score: 0.8, needsCorrection: false };
+    const supported = {
+      tool_rag_retrieve: () => toolOutput.found === true && [toolOutput.memories, toolOutput.rooms].some(rows => Array.isArray(rows) && rows.length > 0),
+      tool_spatial_guidance: () => toolOutput.delivered === true,
+      tool_memory_save: () => toolOutput.saved === true,
+    };
+    const verified = !toolOutput.error && !!supported[step.tool]?.();
+    return { verified, score: verified ? 1 : 0, needsCorrection: false };
   }
 };
 
@@ -8212,22 +8266,67 @@ function pathObstacles(excludeId) {
 
 // ---- Local, persistent memory (this phone) -----------------------------------
 const LocalStore = {
-  KEY: 'astha.local.v1', timer: null,
+  get KEY() {
+    const account = window.ASTHA_LOCAL_ACCOUNT_ID || window.ASTHA_ACCOUNT_ID;
+    return 'astha.local.v2.' + (typeof account === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(account) ? account : 'device');
+  },
+  timer: null, deletions: [], loadedKey: null, revision: 0,
   load() {
     try {
       const d = JSON.parse(localStorage.getItem(this.KEY) || '{}');
+      this.deletions = Array.isArray(d.deletions) ? d.deletions.filter(p => typeof p === 'string' && /^\/api\/(memories|rooms|log)(\/[A-Za-z0-9_-]{1,128})?$/.test(p)) : [];
+      this.loadedKey = this.KEY;
       const mem = Array.isArray(d.memory) ? d.memory.filter(m => m && typeof m.item === 'string' && typeof m.location === 'string' && m.uid) : [];
       const rooms = Array.isArray(d.rooms) ? d.rooms.filter(r => r && typeof r.name === 'string') : [];
       return { memory: mem, rooms };
-    } catch (e) { return { memory: [], rooms: [] }; }
+    } catch (e) { this.deletions = []; this.loadedKey = this.KEY; return { memory: [], rooms: [] }; }
   },
   save() {
     if (typeof privacyMode !== 'undefined' && privacyMode) return;
-    try { localStorage.setItem(this.KEY, JSON.stringify({ memory: state.memory.slice(0, 80), rooms: state.spatialHome.slice(0, 30), saved: Date.now() })); } catch (e) {}
+    if (this.loadedKey !== this.KEY) this.load();
+    try { localStorage.setItem(this.KEY, JSON.stringify({ memory: state.memory.slice(0, 80), rooms: state.spatialHome.slice(0, 30), deletions: this.deletions, saved: Date.now() })); } catch (e) {}
   },
-  scheduleSave() { clearTimeout(this.timer); this.timer = setTimeout(() => this.save(), 250); },
-  clear() { try { localStorage.removeItem(this.KEY); } catch (e) {} },
+  scheduleSave() { clearTimeout(this.timer); const key = this.KEY; this.timer = setTimeout(() => { if (key === this.KEY) this.save(); }, 250); },
+  queueDelete(path) {
+    if (this.loadedKey !== this.KEY) this.load();
+    if (!this.deletions.includes(path)) this.deletions.push(path);
+    this.revision += 1;
+    this.save();
+  },
+  hides(kind, id) { return this.deletions.includes('/api/' + kind) || this.deletions.includes('/api/' + kind + '/' + id); },
+  async flushDeletions() {
+    if (this.loadedKey !== this.KEY) this.load();
+    const key = this.KEY;
+    for (const path of [...this.deletions]) {
+      try {
+        await apiSend('DELETE', path);
+        if (key !== this.KEY) return false;
+        this.deletions = this.deletions.filter(p => p !== path); this.save();
+      } catch (e) { return false; }
+    }
+    return true;
+  },
+  clear() { clearTimeout(this.timer); this.deletions = []; this.loadedKey = this.KEY; try { localStorage.removeItem(this.KEY); } catch (e) {} },
 };
+// One note can be saved directly while a refresh also retries pending notes.
+// Share the in-flight create so those paths cannot create duplicate server records.
+const memoryUploads = new WeakMap();
+function uploadLocalMemory(entry, accountKey) {
+  if (memoryUploads.has(entry)) return memoryUploads.get(entry);
+  const upload = (async () => {
+    if (!entry.pending) return;
+    const result = await apiSend('POST', '/api/memories', { item: entry.item, location: entry.location, source: entry.source, score: entry.score });
+    if (accountKey !== LocalStore.KEY) return;
+    entry.pending = false;
+    if (result && result.id) {
+      entry.uid = String(result.id);
+      if (!state.memory.includes(entry)) LocalStore.queueDelete('/api/memories/' + encodeURIComponent(entry.uid));
+    }
+    LocalStore.save(); renderMemory();
+  })().finally(() => { if (memoryUploads.get(entry) === upload) memoryUploads.delete(entry); });
+  memoryUploads.set(entry, upload);
+  return upload;
+}
 function bnDigits(n) { return String(n).replace(/\d/g, d => '০১২৩৪৫৬৭৮৯'[d]); }
 function newUid() { return (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : 'mem_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7); }
 function relativeTime(iso) {
@@ -8248,6 +8347,9 @@ function relativeTime(iso) {
 
 // Memory: local first, server as backup. Overrides the server-only versions in the module.
 async function refreshMemory() {
+  if (privacyMode || privacyTransition) return;
+  const accountKey = LocalStore.KEY;
+  if (LocalStore.loadedKey !== accountKey) LocalStore.load();
   if (!state.memory.length) {
     const d = LocalStore.load();
     if (d.memory.length) state.memory = d.memory;
@@ -8255,24 +8357,38 @@ async function refreshMemory() {
   }
   renderMemory();
   try {
+    await LocalStore.flushDeletions();
+    const revision = LocalStore.revision;
     const d = await apiGet('/api/memories');
-    const server = (d.memories || []).map(m => ({ uid: String(m.id), id: m.obj_id || undefined, item: m.item, location: m.location, source: m.source, score: m.score, time: new Date(m.created_at).toISOString() }));
+    if (accountKey !== LocalStore.KEY || privacyMode || privacyTransition || revision !== LocalStore.revision) return;
+    const server = (d.memories || []).filter(m => !LocalStore.hides('memories', String(m.id))).map(m => ({ uid: String(m.id), id: m.obj_id || undefined, item: m.item, location: m.location, source: m.source, score: m.score, time: new Date(m.created_at).toISOString() }));
     for (const m of state.memory.filter(x => x.pending)) {
-      try { const r = await apiSend('POST', '/api/memories', { item: m.item, location: m.location, source: m.source, score: m.score }); m.pending = false; if (r && r.id) m.uid = String(r.id); } catch (e) { break; }
+      try {
+        await uploadLocalMemory(m, accountKey);
+        if (accountKey !== LocalStore.KEY) return;
+        if (!m.pending && state.memory.includes(m)) server.push(m);
+      } catch (e) { break; }
     }
     const key = m => (m.item + '|' + m.location).toLowerCase();
     const merged = new Map(); server.forEach(m => merged.set(key(m), m));
     state.memory.forEach(m => { const k = key(m); if (m.pending || merged.has(k)) merged.set(k, Object.assign({}, merged.get(k) || {}, m)); });
-    state.memory = [...merged.values()].sort((a, b) => new Date(b.time) - new Date(a.time)).slice(0, 80);
+    if (accountKey !== LocalStore.KEY || privacyMode || privacyTransition || revision !== LocalStore.revision) return;
+    state.memory = [...merged.values()].filter(m => !LocalStore.hides('memories', m.uid)).sort((a, b) => new Date(b.time) - new Date(a.time)).slice(0, 80);
   } catch (e) { if (!e.quiet) console.warn('memory fetch failed', e); }
   renderMemory(); LocalStore.save();
 }
 async function refreshRooms() {
+  if (privacyMode || privacyTransition) return;
+  const accountKey = LocalStore.KEY;
+  if (LocalStore.loadedKey !== accountKey) LocalStore.load();
   if (!state.spatialHome.length) { const d = LocalStore.load(); if (d.rooms.length) state.spatialHome = d.rooms; }
   renderSpatialLayout();
   try {
+    await LocalStore.flushDeletions();
+    const revision = LocalStore.revision;
     const d = await apiGet('/api/rooms');
-    const server = (d.rooms || []).map(r => ({ id: String(r.id), name: r.name, notes: r.notes, updated: new Date(r.updated_at).toISOString() }));
+    if (accountKey !== LocalStore.KEY || privacyMode || privacyTransition || revision !== LocalStore.revision) return;
+    const server = (d.rooms || []).filter(r => !LocalStore.hides('rooms', String(r.id))).map(r => ({ id: String(r.id), name: r.name, notes: r.notes, updated: new Date(r.updated_at).toISOString() }));
     const byName = new Map(); server.forEach(r => byName.set(r.name.toLowerCase(), r));
     state.spatialHome.forEach(r => { if (!byName.has(r.name.toLowerCase())) byName.set(r.name.toLowerCase(), r); });
     state.spatialHome = [...byName.values()].sort((a, b) => new Date(b.updated) - new Date(a.updated)).slice(0, 30);
@@ -8302,15 +8418,16 @@ function renderSpatialLayout() {
   LocalStore.scheduleSave();
 }
 function addLocalMemory({ item, location, locationBn = null, source = 'Your note', score = null, id = undefined }) {
+  const accountKey = LocalStore.KEY;
   const entry = { uid: newUid(), id, item: String(item).trim().slice(0, 80), location: String(location).trim().slice(0, 160), locationBn: locationBn ? String(locationBn).slice(0, 160) : null, source: String(source).slice(0, 80), score: typeof score === 'number' ? score : null, time: new Date().toISOString(), pending: true };
   state.memory = [entry, ...state.memory.filter(m => m.item.toLowerCase() !== entry.item.toLowerCase())].slice(0, 80);
   renderMemory(); LocalStore.save();
-  (async () => { try { const r = await apiSend('POST', '/api/memories', { item: entry.item, location: entry.location, source: entry.source, score: entry.score }); entry.pending = false; if (r && r.id) entry.uid = String(r.id); LocalStore.save(); renderMemory(); } catch (e) { /* stays on the phone; synced on the next refresh */ } })();
+  uploadLocalMemory(entry, accountKey).catch(() => { /* stays in this account's local namespace */ });
   return entry;
 }
 let _recentMemoryDedupe2 = [];
-async function autoRecordMemory({ item, location, locationBn = null, source = 'Camera observation', score = null, room = null, furniture = null }) {
-  if (privacyMode || privacyTransition) return;
+async function autoRecordMemory({ item, location, locationBn = null, source = 'Camera observation', score = null, room = null, furniture = null, approved = false }) {
+  if (!approved || privacyMode || privacyTransition) return;
   if (!item || !String(item).trim()) return;
   const cleanItem = String(item).trim().slice(0, 80), now = Date.now();
   _recentMemoryDedupe2 = _recentMemoryDedupe2.filter(m => now - m.time < 45000);
@@ -8321,8 +8438,9 @@ async function autoRecordMemory({ item, location, locationBn = null, source = 'C
   if (furniture && curRoom) resolved = `on the ${furniture} in the ${curRoom}`;
   else if (furniture) resolved = `on the ${furniture}`;
   else if (curRoom && !resolved.toLowerCase().includes(curRoom.toLowerCase())) resolved = `${resolved} in the ${curRoom}`;
-  addLocalMemory({ item: cleanItem, location: resolved, locationBn, source, score });
+  const entry = addLocalMemory({ item: cleanItem, location: resolved, locationBn, source, score });
   logEvent(`Memory saved: ${cleanItem} (${resolved})`);
+  return entry;
 }
 async function saveManualMemory() {
   if (privacyTransition) return;
@@ -8345,20 +8463,24 @@ async function remember(id, pos) {
 async function deleteMemory(uid) {
   if (privacyTransition) return;
   state.memory = state.memory.filter(m => m.uid !== uid); renderMemory(); LocalStore.save();
-  try { await apiSend('DELETE', '/api/memories/' + encodeURIComponent(uid)); } catch (e) {}
+  LocalStore.queueDelete('/api/memories/' + encodeURIComponent(uid));
+  const synced = await LocalStore.flushDeletions();
+  if (!synced) announce('Deleted from this phone. Account deletion will retry when connected.', 'এই ফোন থেকে মুছে ফেলা হয়েছে। সংযোগ পেলে অ্যাকাউন্ট থেকে মুছে ফেলার চেষ্টা হবে।', 'system');
   $('memory-search')?.focus();
 }
 async function clearMemory() {
   if (!confirm('Delete all saved object memories and room notes from this phone and your Astha account?')) return;
   state.memory = []; state.spatialHome = []; state.log = []; LocalStore.clear();
   renderMemory(); renderSpatialLayout(); renderLog();
-  try { await Promise.all([apiSend('DELETE', '/api/memories'), apiSend('DELETE', '/api/rooms'), apiSend('DELETE', '/api/log')]); } catch (e) {}
-  announce('All personal memories and room notes deleted.', 'সব ব্যক্তিগত স্মৃতি ও ঘরের নোট মুছে ফেলা হয়েছে।', 'memory');
+  ['/api/memories', '/api/rooms', '/api/log'].forEach(path => LocalStore.queueDelete(path));
+  const synced = await LocalStore.flushDeletions();
+  announce(synced ? 'Personal memories and room notes deleted from this phone and account.' : 'Deleted from this phone. Account deletion is pending and will retry when connected.', synced ? 'এই ফোন ও অ্যাকাউন্ট থেকে ব্যক্তিগত স্মৃতি ও ঘরের নোট মুছে ফেলা হয়েছে।' : 'এই ফোন থেকে মুছে ফেলা হয়েছে। সংযোগ পেলে অ্যাকাউন্ট থেকে মুছে ফেলার চেষ্টা হবে।', 'system');
 }
 async function deleteCalibratedRoom(id) {
   if (privacyTransition) return;
   state.spatialHome = state.spatialHome.filter(r => r.id !== id); renderSpatialLayout(); LocalStore.save();
-  try { await apiSend('DELETE', '/api/rooms/' + encodeURIComponent(id)); } catch (e) {}
+  LocalStore.queueDelete('/api/rooms/' + encodeURIComponent(id));
+  if (!await LocalStore.flushDeletions()) announce('Deleted from this phone. Account deletion will retry when connected.', 'এই ফোন থেকে মুছে ফেলা হয়েছে। সংযোগ পেলে অ্যাকাউন্ট থেকে মুছে ফেলার চেষ্টা হবে।', 'system');
 }
 
 // ---- "I am keeping my wallet here": honest placement notes ----------------------
@@ -8421,7 +8543,7 @@ async function handleOnDevicePlacement(query, statedItem) {
     else if (landmarks.length) { locEn = 'near the ' + objLabel(landmarks[0]); locBn = objLabelBn(landmarks[0]) + '-এর কাছে'; }
     else { locEn = 'where the camera was pointing'; locBn = 'যেখানে ক্যামেরা তাক করা ছিল'; }
     if (room) { locEn += ' in the ' + room; locBn = room + '-এ, ' + locBn; }
-    addLocalMemory({ item, location: locEn, locationBn: locBn, source: 'Voice placement', score: seen ? 0.9 : null, id: targetId || undefined });
+    addLocalMemory({ item, location: locEn, locationBn: locBn, source: 'Voice placement', score: null, id: targetId || undefined });
     const seenEn = seen ? `I see your ${item}.` : `I did not clearly see the ${item}, but I noted the place.`;
     const seenBn = seen ? `আপনার ${itemBn || item} দেখতে পাচ্ছি।` : `${itemBn || item} স্পষ্ট দেখিনি, তবে জায়গাটা লিখে রাখলাম।`;
     const isAre = (VOCAB_BY_ID[targetId] || {}).pl ? 'are' : 'is';
@@ -8444,10 +8566,10 @@ const SEEK_TEXT = {
   found: ['Found it. Your {item} is straight ahead, {dist}. {next}', 'পেয়েছি। আপনার {item} ঠিক সামনে, {dist}। {next}'],
   found_nodist: ['Found it. Your {item} is straight ahead. {next}', 'পেয়েছি। আপনার {item} ঠিক সামনে। {next}'],
   next_reach: ['Reach forward slowly.', 'ধীরে হাত বাড়ান।'],
-  next_walk: ['Walk forward slowly; I will tell you when to stop.', 'ধীরে সামনে এগোন; কখন থামতে হবে আমি বলব।'],
-  next_obstacle: ['But there is {obs} between you and it. Step a little to the {side} first.', 'কিন্তু মাঝখানে {obs} আছে। আগে একটু {side} সরুন।'],
-  closer: ['Closer. Keep going, {dist}.', 'আরও কাছে। এগোতে থাকুন, {dist}।'],
-  stop_here: ['Stop. It is right in front of you.', 'থামুন। এটা ঠিক আপনার সামনে।'],
+  next_walk: ['The target appears ahead. Verify the route with your usual mobility aid before moving.', 'লক্ষ্যটি সামনে দেখা যাচ্ছে। চলার আগে আপনার চলাচলের সহায়ক উপায় দিয়ে পথ যাচাই করুন।'],
+  next_obstacle: ['There may be {obs} between you and it. Verify the route before moving.', 'মাঝখানে {obs} থাকতে পারে। চলার আগে পথ যাচাই করুন।'],
+  closer: ['The target appears larger. Physical distance is uncertain.', 'লক্ষ্যটি বড় দেখা যাচ্ছে। প্রকৃত দূরত্ব অনিশ্চিত।'],
+  stop_here: ['The target appears ahead. Verify its position before reaching.', 'লক্ষ্যটি সামনে দেখা যাচ্ছে। হাত বাড়ানোর আগে অবস্থান যাচাই করুন।'],
   lost: ['I lost sight of it. Move the phone back slowly.', 'এটা আর দেখছি না। ফোনটা ধীরে পেছনে আনুন।'],
   not_yet_1: ['Not seen yet. Keep turning slowly.', 'এখনো দেখছি না। ধীরে ঘুরতে থাকুন।'],
   not_yet_2: ['Try pointing the camera lower, at the table or the floor.', 'ক্যামেরা একটু নিচে, টেবিল বা মেঝের দিকে ধরুন।'],
@@ -8679,7 +8801,7 @@ function findItems(query) {
 const OfflineEar = {
   id: 'onnx-community/whisper-tiny', asr: null, loading: null,
   get status() { return (engine.ear && engine.ear.status) || 'idle'; }, active: false, cancelFlag: false,
-  wanted() { try { if (localStorage.getItem('astha.offline_voice') === '1') return true; } catch (e) {} return navigator.onLine === false; },
+  wanted() { if (typeof remoteProcessingAllowed === 'function' && !remoteProcessingAllowed()) return true; try { if (localStorage.getItem('astha.offline_voice') === '1') return true; } catch (e) {} return navigator.onLine === false; },
   async load() {
     if (this.status === 'ready') return true;
     if (this.loading) return this.loading;
@@ -8835,15 +8957,14 @@ const OfflinePack = {
   markDone(key) { const d = new Set(this.done()); d.add(key); try { localStorage.setItem('astha.offline.parts', JSON.stringify([...d])); localStorage.setItem('astha.offline.at', new Date().toISOString()); } catch (e) {} this.renderStatus(); },
   renderStatus() {
     const pill = $('offline-pill'), status = $('offline-status'); if (!pill) return;
-    const d = this.done(); const n = this.parts.filter(p => d.includes(p.key) || p.ready()).length;
+    const n = this.parts.filter(p => p.ready()).length;
     const online = navigator.onLine !== false;
-    pill.textContent = n >= this.parts.length ? 'Ready offline' : n ? `${n} of ${this.parts.length} parts on this phone` : 'Not prepared';
+    pill.textContent = n >= this.parts.length ? 'Models loaded' : n ? `${n} of ${this.parts.length} models loaded` : 'Models not verified';
     pill.className = 'pill ' + (n >= this.parts.length ? 'ok' : n ? 'warn' : '');
-    if (status) status.textContent = (online ? 'Connected. ' : 'No internet right now. ') + (n >= this.parts.length ? 'Everything Astha needs is stored on this phone; camera, reading, distance and voice input all work with the internet off.' : 'Tap Prepare while connected to download the parts once (about 260 MB in total). After that Astha works with the internet off.');
+    if (status) status.textContent = (online ? 'Connected. ' : 'No internet right now. ') + (n >= this.parts.length ? 'Models initialized in this session. Test again after reopening with the internet off; browser storage can be cleared or evicted.' : 'Tap Prepare to initialize the models (about 260 MB). Previous downloads do not guarantee availability after storage is cleared.');
   },
   async prepare() {
     if (this.running) return announce('Still preparing. I will tell you when it is done.', 'এখনো প্রস্তুত করছি। শেষ হলে বলব।', 'system');
-    if (navigator.onLine === false && !this.parts.every(p => p.ready() || this.done().includes(p.key))) return announce('I need an internet connection once to download the models. Try again when you are connected.', 'মডেল ডাউনলোডের জন্য একবার ইন্টারনেট দরকার। সংযোগ পেলে আবার চেষ্টা করুন।', 'system');
     this.running = true;
     const btn = $('offline-prepare-btn'); if (btn) btn.disabled = true;
     announce('Preparing Astha for offline use. This downloads the models once; keep the app open.', 'অফলাইনে চালানোর জন্য আস্থাকে প্রস্তুত করছি। মডেলগুলো একবার ডাউনলোড হবে; অ্যাপটি খোলা রাখুন।', 'system');
@@ -8856,7 +8977,7 @@ const OfflinePack = {
     }
     this.running = false; if (btn) btn.disabled = false;
     this.renderStatus();
-    if (ok >= this.parts.length) announce('Done. Astha is ready to work without internet: seeing, reading, distance and voice input all stay on this phone.', 'হয়ে গেছে। আস্থা এখন ইন্টারনেট ছাড়াই কাজ করতে পারবে: দেখা, পড়া, দূরত্ব ও কণ্ঠ শনাক্তকরণ সব এই ফোনেই থাকবে।', 'system');
+    if (ok >= this.parts.length) announce('Models loaded. Reopen with the internet off to check that the downloads are available.', 'মডেল লোড হয়েছে। ডাউনলোডগুলো পাওয়া যাচ্ছে কি না যাচাই করতে ইন্টারনেট বন্ধ করে অ্যাপটি আবার খুলুন।', 'system');
     else announce(`${ok} of ${this.parts.length} parts are ready. The rest could not download; try again later.`, `${bnDigits(ok)}টির মধ্যে ${bnDigits(this.parts.length)}টি অংশ প্রস্তুত। বাকিগুলো ডাউনলোড হয়নি; পরে আবার চেষ্টা করুন।`, 'system');
   },
 };
@@ -8871,7 +8992,7 @@ function offlineRoute(query, q) {
     if (Seeker.active && /\b(found it|got it|i have it|i got it|i see it|thanks|thank you)\b|পেয়েছি|পেয়ে গেছি|হয়েছে|peyechi/.test(q)) { Seeker.stop('found'); announce('Great.', 'বাহ, ভালো।', 'voice'); return true; }
     if (Seeker.active && /\b(stop (looking|searching|guiding)|cancel|never mind|forget it)\b|খোঁজা বন্ধ|থাক/.test(q)) { Seeker.stop('user'); return true; }
     if (/prepare (for |me for )?offline|download (the |all )?models|work offline|go offline|make (it|astha) work without internet|অফলাইন/.test(q)) { OfflinePack.prepare(); return true; }
-    if (/\b(am i|are we|are you) (online|offline|connected)\b|is there internet|do (i|we) have internet|ইন্টারনেট আছে|নেট আছে/.test(q)) { announce('You are connected to the internet and Gemini Online AI is active with your free pass.', 'আপনি ইন্টারনেটে যুক্ত আছেন এবং ফ্রি পাসসহ জেমিনি অনলাইন এআই চালু আছে।', 'system'); return true; }
+    if (/\b(am i|are we|are you) (online|offline|connected)\b|is there internet|do (i|we) have internet|ইন্টারনেট আছে|নেট আছে/.test(q)) { announce('Internet is connected. Cloud mode has permission and credentials; a successful model response has not yet been confirmed.', 'ইন্টারনেট সংযোগ আছে। ক্লাউড মোডে অনুমতি ও পরিচয়পত্র আছে; মডেলের সফল উত্তর এখনো নিশ্চিত করা হয়নি।', 'system'); return true; }
     return false;
   }
   if (Seeker.active && /\b(found it|got it|i have it|i got it|i see it|thanks|thank you)\b|পেয়েছি|পেয়ে গেছি|হয়েছে|peyechi/.test(q)) { Seeker.stop('found'); announce('Great.', 'বাহ, ভালো।', 'voice'); return true; }
@@ -8921,7 +9042,7 @@ function offlineBoot() {
   if (details && !$('offline-card')) {
     const card = document.createElement('div'); card.className = 'card'; card.id = 'offline-card';
     card.innerHTML = '<div class="card-head"><h2>Works without internet</h2><span class="pill" id="offline-pill">Checking…</span></div>' +
-      '<p class="help">Astha sees, reads, measures distance and understands your voice on this phone. Nothing is sent anywhere. Download the parts once; from then on the internet is optional.</p>' +
+      '<p class="help">Download models for on-device detection, reading and voice input. Select offline mode to keep requests on this phone. Distance estimates are approximate; test after reopening without internet.</p>' +
       '<div class="utility-row"><button class="btn accent" id="offline-prepare-btn" onclick="OfflinePack.prepare()">Prepare for offline use</button></div>' +
       '<p class="help" id="offline-status" role="status"></p>';
     details.parentElement.insertBefore(card, details);
@@ -8962,7 +9083,7 @@ window.__asthaBoot = function boot() {
     $('font-select').value = savedFont;
 
     const savedVoice = localStorage.getItem('astha.voice_lang') || 'bn';
-    voiceLang = savedVoice;
+    if (savedVoice === 'bn' || savedVoice === 'en') voiceLang = savedVoice;
     if ($('voice-lang-bn')) $('voice-lang-bn').setAttribute('aria-pressed', voiceLang === 'bn');
     if ($('voice-lang-en')) $('voice-lang-en').setAttribute('aria-pressed', voiceLang === 'en');
 
