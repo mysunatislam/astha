@@ -9,7 +9,7 @@ import { createUser, findByPhone, findByPhoneEquivalent, verifyPasscode, signTok
 import { memoryRouter } from './memory.js';
 import { ragRouter } from './rag.js';
 import { agentRouter } from './agent.js';
-import { callGemini, hasCloudAI } from './gemini.js';
+import { callCloudAI, hasCloudAI, getCloudProvider } from './gemini.js';
 import { synthesize } from './tts.js';
 import { createSpeechRouter } from './speech.js';
 import { getAllowedOrigins, getTrustProxyHops, getPublicOrigin, isAllowedOrigin, originGuard, createAuthRateLimiter, validateAuthBody } from './security.js';
@@ -49,7 +49,10 @@ app.use('/api/speak', express.json({ limit: '8kb' }));
 app.use(express.json({ limit: '12mb' })); // camera frames as base64 JPEG can be a few MB
 
 // ---- Health ----
-app.get('/api/health', (req, res) => res.json({ ok: true, name: 'Astha', name_bn: 'আস্থা', cloud: hasCloudAI() }));
+app.get('/api/health', (req, res) => {
+  const cloud = hasCloudAI();
+  res.json({ ok: true, name: 'Astha', name_bn: 'আস্থা', cloud, cloudProvider: cloud ? getCloudProvider() : null });
+});
 
 // ---- Auth: name + a spoken passcode, no email required ----
 app.post('/api/auth/signup', (req, res) => {
@@ -100,16 +103,16 @@ app.use('/api', authMiddleware, memoryRouter);
 app.use('/api', authMiddleware, ragRouter);
 app.use('/api', authMiddleware, agentRouter);
 
-// ---- Gemini vision proxy: the API key never reaches the browser ----
+// ---- Configured cloud vision proxy: deployment keys never reach the browser ----
 app.post('/api/vision', authMiddleware, async (req, res) => {
   const { task, image, prompt, maxTokens } = req.body || {};
   try {
-    const result = await callGemini({ task, customPrompt: prompt, imageBase64: image, maxTokens, userId: req.user?.id || 'astha-user' });
+    const result = await callCloudAI({ task, customPrompt: prompt, imageBase64: image, maxTokens, userId: req.user.id });
     res.json(result);
   } catch (e) {
     console.error('vision error:', e.code || 'error');
     const code = e.code || 'error';
-    const status = { no_key: 503, bad_key: 502, rate_limit: 429, bad_request: 400, network: 502 }[code] || 500;
+    const status = { no_key: 503, bad_key: 502, rate_limit: 429, bad_request: 400, network: 502, upstream: 502, bad_response: 502 }[code] || 500;
     res.status(status).json({ error: code, message: e.message });
   }
 });

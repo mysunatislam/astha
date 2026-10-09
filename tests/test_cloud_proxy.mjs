@@ -3,6 +3,11 @@ import assert from 'node:assert/strict';
 
 // Isolated process/database and fake provider configuration; no live provider call is allowed.
 process.env.DB_PATH = ':memory:';
+process.env.CLOUD_AI_PROVIDER = 'auto';
+process.env.MAIRA_API_KEY = '';
+process.env.MAIRA_PROJECT_KEY = '';
+process.env.MAIRA_PROFILE_ID = '';
+process.env.MAIRA_API_URL = '';
 process.env.API_KEY = '';
 process.env.PROJECT_KEY = '';
 process.env.GEMINI_API_KEY = '';

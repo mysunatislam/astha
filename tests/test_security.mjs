@@ -142,7 +142,8 @@ test('security regression requests run against an isolated server without cloud 
   const childEnv = { ...process.env, NODE_ENV: 'production',
     JWT_SECRET: randomBytes(32).toString('hex'), DB_PATH: path.join(temp, 'test.db'), PORT: String(port),
     CORS_ORIGIN: 'https://trusted.example,capacitor://localhost', PUBLIC_ORIGIN: '', TRUST_PROXY_HOPS: '0',
-    API_KEY: '', PROJECT_KEY: '', GEMINI_API_KEY: '' };
+    CLOUD_AI_PROVIDER: 'auto', MAIRA_API_KEY: '', MAIRA_PROJECT_KEY: '', MAIRA_PROFILE_ID: '',
+    MAIRA_API_URL: '', API_KEY: '', PROJECT_KEY: '', GEMINI_API_KEY: '' };
   const root = fileURLToPath(new URL('..', import.meta.url));
   const child = spawn(process.execPath, ['server/index.js'], { cwd: root, env: childEnv, stdio: ['ignore', 'pipe', 'pipe'] });
   let output = '', db;

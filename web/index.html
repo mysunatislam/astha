@@ -6504,14 +6504,14 @@ function eyeBoot() {
 }
 
 /* =====================================================================
-   16. Cloud reasoning (Gemini), modes, owner ID, yes/no follow-ups,
+   16. Cloud reasoning (configured Maira/Gemini), modes, owner ID, yes/no follow-ups,
        secure-connection guidance
        The on-device models are fast but guess; with a Gemini key the
        heavy understanding goes to the cloud with a strict "never invent"
        instruction. The key is stored only in this browser.
    ===================================================================== */
 const cloud = { key: '', model: 'gemini-3.6-flash', models: ['gemini-3.6-flash'], lastCallAt: 0, lastVerifyAt: 0, badKeyWarned: false };
-const serverCloud = { checked: false, available: false };
+const serverCloud = { checked: false, available: false, provider: null };
 
 function configuredClientModels() {
   const models = window.ASTHA_GEMINI_MODELS;
@@ -6522,7 +6522,7 @@ function configuredClientModels() {
 
 function promptGeminiKey() {
   const current = cloud.key || '';
-  const input = window.prompt('Enter your AI API Key (Google Gemini or Gigalogy Maira) to activate high-accuracy Online AI:', current);
+  const input = window.prompt('Optional personal AI API key (Google Gemini or Gigalogy Maira). The configured ASTHA server is used first:', current);
   if (input !== null) {
     setGeminiKey(input.trim());
     if ($('gemini-key')) $('gemini-key').value = input.trim();
@@ -6580,13 +6580,25 @@ function getEffectiveKey() {
   return '';
 }
 
+function personalMairaUserId() {
+  const valid = value => typeof value === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(value);
+  if (valid(window.ASTHA_ACCOUNT_ID)) return window.ASTHA_ACCOUNT_ID;
+  if (valid(window.ASTHA_MAIRA_USER_ID)) return window.ASTHA_MAIRA_USER_ID;
+  // A cached local account is not authenticated and must not be sent as another person's identity.
+  return null;
+}
+function personalMairaConfigured() {
+  return typeof window.ASTHA_MAIRA_PROJECT_KEY === 'string' &&
+    Boolean(window.ASTHA_MAIRA_PROJECT_KEY.trim()) && Boolean(personalMairaUserId());
+}
+
 function cloudReady() {
   if (!remoteProcessingAllowed()) return false;
   if (typeof Subscription !== 'undefined') {
     if (Subscription.getMode() === 'offline') return false;
   }
   const key = getEffectiveKey();
-  const configuredPersonalKey = key && (!key.startsWith('gAAAAA') || window.ASTHA_MAIRA_PROJECT_KEY);
+  const configuredPersonalKey = key && (!key.startsWith('gAAAAA') || personalMairaConfigured());
   return Boolean(serverCloud.available || configuredPersonalKey);
 }
 function setGeminiKey(v, silent) {
@@ -6603,23 +6615,30 @@ function setGeminiKey(v, silent) {
 function updateCloudBadge() {
   const b = $('cloud-pill'); if (!b) return;
   b.onclick = null; b.style.cursor = 'default';
-  if (Subscription.getMode() === 'offline') { b.textContent = 'On-device mode'; b.className = 'pill'; return; }
-  if (!remoteProcessingConsent) { b.textContent = 'Online: consent required'; b.className = 'pill warn'; return; }
+  const bn = typeof uiLang !== 'undefined' && uiLang === 'bn';
+  if (Subscription.getMode() === 'offline') { b.textContent = bn ? 'ডিভাইস মোড' : 'On-device mode'; b.className = 'pill'; return; }
+  if (!remoteProcessingConsent) { b.textContent = bn ? 'অনলাইন: অনুমতি প্রয়োজন' : 'Online: consent required'; b.className = 'pill warn'; return; }
   const key = getEffectiveKey();
-  const personalConfigured = key && (!key.startsWith('gAAAAA') || window.ASTHA_MAIRA_PROJECT_KEY);
-  b.textContent = serverCloud.available ? 'Cloud configured (server)'
-    : personalConfigured ? 'Cloud configured (personal key)'
-    : 'Cloud unavailable; on-device fallback';
+  const personalConfigured = key && (!key.startsWith('gAAAAA') || personalMairaConfigured());
+  const provider = serverCloud.provider === 'maira' ? (bn ? 'মায়রা এআই' : 'Maira AI')
+    : serverCloud.provider === 'gemini' ? (bn ? 'জেমিনি' : 'Gemini') : (bn ? 'ক্লাউড' : 'Cloud');
+  const personalProvider = key.startsWith('gAAAAA') ? (bn ? 'মায়রা এআই' : 'Maira AI') : (bn ? 'জেমিনি' : 'Gemini');
+  b.textContent = serverCloud.available ? (bn ? `${provider} কনফিগার করা আছে (সার্ভার)` : `${provider} configured (server)`)
+    : personalConfigured ? (bn ? `${personalProvider} কনফিগার করা আছে (ব্যক্তিগত কী)` : `${personalProvider} configured (personal key)`)
+    : bn ? 'ক্লাউড পাওয়া যাচ্ছে না; ডিভাইসের মডেল ব্যবহার হবে' : 'Cloud unavailable; on-device fallback';
   b.className = 'pill ' + (serverCloud.available || personalConfigured ? '' : 'warn');
 }
-// Learn once at boot whether Astha's own server has a Gemini key configured, so the badge and
-// cloudReady() are accurate before the first camera action ever calls /api/vision.
+// Health reports configuration, not a verified provider response. No credentials reach the client.
 async function refreshCloudStatus() {
   try {
     const r = await fetch(apiUrl('/api/health'), { credentials: 'include', signal: deadlineSignal(5000) });
     serverCloud.reachable = r.ok;
-    if (r.ok) { const d = await r.json(); serverCloud.available = !!d.cloud; }
-  } catch (e) { serverCloud.reachable = false; /* offline; personal key (if any) still works */ }
+    serverCloud.available = false; serverCloud.provider = null;
+    if (r.ok) {
+      const d = await r.json(); serverCloud.available = d?.cloud === true;
+      serverCloud.provider = serverCloud.available && ['maira', 'gemini'].includes(d?.cloudProvider) ? d.cloudProvider : null;
+    }
+  } catch (e) { serverCloud.reachable = false; serverCloud.available = false; serverCloud.provider = null; /* personal key (if any) still works */ }
   serverCloud.checked = true;
   updateCloudBadge();
 }
@@ -6654,7 +6673,7 @@ If no target item is clearly placed on a surface, return JSON:
 {"found": false}`,
 };
 // `task` here is the fully-resolved prompt text (CLOUD_PROMPTS.describe, etc). Astha's own
-// server holds the real Gemini key and is tried first; a personal key pasted into Your
+// server holds the configured provider credentials and is tried first; a personal key pasted into Your
 // preferences is only a fallback for when that server is unreachable or has none configured.
 async function gemini(task, frame, opts = {}) {
   if (!remoteProcessingAllowed()) { const e = new Error('remote processing disabled'); e.noCloud = true; throw e; }
@@ -6668,8 +6687,8 @@ async function gemini(task, frame, opts = {}) {
         signal: deadlineSignal(30000, opts.signal),
       });
       if (res.ok) { serverCloud.available = true; serverCloud.checked = true; return await res.json(); }
-      if (res.status === 401) { serverCloud.checked = true; serverCloud.available = false; /* not signed in yet; fall through */ }
-      else if (res.status === 503) { serverCloud.checked = true; serverCloud.available = false; /* server has no key */ }
+      if (res.status === 401) { serverCloud.checked = true; serverCloud.available = false; serverCloud.provider = null; /* not signed in yet; fall through */ }
+      else if (res.status === 503) { serverCloud.checked = true; serverCloud.available = false; serverCloud.provider = null; /* server has no key */ }
       else if (res.status === 429) { throw new Error('rate limit'); }
       // any other server-side failure: fall through to a personal key if the user has one
     } catch (e) { if (String(e.message) === 'rate limit') throw e; /* network error reaching our own server: fall through */ }
@@ -6679,17 +6698,25 @@ async function gemini(task, frame, opts = {}) {
 
   // Direct client call only with an explicitly configured personal Maira project.
   if (effectiveKey.startsWith('gAAAAA')) {
+    const userId = personalMairaUserId();
+    const pKey = typeof window.ASTHA_MAIRA_PROJECT_KEY === 'string' ? window.ASTHA_MAIRA_PROJECT_KEY.trim() : '';
+    if (!pKey || !userId) { const e = new Error('Personal Maira project and verified account or device owner required'); e.noCloud = true; throw e; }
+    const stillAllowed = () => {
+      if (!remoteProcessingAllowed() || personalMairaUserId() !== userId || opts.signal?.aborted) {
+        const e = new Error('Personal Maira request cancelled or owner changed'); e.noCloud = true; throw e;
+      }
+    };
     try {
-      const pKey = String(window.ASTHA_MAIRA_PROJECT_KEY || '').trim();
-      if (!pKey) { const e = new Error('Maira project not configured'); e.noCloud = true; throw e; }
+      stillAllowed();
       const images = image ? [{ file_content: `data:image/jpeg;base64,${image}`, filename: 'frame.jpg' }] : [];
       const mairaBody = {
-        user_id: 'astha-browser-user',
+        user_id: userId,
         query: `${ASTHA_SYSTEM}\n\nTask: ${task}`,
         conversation_type: 'question',
-        gpt_profile_id: '7edb5168-fafd-432c-80e9-de59acc9d0a2',
         images
       };
+      const profile = typeof window.ASTHA_MAIRA_PROFILE_ID === 'string' ? window.ASTHA_MAIRA_PROFILE_ID.trim() : '';
+      if (profile) mairaBody.gpt_profile_id = profile;
       const mRes = await fetch('https://api.recommender.gigalogy.com/v1/maira/ask', {
         method: 'POST',
         headers: {
@@ -6700,9 +6727,11 @@ async function gemini(task, frame, opts = {}) {
         body: JSON.stringify(mairaBody),
         signal: deadlineSignal(30000, opts.signal)
       });
-      if (mRes.ok) {
+      stillAllowed();
+      if (mRes.ok && mRes.status === 200) {
         const mData = await mRes.json();
-        return parseJsonLoose(mData?.detail?.response || '');
+        stillAllowed();
+        return parseMairaResponse(mData);
       }
       if (mRes.status === 401 || mRes.status === 403) {
         if (!cloud.badKeyWarned) {
@@ -6714,12 +6743,14 @@ async function gemini(task, frame, opts = {}) {
       if (mRes.status === 429) {
         if (!opts.isRetry) {
           await new Promise(r => setTimeout(r, 1800));
+          stillAllowed();
           return await gemini(task, frame, { ...opts, isRetry: true });
         }
         throw new Error('rate limit');
       }
-      if (!mRes.ok) throw new Error('Maira ' + mRes.status);
+      throw new Error('Maira ' + mRes.status);
     } catch (e) {
+      if (e.noCloud || e.name === 'AbortError' || opts.signal?.aborted) throw e;
       if (/bad key|rate limit/.test(String(e))) throw e;
       throw new Error('Maira unavailable');
     }
@@ -6753,6 +6784,24 @@ async function gemini(task, frame, opts = {}) {
     return parseJsonLoose(text);
   }
   throw lastErr || new Error('Gemini unavailable');
+}
+function parseMairaResponse(payload) {
+  const text = payload?.detail?.response;
+  if (typeof text !== 'string' || !text.trim() || text.length > 131072) throw new Error('Invalid Maira response');
+  const trimmed = text.trim();
+  let result;
+  if (/^[{\[]|^```/.test(trimmed)) {
+    const fenced = trimmed.startsWith('```') ? trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i) : null;
+    if (trimmed.startsWith('```') && !fenced) throw new Error('Invalid Maira JSON response');
+    const candidate = fenced ? fenced[1] : trimmed;
+    try { result = JSON.parse(candidate); } catch (e) { throw new Error('Invalid Maira JSON response'); }
+  } else {
+    try { result = JSON.parse(trimmed); } catch (e) { return { en: trimmed, bn: '' }; }
+  }
+  if (!result || typeof result !== 'object' || Array.isArray(result) || !Object.keys(result).length ||
+      (result.en !== undefined && typeof result.en !== 'string') ||
+      (result.bn !== undefined && typeof result.bn !== 'string')) throw new Error('Invalid Maira response');
+  return result;
 }
 function parseJsonLoose(text) {
   try { return JSON.parse(text); } catch (e) {}

@@ -9,7 +9,13 @@ services:
     envVars:
       - key: JWT_SECRET
         generateValue: true
-      - key: GEMINI_API_KEY
+      - key: CLOUD_AI_PROVIDER
+        value: maira
+      - key: MAIRA_API_KEY
+        sync: false
+      - key: MAIRA_PROJECT_KEY
+        sync: false
+      - key: MAIRA_PROFILE_ID
         sync: false
       - key: NODE_ENV
         value: production

@@ -6,7 +6,7 @@ import { spawnSync } from 'node:child_process';
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const python = process.env.ASTHA_PYTHON || 'python';
-const env = { ...process.env, DB_PATH: ':memory:', GEMINI_API_KEY: '', MAIRA_API_KEY: '', MAIRA_PROJECT_KEY: '', MAIRA_TOKEN: '', API_KEY: '', PROJECT_KEY: '' };
+const env = { ...process.env, DB_PATH: ':memory:', CLOUD_AI_PROVIDER: 'auto', GEMINI_API_KEY: '', MAIRA_API_KEY: '', MAIRA_PROJECT_KEY: '', MAIRA_PROFILE_ID: '', MAIRA_API_URL: '', MAIRA_TOKEN: '', API_KEY: '', PROJECT_KEY: '' };
 function run(command, args) {
   const result = spawnSync(command, args, { cwd: root, env, stdio: 'inherit' });
   if (result.error) throw result.error;

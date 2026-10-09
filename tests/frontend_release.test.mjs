@@ -213,6 +213,8 @@ test('a personal Maira key without an explicit project cannot advertise cloud re
   const h = harness({ 'astha.gemini': 'gAAAAA-test-key' });
   assert.equal(h.run('cloudReady()'), false);
   h.context.window.ASTHA_MAIRA_PROJECT_KEY = 'explicit-test-project';
+  assert.equal(h.run('cloudReady()'), false);
+  h.context.window.ASTHA_ACCOUNT_ID = 'verified-owner';
   assert.equal(h.run('cloudReady()'), true);
 });
 

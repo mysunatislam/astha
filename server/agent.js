@@ -1,7 +1,7 @@
 // Autonomous Agent Engine with Tool Orchestration, Planning, and Verification Loop
 import { Router } from 'express';
 import { nanoid } from 'nanoid';
-import { callGemini, hasCloudAI } from './gemini.js';
+import { callCloudAI, hasCloudAI } from './gemini.js';
 import { searchRAG, formatRagContextForPrompt, expandQueryTerms } from './rag.js';
 import { all, get, run } from './db.js';
 
@@ -311,7 +311,7 @@ agentRouter.post('/agent/plan', async (req, res) => {
     if (hasCloudAI()) {
       try {
         const prompt = PLANNER_PROMPT(goal, ragContext, image ? 'Camera frame provided' : 'No frame');
-        plan = await callGemini({ customPrompt: prompt, imageBase64: image, userId: req.user?.id || 'astha-user' });
+        plan = await callCloudAI({ customPrompt: prompt, imageBase64: image, userId: req.user?.id });
       } catch (err) {
         console.warn('Planner fallback to heuristic:', err.message);
       }
@@ -345,7 +345,7 @@ agentRouter.post('/agent/evaluate', async (req, res) => {
     if (hasCloudAI()) {
       try {
         const prompt = EVALUATOR_PROMPT(step, toolOutput, goal || 'General task');
-        evaluation = await callGemini({ customPrompt: prompt, userId: req.user?.id || 'astha-user' });
+        evaluation = await callCloudAI({ customPrompt: prompt, userId: req.user?.id });
       } catch (err) {
         console.warn('Evaluator fallback to heuristic:', err.message);
       }
@@ -379,10 +379,10 @@ agentRouter.post('/agent/run', async (req, res) => {
     let plan = null;
     if (hasCloudAI()) {
       try {
-        plan = await callGemini({
+        plan = await callCloudAI({
           customPrompt: PLANNER_PROMPT(goal, ragContext, image ? 'Camera frame provided' : 'No frame'),
           imageBase64: image,
-          userId: req.user?.id || 'astha-user'
+          userId: req.user?.id
         });
       } catch (e) {
         console.warn('Planner fallback to heuristic:', e.message);
@@ -403,10 +403,10 @@ agentRouter.post('/agent/run', async (req, res) => {
 
     if (hasCloudAI()) {
       try {
-        response = await callGemini({
+        response = await callCloudAI({
           customPrompt: SYNTHESIZER_PROMPT(goal, plan.steps, combinedFindings),
           imageBase64: image,
-          userId: req.user?.id || 'astha-user'
+          userId: req.user?.id
         });
       } catch (e) {
         console.warn('Synthesizer fallback:', e.message);
