@@ -331,7 +331,12 @@ await t.test('auth brute-force requests eventually receive a bounded 429 respons
   }
   assert.equal(blocked, true);
   assert.equal((await api('/api/auth/me', { token: session.token })).res.status, 200);
-  assert.equal((await api('/api/auth/logout', { method: 'POST' })).res.status, 200);
+  const logout = await api('/api/auth/logout', { method: 'POST' });
+  assert.equal(logout.res.status, 200);
+  const cleared = logout.res.headers.get('set-cookie');
+  assert.match(cleared, /astha_session=;/);
+  assert.doesNotMatch(cleared, /Max-Age=/i);
+  assert.ok(Date.parse(cleared.match(/Expires=([^;]+)/i)?.[1]) < Date.now());
 });
 
 });

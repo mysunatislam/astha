@@ -14,7 +14,7 @@ The source repository is mysunatislam/astha; the requested astha-live repository
 | Root and server npm audit | 0 reported advisories each | Checked 9 October; excludes CDN/model/native SDK assets and future advisories. |
 | Workflow YAML and whitespace | Parsed with PyYAML 6.0.3; git diff --check passes | Hosted GitHub jobs have not run. |
 | Capacitor Android sync | Passed with final web assets | Actual installer-exclusion hook also passed with a disposable archive fixture; Android/iOS fixture tests pass. |
-| Android testDebugUnitTest lintDebug assembleDebug | Passed | Existing unit suite has 1 arithmetic test. Lint: 0 errors, 15 warnings. No device instrumentation. |
+| Android testDebugUnitTest lintDebug assembleDebug | Passed | Existing unit suite has 1 arithmetic test. Lint: 0 errors, 15 warnings. No device instrumentation; authorized ADB discovery found zero attached test devices. |
 | assembleRelease bundleRelease without credentials | Expected rejection at validateReleaseInputs | No signed release APK or AAB produced. |
 | Browser local note / reload / sign-out | Observed note saved locally, persisted after reload, and absent in fresh guest | Synthetic fixture; no real user data or cloud provider result. |
 | Browser interface/voice languages | English UI switch/persistence retained Bangla voice selection; Bangla UI restored | Complete translation and physical Bangla synthesis unverified. |

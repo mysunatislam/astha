@@ -84,7 +84,10 @@ app.post('/api/auth/guest', (req, res) => {
   res.cookie('astha_session', token, COOKIE_OPTS);
   res.json({ token, userId: id });
 });
-app.post('/api/auth/logout', (req, res) => { res.clearCookie('astha_session', COOKIE_OPTS); res.json({ ok: true }); });
+app.post('/api/auth/logout', (req, res) => {
+  const options = { ...COOKIE_OPTS }; delete options.maxAge;
+  res.clearCookie('astha_session', options); res.json({ ok: true });
+});
 app.get('/api/auth/me', authMiddleware, (req, res) => {
   const { id, name, phone, voice_lang, mode, face_descriptor } = req.user;
   res.json({ id, name, phone, voice_lang, mode, face_descriptor: face_descriptor ? JSON.parse(face_descriptor) : null });
