@@ -1,5 +1,26 @@
 apply plugin: 'com.android.application'
 
+// Release signing and monotonically increasing store versions are supplied externally.
+// Debug builds remain available without production credentials.
+def releaseEnvironment = System.getenv()
+def releaseVersionCode = releaseEnvironment['ASTHA_VERSION_CODE']
+def releaseVersionName = releaseEnvironment['ASTHA_VERSION_NAME']
+if (releaseVersionCode != null && !(releaseVersionCode ==~ /[1-9][0-9]{0,9}/)) {
+    throw new GradleException('ASTHA_VERSION_CODE must be a positive integer.')
+}
+if (releaseVersionCode != null && releaseVersionCode.toLong() > 2100000000L) {
+    throw new GradleException('ASTHA_VERSION_CODE must not exceed 2100000000.')
+}
+if (releaseVersionName != null && !(releaseVersionName ==~ /[0-9]+\.[0-9]+\.[0-9]+/)) {
+    throw new GradleException('ASTHA_VERSION_NAME must have the form major.minor.patch.')
+}
+def releaseKeystorePath = releaseEnvironment['ASTHA_ANDROID_KEYSTORE_PATH']
+def releaseKeystore = releaseKeystorePath ? file(releaseKeystorePath) : null
+def requiredReleaseVariables = [
+    'ASTHA_VERSION_CODE', 'ASTHA_VERSION_NAME', 'ASTHA_ANDROID_KEYSTORE_PATH',
+    'ASTHA_ANDROID_KEYSTORE_PASSWORD', 'ASTHA_ANDROID_KEY_ALIAS', 'ASTHA_ANDROID_KEY_PASSWORD'
+]
+
 android {
     namespace = "com.astha.companion"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -7,21 +28,19 @@ android {
         applicationId "com.astha.companion"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode releaseVersionCode ? releaseVersionCode.toInteger() : 1
+        versionName releaseVersionName ?: "1.0.0"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
-             // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
-             // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
     signingConfigs {
         release {
-            storeFile file('astha-release-key.jks')
-            storePassword 'asthakey2026'
-            keyAlias 'astha'
-            keyPassword 'asthakey2026'
+            storeFile releaseKeystore
+            storePassword releaseEnvironment['ASTHA_ANDROID_KEYSTORE_PASSWORD']
+            keyAlias releaseEnvironment['ASTHA_ANDROID_KEY_ALIAS']
+            keyPassword releaseEnvironment['ASTHA_ANDROID_KEY_PASSWORD']
         }
     }
     buildTypes {
@@ -33,8 +52,26 @@ android {
     }
 }
 
+def validateReleaseInputs = tasks.register('validateReleaseInputs') {
+    group = 'verification'
+    description = 'Require external signing credentials and explicit store versions for release builds.'
+    doLast {
+        def missing = requiredReleaseVariables.findAll { !releaseEnvironment[it] }
+        if (!missing.isEmpty()) {
+            throw new GradleException('Release build requires: ' + missing.join(', '))
+        }
+        if (!releaseKeystore.isFile()) {
+            throw new GradleException('ASTHA_ANDROID_KEYSTORE_PATH must point to an existing upload keystore.')
+        }
+    }
+}
+// This also gates aggregate tasks such as `build`, rather than inspecting CLI task names.
+tasks.matching { it.name == 'preReleaseBuild' }.configureEach {
+    dependsOn validateReleaseInputs
+}
+
 repositories {
-    flatDir{
+    flatDir {
         dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
     }
 }
@@ -58,6 +95,6 @@ try {
     if (servicesJSON.text) {
         apply plugin: 'com.google.gms.google-services'
     }
-} catch(Exception e) {
-    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+} catch (Exception e) {
+    logger.info('google-services.json not found, google-services plugin not applied. Push Notifications will not work')
 }

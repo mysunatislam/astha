@@ -68,8 +68,8 @@ export async function searchRAG(userId, query, options = {}) {
     let score = scoreLexical(text, terms);
     // Recency decay boost: up to +2 for very recent memories (< 2 hours)
     const hoursAgo = Math.max(0, (now - m.created_at) / (1000 * 3600));
-    if (hoursAgo < 2) score += 2;
-    else if (hoursAgo < 24) score += 1;
+    if (score > 0 && hoursAgo < 2) score += 2;
+    else if (score > 0 && hoursAgo < 24) score += 1;
     return { type: 'memory', id: m.id, title: m.item, content: m.location, source: m.source, time: m.created_at, score };
   }).filter(m => m.score > 0);
 

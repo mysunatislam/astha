@@ -3,9 +3,10 @@
 import { scryptSync, randomBytes, timingSafeEqual } from 'node:crypto';
 import jwt from 'jsonwebtoken';
 import { nanoid } from 'nanoid';
-import { run, get } from './db.js';
+import { run, get, all } from './db.js';
+import { getJwtSecret, LEGACY_GUEST_PHONE, normalizePhone } from './security.js';
 
-const JWT_SECRET = process.env.JWT_SECRET || 'astha-default-secure-companion-secret-key-2026';
+const JWT_SECRET = getJwtSecret();
 
 export function hashPasscode(passcode) {
   const salt = randomBytes(16).toString('hex');
@@ -26,19 +27,38 @@ export function createUser({ name, phone, passcode }) {
   return id;
 }
 export function findByPhone(phone) { return get('SELECT * FROM users WHERE phone = ?', [phone]); }
+export function findByPhoneEquivalent(phone) {
+  const exact = findByPhone(phone);
+  if (exact) return exact;
+  const normalized = normalizePhone(phone);
+  if (!normalized) return null;
+  // Preserve old stored formats without rewriting or merging accounts during a security patch.
+  const legacy = all('SELECT id, phone FROM users WHERE phone IS NOT NULL')
+    .find(user => normalizePhone(user.phone) === normalized);
+  return legacy ? findById(legacy.id) : null;
+}
 export function findById(id) { return get('SELECT * FROM users WHERE id = ?', [id]); }
 
 export function signToken(userId) {
-  return jwt.sign({ sub: userId }, JWT_SECRET, { expiresIn: '180d' });
+  return jwt.sign({ sub: userId }, JWT_SECRET, { expiresIn: '180d', algorithm: 'HS256' });
+}
+export function getAuthenticatedUser(req) {
+  const bearer = (req.headers.authorization || '').match(/^Bearer\s+(\S+)$/i);
+  const token = bearer?.[1] || req.cookies?.astha_session;
+  if (!token) return null;
+  try {
+    const payload = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] });
+    if (typeof payload.sub !== 'string') return null;
+    const user = findById(payload.sub);
+    // All former shared-guest sessions are unsafe; their data stays quarantined in the DB.
+    return user && user.phone !== LEGACY_GUEST_PHONE ? user : null;
+  } catch {
+    return null;
+  }
 }
 export function authMiddleware(req, res, next) {
-  const token = req.cookies?.astha_session || (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
-  if (!token) return res.status(401).json({ error: 'not_signed_in' });
-  try {
-    const payload = jwt.verify(token, JWT_SECRET);
-    const user = findById(payload.sub);
-    if (!user) return res.status(401).json({ error: 'not_signed_in' });
-    req.user = user;
-    next();
-  } catch (e) { return res.status(401).json({ error: 'not_signed_in' }); }
+  const user = getAuthenticatedUser(req);
+  if (!user) return res.status(401).json({ error: 'not_signed_in' });
+  req.user = user;
+  next();
 }

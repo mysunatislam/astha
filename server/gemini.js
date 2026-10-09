@@ -1,8 +1,24 @@
+import { fetchCloud } from './security.js';
+
 // Server-side Gemini proxy. The key lives only in this process's environment, never sent to the
 // client, so the phone app never needs to know or store it. Mirrors the prompt contract the
 // frontend already expects (see web/cloud-client.js): {en, bn, ...task-specific fields}.
-// 'gemini-flash-latest' auto-resolves to Google's current flash model, so this list keeps
-const MODELS = ['gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-flash-latest', 'gemini-3.5-flash', 'gemini-3-flash-preview'];
+// Google's documented stable replacement for retired Gemini 2.0 Flash; reviewed 2026-10-09.
+// https://ai.google.dev/gemini-api/docs/deprecations/
+export const DEFAULT_GEMINI_MODELS = Object.freeze(['gemini-3.6-flash']);
+export function getGeminiModels(value = process.env.GEMINI_MODELS) {
+  if (value === undefined || value === '') return [...DEFAULT_GEMINI_MODELS];
+  const models = typeof value === 'string' ? value.split(',').map(model => model.trim()) : value;
+  if (!Array.isArray(models) || models.length < 1 || models.length > 3 ||
+      models.some(model => typeof model !== 'string' || !/^gemini-[a-z0-9][a-z0-9._-]{0,79}$/.test(model))) {
+    const error = new Error('GEMINI_MODELS must contain 1 to 3 exact Gemini model IDs.');
+    error.code = 'bad_request';
+    throw error;
+  }
+  // Preview/latest IDs are never defaults; operators can choose them explicitly after evaluation.
+  return [...new Set(models)];
+}
+const MODELS = getGeminiModels();
 const SYSTEM = 'You are Astha, a warm, highly perceptive, and deeply detailed visual companion for a blind user in Bangladesh. Speak as "I". Be exceptionally vivid, concrete, and comprehensive: describe the room/environment layout, surfaces, lighting, all visible objects with their exact colours, textures, materials, brands, printed text, and precise spatial arrangement (left, ahead, right, foreground, background) with rough distances. Point out any hazards (stairs, drops, obstacles, wires, fire, water) first. Never invent anything you cannot actually see; if unsure, say you are not sure. Do not describe people as animals or objects; say "a person" when a human is visible. Return only the requested JSON. "bn" must be natural spoken Bangla with the exact same rich detail and meaning as "en".';
 
 export const PROMPTS = {
@@ -73,7 +89,7 @@ export async function callMaira({ task, customPrompt, imageBase64, apiKey, proje
 
   let res;
   try {
-    res = await fetch(MAIRA_ENDPOINT, {
+    res = await fetchCloud(MAIRA_ENDPOINT, {
       method: 'POST',
       headers: {
         'project-key': pKey,
@@ -110,7 +126,7 @@ export async function callMaira({ task, customPrompt, imageBase64, apiKey, proje
 }
 
 export async function callGemini(options = {}) {
-  const { task, customPrompt, imageBase64, apiKey, projectKey, maxTokens = 900, userId } = options;
+  const { task, customPrompt, imageBase64, apiKey, projectKey, maxTokens = 900, userId, models } = options;
   const key = apiKey || process.env.API_KEY || process.env.GEMINI_API_KEY;
   const pKey = projectKey || process.env.PROJECT_KEY;
 
@@ -131,10 +147,10 @@ export async function callGemini(options = {}) {
     generationConfig: { temperature: 0.2, response_mime_type: 'application/json', max_output_tokens: maxTokens },
   };
   let lastErr = null;
-  for (const model of MODELS) {
+  for (const model of models === undefined ? MODELS : getGeminiModels(models)) {
     let res;
     try {
-      res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`, {
+      res = await fetchCloud(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(key)}`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
       });
     } catch (e) { const err = new Error('network'); err.code = 'network'; throw err; }
@@ -150,4 +166,3 @@ export async function callGemini(options = {}) {
 }
 
 export const callCloudAI = callGemini;
-
