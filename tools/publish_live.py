@@ -48,7 +48,7 @@ def main():
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(source, destination)
         manifest["sha256"][relative] = hashlib.sha256(source.read_bytes()).hexdigest()
-    (checkout / "release-manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8")
+    (checkout / "release-manifest.json").write_text(json.dumps(manifest, indent=2) + "\n", encoding="utf-8", newline="\n")
     print("Staged verified build on " + branch + ". Review the diff; no commit or push was made.")
     print("The existing APK download is unchanged and is not verified by this web build.")
 
