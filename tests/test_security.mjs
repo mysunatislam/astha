@@ -280,8 +280,12 @@ await t.test('Bangla signup and English login preserve normal authentication; ma
 await t.test('speech rejection is private and cloud-unavailable behavior remains explicit', async () => {
   const a = await guest();
   const speak = await api('/api/speak', { token: a.token });
-  assert.equal(speak.res.status, 400);
+  assert.equal(speak.res.status, 405);
+  assert.equal(speak.res.headers.get('allow'), 'POST');
   assert.equal(speak.res.headers.get('cache-control'), 'no-store');
+  const missing = await api('/api/speak', { method: 'POST', token: a.token, body: {} });
+  assert.equal(missing.res.status, 400);
+  assert.equal(missing.res.headers.get('cache-control'), 'no-store');
   const vision = await api('/api/vision', { method: 'POST', token: a.token, body: { task: 'describe' } });
   assert.equal(vision.res.status, 503);
   assert.equal(vision.data.error, 'no_key');

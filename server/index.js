@@ -11,6 +11,7 @@ import { ragRouter } from './rag.js';
 import { agentRouter } from './agent.js';
 import { callGemini, hasCloudAI } from './gemini.js';
 import { synthesize } from './tts.js';
+import { createSpeechRouter } from './speech.js';
 import { getAllowedOrigins, getTrustProxyHops, getPublicOrigin, isAllowedOrigin, originGuard, createAuthRateLimiter, validateAuthBody } from './security.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -44,6 +45,7 @@ app.use('/api/auth', (req, res, next) => {
   next();
 }, express.json({ limit: '8kb' }));
 app.use(cookieParser());
+app.use('/api/speak', express.json({ limit: '8kb' }));
 app.use(express.json({ limit: '12mb' })); // camera frames as base64 JPEG can be a few MB
 
 // ---- Health ----
@@ -113,17 +115,7 @@ app.post('/api/vision', authMiddleware, async (req, res) => {
 });
 
 // ---- Speech: real neural voices (Bangla female included), MP3 streamed back ----
-app.get('/api/speak', authMiddleware, async (req, res) => {
-  const text = String(req.query.text || '').slice(0, 900);
-  const voice = String(req.query.voice || 'bn-female');
-  if (!text.trim()) return res.status(400).json({ error: 'text_required' });
-  try {
-    const audio = await synthesize(text, voice);
-    res.set('Content-Type', 'audio/mpeg');
-    res.set('Cache-Control', 'no-store');
-    res.send(audio);
-  } catch (e) { console.error('tts unavailable'); res.status(502).json({ error: 'tts_unavailable' }); }
-});
+app.use('/api', authMiddleware, createSpeechRouter(synthesize));
 
 // ---- Static PWA ----
 app.use(express.static(WEB_DIR, { maxAge: IS_PROD ? '1d' : 0 }));

@@ -3688,15 +3688,21 @@ const VoiceEngine = {
       // paying a failed network round-trip before every sentence.
       if (!remoteProcessingAllowed() || (typeof backendReachable === 'function' && !backendReachable())) throw offlineError();
       const controller = new AbortController(); this.requestController = controller;
-      let res;
-      try { res = await fetch(apiUrl('/api/speak?text=' + encodeURIComponent(text) + '&voice=' + voiceKey), { credentials: 'include', signal: deadlineSignal(10000, controller.signal) }); }
+      let res, blob;
+      try {
+        res = await fetch(apiUrl('/api/speak'), {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text, voice: voiceKey }), credentials: 'include',
+          cache: 'no-store', signal: deadlineSignal(10000, controller.signal),
+        });
+        if (generation !== this.generation) return false;
+        if (!remoteProcessingAllowed()) throw offlineError();
+        if (res.ok) blob = await res.blob();
+      }
       finally { if (this.requestController === controller) this.requestController = null; }
       if (generation !== this.generation) return false;
       if (!remoteProcessingAllowed()) throw offlineError();
       if (res.ok) {
-        const blob = await res.blob();
-        if (generation !== this.generation) return false;
-        if (!remoteProcessingAllowed()) throw offlineError();
         const audio = new Audio(URL.createObjectURL(blob));
         const rate = Number($('speech-rate') && $('speech-rate').value) || 1;
         audio.playbackRate = rate;
@@ -6050,10 +6056,8 @@ const EdgeAndStairsDetector = {
   async evaluate(frame, cocoObjs) {
     if (!frame) return null;
 
-    // 0. If Online AI (Gemini) is active, do not trigger false alarm emergency edge/stairs alerts from geometry gradients
-    if (typeof cloudReady === 'function' && cloudReady()) {
-      return null;
-    }
+    // Provider configuration/reachability is not evidence about this frame.
+    // Keep local checks active in every mode; retain the model/geometry and context guards below.
 
     // 1. Context suppression: If desk, table, keyboard, laptop, monitor, chair, book, mouse, or TV is present,
     // suppress stairs and high-stage drop-off alerts completely (they are false alarms caused by keyboard/desk rows)
@@ -6096,8 +6100,8 @@ const EdgeAndStairsDetector = {
             this.lastEdgeAlertAt = now;
             return {
               type: 'drop_off',
-              en: 'Stop! High stage edge and drop-off ahead!',
-              bn: 'থামুন! সামনে উঁচু মঞ্চের শেষ কিনারা ও খাদ!',
+              en: 'Caution: possible drop-off ahead. Verify with your usual mobility aid before moving.',
+              bn: 'সাবধান: সামনে খাদ থাকতে পারে। চলার আগে আপনার চলাচলের সহায়ক উপায় দিয়ে যাচাই করুন।',
               haptic: 'RAPID'
             };
           }
@@ -6107,8 +6111,8 @@ const EdgeAndStairsDetector = {
             this.lastStairsAlertAt = now;
             return {
               type: 'stairs',
-              en: 'Warning! Stairs directly ahead!',
-              bn: 'সতর্ক! সামনে সিঁড়ি!',
+              en: 'Caution: possible stairs ahead. Verify with your usual mobility aid before moving.',
+              bn: 'সাবধান: সামনে সিঁড়ি থাকতে পারে। চলার আগে আপনার চলাচলের সহায়ক উপায় দিয়ে যাচাই করুন।',
               haptic: 'RAPID'
             };
           }
