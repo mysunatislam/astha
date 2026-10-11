@@ -13,6 +13,7 @@ import { callCloudAI, hasCloudAI, getCloudProvider } from './gemini.js';
 import { synthesize } from './tts.js';
 import { createSpeechRouter } from './speech.js';
 import { asyncRoute } from './async-route.js';
+import { createRequestObservability } from './observability.js';
 import { db, storageReady } from './db.js';
 import { getAllowedOrigins, getTrustProxyHops, getPublicOrigin, isAllowedOrigin, originGuard, createAuthRateLimiter, validateAuthBody } from './security.js';
 
@@ -30,11 +31,16 @@ const COOKIE_OPTS = { httpOnly: true, sameSite: CROSS_ORIGIN ? 'none' : 'lax', s
 
 const app = express();
 app.disable('x-powered-by');
+const requestMonitor = createRequestObservability({
+  logger: process.env.ASTHA_LOG_REQUEST_ERRORS === '1' ? line => console.error(line) : null,
+});
+app.use(requestMonitor.middleware);
 // Trust only the explicitly configured number of ingress hops; direct connections default to zero.
 app.set('trust proxy', getTrustProxyHops());
 app.use((req, res, next) => cors({
   origin: (origin, callback) => callback(null, isAllowedOrigin(origin, req, ALLOWED_ORIGINS, PUBLIC_ORIGIN)),
   credentials: true,
+  exposedHeaders: ['X-Request-ID'],
 })(req, res, next));
 app.use('/api', (req, res, next) => { res.set('Cache-Control', 'no-store'); next(); });
 app.use('/api', originGuard(ALLOWED_ORIGINS, PUBLIC_ORIGIN));
@@ -120,7 +126,7 @@ app.post('/api/vision', authMiddleware, async (req, res) => {
     const result = await callCloudAI({ task, customPrompt: prompt, imageBase64: image, maxTokens, userId: req.user.id });
     res.json(result);
   } catch (e) {
-    console.error('vision error:', e.code || 'error');
+    requestMonitor.markError(req, e);
     const code = e.code || 'error';
     const status = { no_key: 503, bad_key: 502, rate_limit: 429, bad_request: 400, network: 502, upstream: 502, bad_response: 502 }[code] || 500;
     res.status(status).json({ error: code, message: e.message });
@@ -138,13 +144,7 @@ app.get('*', (req, res, next) => {
 });
 
 // Body-parser and unexpected route failures return bounded JSON without exposing a stack.
-app.use((err, req, res, next) => {
-  if (res.headersSent) return next(err);
-  const status = err.type === 'entity.too.large' ? 413 :
-    err.type === 'entity.parse.failed' ? 400 : 500;
-  res.status(status).json({ error: status === 413 ? 'payload_too_large' :
-    status === 400 ? 'invalid_json' : 'internal_error' });
-});
+app.use(requestMonitor.errorMiddleware);
 
 const server = app.listen(PORT, () => console.log(`Astha server listening on :${PORT}`));
 let stopping = false;

@@ -12,3 +12,5 @@ ios
 tests
 work
 release-artifacts
+# Historical installer is not a verified release artifact.
+web/downloads/astha.apk

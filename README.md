@@ -59,7 +59,7 @@ The current Express API still needs a permanent HTTPS Node/container host. Supab
 URL identifies its services; it is not this Express API's origin. A separate Edge Functions
 migration needs runtime validation. The legacy `render.yaml` uses SQLite and requests a paid
 starter service/disk; no deployment or spending occurs automatically. Docker can run the
-existing server with externally supplied database, JWT and provider secrets.
+existing server with externally supplied database, JWT and provider secrets. Its production default is Supabase; SQLite requires an explicit override. Read [container checks and request monitoring](docs/operations.md) for readiness, certificate mounts, sanitized logging and remaining hosting gates.
 
 ### GitHub Pages (frontend only)
 

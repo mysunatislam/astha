@@ -39,3 +39,6 @@ jobs:
           npm audit --prefix server --audit-level=moderate
       - name: Require committed generated assets to match the source
         run: git diff --exit-code -- web/index.html web/sw.js
+      - name: Container isolation, readiness and persistence smoke
+        timeout-minutes: 15
+        run: node tools/check-container.mjs

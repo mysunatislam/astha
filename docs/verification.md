@@ -9,7 +9,7 @@ The source repository is mysunatislam/astha; the requested astha-live repository
 | Check | Result | Limit |
 | --- | --- | --- |
 | Original web build and existing agent client/server suites | Passed | Simulated agent behavior; no visual accuracy proof. |
-| Final npm run check | Passed: 165 regressions plus both existing suites | Reproducible generation (two runs), all JS/generated inline syntax, isolated HTTP/database and mocked frontend/provider/storage tests; actual pg-pool initialization lifecycle tested with transport fixtures. |
+| Final npm run check | Passed: 177 regressions plus both existing suites | Reproducible generation (two runs), all JS/generated inline syntax, isolated HTTP/database and mocked frontend/provider/storage tests; actual pg-pool initialization lifecycle tested with transport fixtures. |
 | Root/server locked dependency installs | npm ci passed | Local runtime Node 24.13.0. |
 | Root and server npm audit | 0 reported advisories each | Checked 11 October after Postgres dependency installation; excludes CDN/model/native SDK assets and future advisories. |
 | Workflow syntax and whitespace | All three workflows pass actionlint 1.7.12, YAML parsing and git diff --check | Fixed actual GitHub rejection of runner.temp in job-level env. Native jobs remain unrun. |
@@ -30,7 +30,9 @@ The source repository is mysunatislam/astha; the requested astha-live repository
 | Browser interface/voice languages | English UI switch/persistence retained Bangla voice selection; Bangla UI restored | Complete translation and physical Bangla synthesis unverified. |
 | Browser model initialization | Quantized YOLO failed with unsupported ConvInteger(10); existing COCO-SSD fallback initialized | Only initialization observed; actual detector output/accuracy and offline cold reopen unverified. |
 | iOS / IPA / TestFlight | Not run | Windows host; macOS/Xcode and owner signing/account credentials needed. |
-| Docker / paid hosting / production monitoring | Not run/deployed | Docker unavailable; hosting, ingress, storage/backup and alert gates remain open. |
+| Container readiness and image gate | Three local health-probe tests pass; real Docker build/runtime smoke is added to source CI | Official base digest verified/pinned. Docker unavailable locally; hosted smoke outcome recorded in delivery evidence. HTTPS hosting, CA mount, backups and alerts remain open. |
+| Request monitoring/privacy | Nine regressions pass, including real HTTP failures and interrupted responses | Generated IDs, fixed counters and optional bounded failure logs; host alerts, retention and external monitoring remain unconfigured. |
+| Authenticated hosted storage smoke | Seven checks passed using two temporary synthetic accounts with exact guarded cleanup | Existing personal rows unchanged; no Maira request. Hosted signup, agent/provider, HTTPS/client and real-device flows unverified. |
 
 Local versions: Node 24.13.0, Python 3.12.14, Java 21.0.9, Gradle 8.14.3, Android API/build-tools 36. Workflows pin Node 24.21.0, Python 3.11.9, Ubuntu 24.04, explicit Android SDK packages and Xcode 26.3. The pinned Linux/Node/Python source CI environment passed at 3acd000; hosted native/iOS environments remain unverified.
 
