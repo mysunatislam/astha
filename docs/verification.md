@@ -2,21 +2,25 @@
 
 Date: 9–11 October 2026. These are release candidate checks, not production approval.
 
-The source repository is mysunatislam/astha; the requested astha-live repository contains generated static assets. Both candidates use a separate production/stabilize-2026-10-09 review branch, pushed after explicit public-payload approval. No main branch, hosting, store account or production database was changed.
+The source repository is mysunatislam/astha; the requested astha-live repository contains generated static assets. Both candidates use a separate production/stabilize-2026-10-09 review branch, pushed after explicit public-payload approval. The separately approved Supabase setup created the private six-table schema and restricted login; its password and connection configuration were provisioned securely. Existing public.asha_objects and personal rows remain untouched. No main branch, HTTP hosting or store account was changed.
 
 ## Recorded checks
 
 | Check | Result | Limit |
 | --- | --- | --- |
 | Original web build and existing agent client/server suites | Passed | Simulated agent behavior; no visual accuracy proof. |
-| Final npm run check | Passed: 162 regressions plus both existing suites | Reproducible generation (two runs), all JS/generated inline syntax, isolated HTTP/database and mocked frontend/provider/storage tests. |
+| Final npm run check | Passed: 165 regressions plus both existing suites | Reproducible generation (two runs), all JS/generated inline syntax, isolated HTTP/database and mocked frontend/provider/storage tests; actual pg-pool initialization lifecycle tested with transport fixtures. |
 | Root/server locked dependency installs | npm ci passed | Local runtime Node 24.13.0. |
 | Root and server npm audit | 0 reported advisories each | Checked 11 October after Postgres dependency installation; excludes CDN/model/native SDK assets and future advisories. |
 | Workflow syntax and whitespace | All three workflows pass actionlint 1.7.12, YAML parsing and git diff --check | Fixed actual GitHub rejection of runner.temp in job-level env. Native jobs remain unrun. |
 | Hosted source CI | Push/PR checks passed for original review head 3acd000 | Final follow-up commit checks are recorded separately in delivery-status; no deployment. |
 | Maira live contract | One text request and one synthetic printed-image request passed with Bangla/English fields | Keys were held in memory only; no camera/private image. Actual accuracy, privacy policy/profile guarantees and production availability remain unverified. |
-| Supabase storage preparation | Local Postgres adapter/schema/RLS/atomic-write and actual HTTP PGlite tests pass; async SQLite API persistence/isolation/failure tests pass | Embedded local PostgreSQL semantics; hosted Supabase TLS/driver connection, migration/import and deployment remain unverified. |
-| Supabase dashboard metadata | Read-only project, schemas, role and policy UI inspection succeeded | Healthy free Nano project in Tokyo; existing public.asha_objects preserved. No astha schema/role observed; personal records and credentials were not read. |
+| Supabase storage/API fixtures | Local Postgres adapter/schema/RLS/atomic-write and actual HTTP PGlite tests pass; async SQLite API persistence/isolation/failure tests pass | Isolated fixtures verify API behavior; hosted authenticated account CRUD/import and deployment remain unverified. |
+| Approved Supabase setup and actual driver connection | Six private tables and restricted SCRAM login; pg 8.23.1 authenticated with verified TLS 1.3 and passed read-only schema/role/index checks | No personal rows read or account data written/imported; the existing public.asha_objects remains untouched. |
+| Hosted statement timeout | Two distinct session-pool connections each report 10s; server cancels SELECT pg_sleep(11) with 57014 | Corrects observed 2min default through awaited initialization; port 6543 rejected. No global database timeout changed. |
+| Actual Express API startup | Production local configuration loads, health 200/no-store reports Maira configured, unauthenticated memory 401; shutdown handler exits 0 | Loopback HTTP startup and hosted storage readiness only; no Maira request, authenticated hosted CRUD, HTTPS deployment or device flow. |
+| Private configuration and test isolation | Git-ignored/untracked environment with protected owner/SYSTEM/Administrators ACL; injected fixture settings override private configuration | Maira keys, local JWT and restricted database password stay private. No provider/database requests by this configuration probe. |
+| Supabase advisors | Security INFO for existing public.asha_objects without policies; performance INFO for five new unused indexes | Keep unrelated data inaccessible and new tenant indexes until representative workload evidence; platform patch baseline needs review. See supabase-integration.md. |
 | Speech privacy and resources | POST/auth/origin/bounds/no-store, local fallback, disconnect/Stop, deadline, XML escaping and cleanup regressions pass | Mocked provider only; legacy cached GET clients need refreshed shell/local voice. No generated-speech cache remains. |
 | Local hazard fallback | Six regressions pass with cloud configured/unavailable/failing and existing local evidence guards | Actual accuracy, false-warning rate and physical movement safety unverified. |
 | Capacitor Android sync | Passed with final web assets | Actual installer-exclusion hook also passed with a disposable archive fixture; Android/iOS fixture tests pass. |
@@ -62,4 +66,4 @@ The GitHub connector returned HTTP 403 for branch/PR creation. After explicit pu
 
 ## Provider and storage continuation
 
-The production example selects Maira and Supabase, with blank server-only credentials. SQLite remains the explicit/default development provider. Environment injection takes precedence; server/.env resolves independently of launch directory, with the legacy cwd fallback retained. The current Node HTTP host, restricted Supabase connection and any live migration/import are still required. Read maira-integration.md and supabase-integration.md before enabling production configuration; read-only `npm run check:storage` from server verifies connection/role/schema without migrations or personal row reads.
+The production example selects Maira and Supabase, with blank server-only credentials. Protected local server configuration now contains the authorized Maira keys, newly generated local JWT and restricted Supabase connection with trusted CA; no deployed signing secret was rotated. SQLite remains the explicit/default development provider. Environment injection takes precedence; server/.env resolves independently of launch directory, with the legacy cwd fallback retained. Actual `npm run check:storage` passed against the selected project. Permanent HTTPS Node hosting, hosted authenticated user flows and any reviewed existing-data import remain required before cutover. Read maira-integration.md and supabase-integration.md for setup and evidence limits.

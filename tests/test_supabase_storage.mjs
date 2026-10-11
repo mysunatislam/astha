@@ -14,10 +14,12 @@ test('Supabase configuration bounds pooling/deadlines and verifies TLS without U
   assert.deepEqual(config.ssl, { rejectUnauthorized: true });
   assert.equal(config.max, 5); assert.equal(config.connectionTimeoutMillis, 5000);
   assert.equal(config.statement_timeout, 10000); assert.equal(config.query_timeout, 12000);
-  assert.equal(postgresConfig({ SUPABASE_DB_URL: 'postgres://astha_backend.fixture:fixture@aws-0-region.pooler.supabase.com:6543/postgres' }).ssl.rejectUnauthorized, true);
+  assert.equal(postgresConfig({ SUPABASE_DB_URL: 'postgres://astha_backend.fixture:fixture@aws-0-region.pooler.supabase.com:5432/postgres' }).ssl.rejectUnauthorized, true);
   for (const url of ['', fixtureUrl + '?sslmode=disable', fixtureUrl + '?sslmode=require', fixtureUrl + '#unsafe',
     fixtureUrl.replace('astha_backend:', 'postgres:'), fixtureUrl.replace('db.fixture.supabase.co', 'supabase.co.attacker.example'),
-    fixtureUrl.replace('5432', '4444'), fixtureUrl.replace('/postgres', '/other')]) {
+    fixtureUrl.replace('5432', '4444'), fixtureUrl.replace('5432', '6543'),
+    'postgres://astha_backend.fixture:fixture@aws-0-region.pooler.supabase.com:6543/postgres',
+    fixtureUrl.replace('/postgres', '/other')]) {
     assert.throws(() => postgresConfig({ SUPABASE_DB_URL: url }));
   }
 });

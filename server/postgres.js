@@ -12,20 +12,32 @@ const COLUMNS = {
   knowledge_docs: ['id:text', 'user_id:text', 'category:text', 'title:text', 'content:text', 'tags_json:text', 'embedding_json:text', 'created_at:bigint', 'updated_at:bigint'],
 };
 
+async function initializePostgresClient(client) {
+  // Supavisor can ignore startup parameters. Session pooling keeps this setting
+  // on the backend; the awaited hook runs before a client reaches application SQL.
+  try {
+    await client.query("SET statement_timeout = '10s'");
+    const result = await client.query('SHOW statement_timeout');
+    if (result.rows[0]?.statement_timeout !== '10s') throw new Error('Unexpected statement timeout');
+  } catch {
+    throw new Error('Supabase statement timeout initialization failed');
+  }
+}
+
 export function postgresConfig(env = process.env) {
   let url;
   try { url = new URL(env.SUPABASE_DB_URL || ''); } catch { throw new Error('Supabase database URL is required'); }
   if (!['postgres:', 'postgresql:'].includes(url.protocol) || !url.username || !url.password ||
       !/^astha_backend(?:\.[a-z0-9]+)?$/.test(decodeURIComponent(url.username)) ||
       !(/\.supabase\.co$/.test(url.hostname) || /\.pooler\.supabase\.com$/.test(url.hostname)) ||
-      !['', '5432', '6543'].includes(url.port) || url.pathname !== '/postgres' || url.search || url.hash) {
-    throw new Error('Use the Supabase Connect database URL for astha_backend without URL options');
+      !['', '5432'].includes(url.port) || url.pathname !== '/postgres' || url.search || url.hash) {
+    throw new Error('Use the Supabase Connect direct or session database URL on port 5432 for astha_backend without URL options');
   }
   const ssl = { rejectUnauthorized: true };
   if (env.SUPABASE_DB_CA_FILE) ssl.ca = readFileSync(env.SUPABASE_DB_CA_FILE, 'utf8');
   return { connectionString: url.href, ssl, max: 5, connectionTimeoutMillis: 5000,
     idleTimeoutMillis: 10000, statement_timeout: 10000, query_timeout: 12000,
-    application_name: 'astha', keepAlive: true };
+    application_name: 'astha', keepAlive: true, onConnect: initializePostgresClient };
 }
 
 // These are application-owned, static SQL strings. Values remain bound parameters.

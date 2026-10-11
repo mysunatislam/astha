@@ -22,6 +22,6 @@ Verification on 10 October 2026: `npm run check` passed 125 regressions and two 
 
 Remaining gates: live application/camera and accessibility/device testing, reviewed provider profile/retention/isolation, exposed historical credential revocation, production HTTPS/API configuration, and signed store artifacts. These two live requests establish the tested request contracts only; they do not establish visual accuracy, physical safety, offline performance, service availability or production deployment.
 
-## Supabase next increment
+## Supabase configuration
 
-Supabase is the selected database service. Preserve the existing PIN/JWT and Express routes while adding a server-side Postgres adapter and a private application schema. Do not point `ASTHA_API_BASE` at a Supabase project URL: it identifies the ASTHA API host. Project selection, secure connection setup, schema application and any existing-data migration require separate verification before enabling the database in production.
+Supabase is the selected database service. The server-side PostgreSQL adapter preserves existing PIN/JWT accounts and Express routes. The approved private schema, restricted login, protected local credential and certificate-verified connection are configured; hosted read-only readiness and timeout checks passed. Existing-account import, authenticated hosted CRUD and permanent HTTPS API deployment remain separate gates. Do not point `ASTHA_API_BASE` at a Supabase project URL: it identifies the ASTHA API host. See [storage setup and evidence limits](supabase-integration.md).
