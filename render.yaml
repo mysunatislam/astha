@@ -1,5 +1,6 @@
-# Deploy to Render (render.com): "New +" -> "Blueprint" -> point at this repo.
-# Persistent SQLite needs an eligible paid service. Review cost and origin before deployment.
+# Legacy SQLite hosting example; the selected database is now Supabase.
+# Review docs/supabase-integration.md and choose the Node API host before deployment.
+# This blueprint still requests a paid service/disk and is not the Supabase cutover config.
 services:
   - type: web
     name: astha
@@ -27,6 +28,8 @@ services:
         value: "0"
       - key: DB_PATH
         value: /data/astha.db
+      - key: DB_PROVIDER
+        value: sqlite
     disk:
       name: astha-data
       mountPath: /data

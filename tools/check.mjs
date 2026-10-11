@@ -6,7 +6,7 @@ import { spawnSync } from 'node:child_process';
 
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const python = process.env.ASTHA_PYTHON || 'python';
-const env = { ...process.env, DB_PATH: ':memory:', CLOUD_AI_PROVIDER: 'auto', GEMINI_API_KEY: '', MAIRA_API_KEY: '', MAIRA_PROJECT_KEY: '', MAIRA_PROFILE_ID: '', MAIRA_API_URL: '', MAIRA_TOKEN: '', API_KEY: '', PROJECT_KEY: '' };
+const env = { ...process.env, NODE_ENV: 'test', JWT_SECRET: 'astha-isolated-test-signing-key-2026', DB_PROVIDER: 'sqlite', SUPABASE_DB_URL: '', SUPABASE_DB_CA_FILE: '', DB_PATH: ':memory:', CLOUD_AI_PROVIDER: 'auto', GEMINI_API_KEY: '', MAIRA_API_KEY: '', MAIRA_PROJECT_KEY: '', MAIRA_PROFILE_ID: '', MAIRA_API_URL: '', MAIRA_TOKEN: '', API_KEY: '', PROJECT_KEY: '' };
 function run(command, args) {
   const result = spawnSync(command, args, { cwd: root, env, stdio: 'inherit' });
   if (result.error) throw result.error;
@@ -31,5 +31,5 @@ if (!inlineCount) throw new Error('Generated app has no inline script');
 run(process.execPath, ['tests/test_agent_client.mjs']);
 run(process.execPath, ['tests/test_agent_server.mjs']);
 const tests = fs.readdirSync(path.join(root, 'tests')).filter(file => /(?:\.test|test_.*)\.mjs$/.test(file) && !['test_agent_client.mjs', 'test_agent_server.mjs'].includes(file));
-run(process.execPath, ['--test', ...tests.map(file => path.join('tests', file))]);
+run(process.execPath, ['--test', '--test-concurrency=4', ...tests.map(file => path.join('tests', file))]);
 console.log('Build reproducibility, all JavaScript syntax and regression tests passed.');

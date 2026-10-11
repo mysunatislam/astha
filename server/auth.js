@@ -5,8 +5,10 @@ import jwt from 'jsonwebtoken';
 import { nanoid } from 'nanoid';
 import { run, get, all } from './db.js';
 import { getJwtSecret, LEGACY_GUEST_PHONE, normalizePhone } from './security.js';
+import { asyncRoute } from './async-route.js';
 
 const JWT_SECRET = getJwtSecret();
+const VERIFIED_SESSION = Symbol('astha-verified-session');
 
 export function hashPasscode(passcode) {
   const salt = randomBytes(16).toString('hex');
@@ -19,46 +21,54 @@ export function verifyPasscode(passcode, hash, salt) {
   return check.length === stored.length && timingSafeEqual(check, stored);
 }
 
-export function createUser({ name, phone, passcode }) {
+export async function createUser({ name, phone, passcode }) {
   const id = nanoid();
   const { hash, salt } = hashPasscode(passcode);
-  run('INSERT INTO users (id, name, phone, passcode_hash, passcode_salt, created_at) VALUES (?,?,?,?,?,?)',
+  await run('INSERT INTO users (id, name, phone, passcode_hash, passcode_salt, created_at) VALUES (?,?,?,?,?,?)',
     [id, name, phone || null, hash, salt, Date.now()]);
   return id;
 }
-export function findByPhone(phone) { return get('SELECT * FROM users WHERE phone = ?', [phone]); }
-export function findByPhoneEquivalent(phone) {
-  const exact = findByPhone(phone);
+export async function findByPhone(phone) { return await get('SELECT * FROM users WHERE phone = ?', [phone]); }
+export async function findByPhoneEquivalent(phone) {
+  const exact = await findByPhone(phone);
   if (exact) return exact;
   const normalized = normalizePhone(phone);
   if (!normalized) return null;
   // Preserve old stored formats without rewriting or merging accounts during a security patch.
-  const legacy = all('SELECT id, phone FROM users WHERE phone IS NOT NULL')
+  const legacy = (await all('SELECT id, phone FROM users WHERE phone IS NOT NULL'))
     .find(user => normalizePhone(user.phone) === normalized);
-  return legacy ? findById(legacy.id) : null;
+  return legacy ? await findById(legacy.id) : null;
 }
-export function findById(id) { return get('SELECT * FROM users WHERE id = ?', [id]); }
+export async function findById(id) { return await get('SELECT * FROM users WHERE id = ?', [id]); }
 
 export function signToken(userId) {
   return jwt.sign({ sub: userId }, JWT_SECRET, { expiresIn: '180d', algorithm: 'HS256' });
 }
-export function getAuthenticatedUser(req) {
+export async function getAuthenticatedUser(req) {
   const bearer = (req.headers.authorization || '').match(/^Bearer\s+(\S+)$/i);
   const token = bearer?.[1] || req.cookies?.astha_session;
   if (!token) return null;
+  const cached = req[VERIFIED_SESSION];
+  if (cached?.token === token) return cached.user;
+  let payload;
   try {
-    const payload = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] });
+    payload = jwt.verify(token, JWT_SECRET, { algorithms: ['HS256'] });
     if (typeof payload.sub !== 'string') return null;
-    const user = findById(payload.sub);
-    // All former shared-guest sessions are unsafe; their data stays quarantined in the DB.
-    return user && user.phone !== LEGACY_GUEST_PHONE ? user : null;
   } catch {
     return null;
   }
+  // A storage outage must reach error middleware, not masquerade as an invalid session.
+  const user = await findById(payload.sub);
+  // All former shared-guest sessions are unsafe; their data stays quarantined in the DB.
+  if (!user || user.phone === LEGACY_GUEST_PHONE) return null;
+  // Router chains share this verified lookup only within the current request. req.user alone
+  // is never a trust signal, and neither failures nor different tokens reuse this result.
+  req[VERIFIED_SESSION] = { token, user };
+  return user;
 }
-export function authMiddleware(req, res, next) {
-  const user = getAuthenticatedUser(req);
+export const authMiddleware = asyncRoute(async (req, res, next) => {
+  const user = await getAuthenticatedUser(req);
   if (!user) return res.status(401).json({ error: 'not_signed_in' });
   req.user = user;
   next();
-}
+});

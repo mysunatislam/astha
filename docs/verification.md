@@ -1,6 +1,6 @@
 # ASTHA verification and delivery
 
-Date: 9–10 October 2026. These are release candidate checks, not production approval.
+Date: 9–11 October 2026. These are release candidate checks, not production approval.
 
 The source repository is mysunatislam/astha; the requested astha-live repository contains generated static assets. Both candidates use a separate production/stabilize-2026-10-09 review branch, pushed after explicit public-payload approval. No main branch, hosting, store account or production database was changed.
 
@@ -9,11 +9,14 @@ The source repository is mysunatislam/astha; the requested astha-live repository
 | Check | Result | Limit |
 | --- | --- | --- |
 | Original web build and existing agent client/server suites | Passed | Simulated agent behavior; no visual accuracy proof. |
-| Final npm run check | Passed: 102 regressions plus both existing suites | Reproducible generation (two runs), all JS/generated inline syntax, isolated HTTP/database and mocked frontend/provider/storage tests. |
+| Final npm run check | Passed: 162 regressions plus both existing suites | Reproducible generation (two runs), all JS/generated inline syntax, isolated HTTP/database and mocked frontend/provider/storage tests. |
 | Root/server locked dependency installs | npm ci passed | Local runtime Node 24.13.0. |
-| Root and server npm audit | 0 reported advisories each | Checked 9 October; excludes CDN/model/native SDK assets and future advisories. |
+| Root and server npm audit | 0 reported advisories each | Checked 11 October after Postgres dependency installation; excludes CDN/model/native SDK assets and future advisories. |
 | Workflow syntax and whitespace | All three workflows pass actionlint 1.7.12, YAML parsing and git diff --check | Fixed actual GitHub rejection of runner.temp in job-level env. Native jobs remain unrun. |
 | Hosted source CI | Push/PR checks passed for original review head 3acd000 | Final follow-up commit checks are recorded separately in delivery-status; no deployment. |
+| Maira live contract | One text request and one synthetic printed-image request passed with Bangla/English fields | Keys were held in memory only; no camera/private image. Actual accuracy, privacy policy/profile guarantees and production availability remain unverified. |
+| Supabase storage preparation | Local Postgres adapter/schema/RLS/atomic-write and actual HTTP PGlite tests pass; async SQLite API persistence/isolation/failure tests pass | Embedded local PostgreSQL semantics; hosted Supabase TLS/driver connection, migration/import and deployment remain unverified. |
+| Supabase dashboard metadata | Read-only project, schemas, role and policy UI inspection succeeded | Healthy free Nano project in Tokyo; existing public.asha_objects preserved. No astha schema/role observed; personal records and credentials were not read. |
 | Speech privacy and resources | POST/auth/origin/bounds/no-store, local fallback, disconnect/Stop, deadline, XML escaping and cleanup regressions pass | Mocked provider only; legacy cached GET clients need refreshed shell/local voice. No generated-speech cache remains. |
 | Local hazard fallback | Six regressions pass with cloud configured/unavailable/failing and existing local evidence guards | Actual accuracy, false-warning rate and physical movement safety unverified. |
 | Capacitor Android sync | Passed with final web assets | Actual installer-exclusion hook also passed with a disposable archive fixture; Android/iOS fixture tests pass. |
@@ -56,3 +59,7 @@ The GitHub connector returned HTTP 403 for branch/PR creation. After explicit pu
 
 ![Bangla UI, explicit offline mode and safety disclosure](browser-verification.jpg)
 
+
+## Provider and storage continuation
+
+The production example selects Maira and Supabase, with blank server-only credentials. SQLite remains the explicit/default development provider. Environment injection takes precedence; server/.env resolves independently of launch directory, with the legacy cwd fallback retained. The current Node HTTP host, restricted Supabase connection and any live migration/import are still required. Read maira-integration.md and supabase-integration.md before enabling production configuration; read-only `npm run check:storage` from server verifies connection/role/schema without migrations or personal row reads.

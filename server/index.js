@@ -1,4 +1,4 @@
-import 'dotenv/config';
+import './env.js';
 import express from 'express';
 import cookieParser from 'cookie-parser';
 import cors from 'cors';
@@ -12,6 +12,8 @@ import { agentRouter } from './agent.js';
 import { callCloudAI, hasCloudAI, getCloudProvider } from './gemini.js';
 import { synthesize } from './tts.js';
 import { createSpeechRouter } from './speech.js';
+import { asyncRoute } from './async-route.js';
+import { db, storageReady } from './db.js';
 import { getAllowedOrigins, getTrustProxyHops, getPublicOrigin, isAllowedOrigin, originGuard, createAuthRateLimiter, validateAuthBody } from './security.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -49,46 +51,54 @@ app.use('/api/speak', express.json({ limit: '8kb' }));
 app.use(express.json({ limit: '12mb' })); // camera frames as base64 JPEG can be a few MB
 
 // ---- Health ----
-app.get('/api/health', (req, res) => {
+app.get('/api/health', asyncRoute(async (req, res) => {
+  try { await storageReady(); }
+  catch { return res.status(503).json({ ok: false, error: 'storage_unavailable', cloud: false, cloudProvider: null }); }
   const cloud = hasCloudAI();
   res.json({ ok: true, name: 'Astha', name_bn: 'আস্থা', cloud, cloudProvider: cloud ? getCloudProvider() : null });
-});
+}));
 
 // ---- Auth: name + a spoken passcode, no email required ----
-app.post('/api/auth/signup', (req, res) => {
+app.post('/api/auth/signup', asyncRoute(async (req, res) => {
   const validated = validateAuthBody(req.body, true);
   if (!validated) return res.status(400).json({ error: 'invalid_auth_input' });
   const { name, phone, passcode } = validated;
   // Phone is required (not just optional) so the account is recoverable on a new device or
   // after clearing cookies -- the 180-day session cookie alone is not enough for a blind user
   // who cannot easily read back a lost token.
-  if (findByPhoneEquivalent(phone)) return res.status(409).json({ error: 'phone_taken' });
-  const id = createUser({ name: String(name).slice(0, 80), phone, passcode });
+  if (await findByPhoneEquivalent(phone)) return res.status(409).json({ error: 'phone_taken' });
+  let id;
+  try { id = await createUser({ name: String(name).slice(0, 80), phone, passcode }); }
+  catch (err) {
+    // Concurrent signup can reach the unique constraint after the initial lookup.
+    if (err.code === '23505' || err.code === 'ERR_SQLITE_ERROR' && err.errcode === 2067) return res.status(409).json({ error: 'phone_taken' });
+    throw err;
+  }
   const token = signToken(id);
   res.cookie('astha_session', token, COOKIE_OPTS);
   res.json({ token, userId: id });
-});
-app.post('/api/auth/login', (req, res) => {
+}));
+app.post('/api/auth/login', asyncRoute(async (req, res) => {
   const validated = validateAuthBody(req.body);
   if (!validated) return res.status(400).json({ error: 'invalid_auth_input' });
   const { phone, passcode } = validated;
   // Before normalization, existing accounts could store spoken Bangla digits literally.
-  const user = findByPhone(req.body.phone) || findByPhoneEquivalent(phone);
+  const user = await findByPhone(req.body.phone) || await findByPhoneEquivalent(phone);
   const matches = user && (verifyPasscode(passcode, user.passcode_hash, user.passcode_salt) ||
     (req.body.passcode !== passcode && verifyPasscode(req.body.passcode, user.passcode_hash, user.passcode_salt)));
   if (!matches) return res.status(401).json({ error: 'invalid_credentials' });
   const token = signToken(user.id);
   res.cookie('astha_session', token, COOKIE_OPTS);
   res.json({ token, userId: user.id });
-});
-app.post('/api/auth/guest', (req, res) => {
-  const existing = getAuthenticatedUser(req);
+}));
+app.post('/api/auth/guest', asyncRoute(async (req, res) => {
+  const existing = await getAuthenticatedUser(req);
   const id = existing?.phone === null ? existing.id :
-    createUser({ name: 'User', phone: null, passcode: randomBytes(32).toString('hex') });
+    await createUser({ name: 'User', phone: null, passcode: randomBytes(32).toString('hex') });
   const token = signToken(id);
   res.cookie('astha_session', token, COOKIE_OPTS);
   res.json({ token, userId: id });
-});
+}));
 app.post('/api/auth/logout', (req, res) => {
   const options = { ...COOKIE_OPTS }; delete options.maxAge;
   res.clearCookie('astha_session', options); res.json({ ok: true });
@@ -136,4 +146,16 @@ app.use((err, req, res, next) => {
     status === 400 ? 'invalid_json' : 'internal_error' });
 });
 
-app.listen(PORT, () => console.log(`Astha server listening on :${PORT}`));
+const server = app.listen(PORT, () => console.log(`Astha server listening on :${PORT}`));
+let stopping = false;
+for (const signal of ['SIGTERM', 'SIGINT']) process.on(signal, () => {
+  if (stopping) return;
+  stopping = true;
+  // Allow in-flight requests to finish before draining the pool; bound shutdown.
+  const deadline = setTimeout(() => process.exit(1), 15000);
+  deadline.unref();
+  server.close(async () => {
+    try { await db.close(); clearTimeout(deadline); process.exit(0); }
+    catch { process.exit(1); }
+  });
+});

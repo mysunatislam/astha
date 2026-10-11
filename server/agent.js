@@ -3,7 +3,8 @@ import { Router } from 'express';
 import { nanoid } from 'nanoid';
 import { callCloudAI, hasCloudAI } from './gemini.js';
 import { searchRAG, formatRagContextForPrompt, expandQueryTerms } from './rag.js';
-import { all, get, run } from './db.js';
+import { run } from './db.js';
+import { asyncRoute } from './async-route.js';
 
 export const agentRouter = Router();
 
@@ -299,7 +300,7 @@ export function evaluateHeuristicStep(step, toolOutput) {
 // ---- API Routes ----
 
 // 1. Plan Route
-agentRouter.post('/agent/plan', async (req, res) => {
+agentRouter.post('/agent/plan', asyncRoute(async (req, res) => {
   const { goal, image } = req.body || {};
   if (!goal) return res.status(400).json({ error: 'goal_required' });
 
@@ -313,7 +314,7 @@ agentRouter.post('/agent/plan', async (req, res) => {
         const prompt = PLANNER_PROMPT(goal, ragContext, image ? 'Camera frame provided' : 'No frame');
         plan = await callCloudAI({ customPrompt: prompt, imageBase64: image, userId: req.user?.id });
       } catch (err) {
-        console.warn('Planner fallback to heuristic:', err.message);
+        console.warn('Planner fallback to heuristic');
       }
     }
 
@@ -323,20 +324,20 @@ agentRouter.post('/agent/plan', async (req, res) => {
 
     const taskId = nanoid();
     const now = Date.now();
-    run(
+    await run(
       'INSERT INTO agent_tasks (id, user_id, goal, plan_json, status, created_at, updated_at) VALUES (?,?,?,?,?,?,?)',
       [taskId, req.user.id, goal, JSON.stringify(plan), 'planned', now, now]
     );
 
     res.json({ ok: true, taskId, plan, ragContext });
   } catch (err) {
-    console.error('Agent plan error:', err);
-    res.status(500).json({ error: 'agent_plan_failed', message: err.message });
+    console.error('Agent plan failed');
+    res.status(500).json({ error: 'agent_plan_failed', message: 'agent_plan_failed' });
   }
-});
+}));
 
 // 2. Evaluate / Verification Route
-agentRouter.post('/agent/evaluate', async (req, res) => {
+agentRouter.post('/agent/evaluate', asyncRoute(async (req, res) => {
   const { step, toolOutput, goal } = req.body || {};
   if (!step || !toolOutput) return res.status(400).json({ error: 'step_and_toolOutput_required' });
 
@@ -347,7 +348,7 @@ agentRouter.post('/agent/evaluate', async (req, res) => {
         const prompt = EVALUATOR_PROMPT(step, toolOutput, goal || 'General task');
         evaluation = await callCloudAI({ customPrompt: prompt, userId: req.user?.id });
       } catch (err) {
-        console.warn('Evaluator fallback to heuristic:', err.message);
+        console.warn('Evaluator fallback to heuristic');
       }
     }
 
@@ -360,13 +361,13 @@ agentRouter.post('/agent/evaluate', async (req, res) => {
 
     res.json({ ok: true, evaluation });
   } catch (err) {
-    console.error('Agent evaluate error:', err);
-    res.status(500).json({ error: 'agent_evaluate_failed', message: err.message });
+    console.error('Agent evaluate failed');
+    res.status(500).json({ error: 'agent_evaluate_failed', message: 'agent_evaluate_failed' });
   }
-});
+}));
 
 // 3. Planning/synthesis route. Actual tool execution remains in the client agent loop.
-agentRouter.post('/agent/run', async (req, res) => {
+agentRouter.post('/agent/run', asyncRoute(async (req, res) => {
   const { goal, image, observations = [] } = req.body || {};
   if (!goal) return res.status(400).json({ error: 'goal_required' });
 
@@ -385,7 +386,7 @@ agentRouter.post('/agent/run', async (req, res) => {
           userId: req.user?.id
         });
       } catch (e) {
-        console.warn('Planner fallback to heuristic:', e.message);
+        console.warn('Planner fallback to heuristic');
       }
     }
     if (!plan || !plan.steps) {
@@ -409,7 +410,7 @@ agentRouter.post('/agent/run', async (req, res) => {
           userId: req.user?.id
         });
       } catch (e) {
-        console.warn('Synthesizer fallback:', e.message);
+        console.warn('Synthesizer fallback');
       }
     }
 
@@ -437,7 +438,7 @@ agentRouter.post('/agent/run', async (req, res) => {
     const status = 'needs_verification';
     const taskId = nanoid();
     const now = Date.now();
-    run(
+    await run(
       'INSERT INTO agent_tasks (id, user_id, goal, plan_json, status, result_json, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)',
       [taskId, req.user.id, goal, JSON.stringify(plan), status, JSON.stringify(response), now, now]
     );
@@ -451,7 +452,7 @@ agentRouter.post('/agent/run', async (req, res) => {
       response
     });
   } catch (err) {
-    console.error('Agent run error:', err);
-    res.status(500).json({ error: 'agent_run_failed', message: err.message });
+    console.error('Agent run failed');
+    res.status(500).json({ error: 'agent_run_failed', message: 'agent_run_failed' });
   }
-});
+}));

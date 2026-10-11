@@ -1,12 +1,22 @@
-// SQLite storage for Astha. Uses Node's built-in node:sqlite (no native build step),
-// so the same code runs unmodified on the dev machine, in Docker, and on Render/Fly.
+// Existing SQLite development/storage remains available. Supabase uses the same
+// parameterized interface; callers await operations for either provider.
 import { DatabaseSync } from 'node:sqlite';
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
+import { connectPostgres } from './postgres.js';
+import { nanoid } from 'nanoid';
 
+export const storageProvider = process.env.DB_PROVIDER || 'sqlite';
+if (!['sqlite', 'supabase'].includes(storageProvider)) throw new Error('Unsupported DB_PROVIDER');
+let postgres;
+export let db;
+if (storageProvider === 'supabase') {
+  postgres = await connectPostgres();
+  db = { close: postgres.close };
+} else {
 const DB_PATH = process.env.DB_PATH || './data/astha.db';
 mkdirSync(dirname(DB_PATH), { recursive: true });
-export const db = new DatabaseSync(DB_PATH);
+db = new DatabaseSync(DB_PATH);
 db.exec('PRAGMA journal_mode = WAL;');
 db.exec('PRAGMA foreign_keys = ON;');
 
@@ -73,7 +83,22 @@ CREATE TABLE IF NOT EXISTS knowledge_docs (
 );
 CREATE INDEX IF NOT EXISTS idx_knowledge_user ON knowledge_docs(user_id, category);
 `);
+}
 
-export function run(sql, params = []) { return db.prepare(sql).run(...params); }
-export function get(sql, params = []) { return db.prepare(sql).get(...params); }
-export function all(sql, params = []) { return db.prepare(sql).all(...params); }
+export function run(sql, params = []) { return postgres ? postgres.run(sql, params) : db.prepare(sql).run(...params); }
+export function get(sql, params = []) { return postgres ? postgres.get(sql, params) : db.prepare(sql).get(...params); }
+export function all(sql, params = []) { return postgres ? postgres.all(sql, params) : db.prepare(sql).all(...params); }
+export function saveRoom({ userId, name, notes }) {
+  if (postgres) return postgres.saveRoom({ userId, name, notes });
+  // Keep SQLite's original read/write together, with no asynchronous gap or data migration.
+  const existing = get('SELECT id FROM rooms WHERE user_id = ? AND lower(name) = lower(?)', [userId, name]);
+  const id = existing ? existing.id : nanoid();
+  const now = Date.now();
+  if (existing) run('UPDATE rooms SET notes = ?, updated_at = ? WHERE id = ? AND user_id = ?', [notes, now, id, userId]);
+  else run('INSERT INTO rooms (id, user_id, name, notes, updated_at) VALUES (?,?,?,?,?)', [id, userId, name, notes, now]);
+  return id;
+}
+export async function storageReady() {
+  if (postgres) await postgres.ready();
+  else db.prepare('SELECT 1').get();
+}

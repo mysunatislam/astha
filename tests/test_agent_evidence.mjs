@@ -45,9 +45,9 @@ test('client recency cannot retrieve an unrelated note', () => {
   assert.equal(c.ClientRAG.search('wallet').memories.length, 0);
 });
 test('server recency cannot retrieve an unrelated note or expand it to rooms', async () => {
-  run('INSERT INTO users (id,name,phone,passcode_hash,passcode_salt,created_at) VALUES (?,?,?,?,?,?)',
+  await run('INSERT INTO users (id,name,phone,passcode_hash,passcode_salt,created_at) VALUES (?,?,?,?,?,?)',
     ['evidence-user', 'Fixture', null, 'hash', 'salt', Date.now()]);
-  run('INSERT INTO memories (id,user_id,item,location,source,created_at) VALUES (?,?,?,?,?,?)',
+  await run('INSERT INTO memories (id,user_id,item,location,source,created_at) VALUES (?,?,?,?,?,?)',
     ['evidence-note', 'evidence-user', 'glasses', 'desk', 'Your note', Date.now()]);
   const result = await searchRAG('evidence-user', 'wallet');
   assert.equal(result.results.length, 0);

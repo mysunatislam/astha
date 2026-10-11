@@ -17,7 +17,7 @@ const { db } = await import('../server/db.js');
 const requireServer = createRequire(new URL('../server/package.json', import.meta.url));
 const express = requireServer('express');
 const cookieParser = requireServer('cookie-parser');
-const token = signToken(createUser({ name: 'Speech fixture', phone: null, passcode: 'test-only-passcode' }));
+const token = signToken(await createUser({ name: 'Speech fixture', phone: null, passcode: 'test-only-passcode' }));
 const audio = Buffer.from('fixture-mp3');
 const calls = [];
 let synthesize, listener, base;
