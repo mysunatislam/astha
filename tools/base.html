@@ -1778,7 +1778,7 @@ function loadClip() {
   setEngineState('clip', 'loading');
   clipPromise = (async () => {
     try {
-      const TF = await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3/dist/transformers.min.js');
+      const TF = await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1/dist/transformers.min.js');
       TF.env.allowLocalModels = false;
       engine.clip.lib = TF;
       const id = 'Xenova/clip-vit-base-patch32';
@@ -3074,7 +3074,7 @@ function queryHomeLayout(query) {
 }
 
 function updateSourceStatus() {
-  const text = state.source === 'camera' ? 'Live camera · Recognition is experimental' : state.source === 'scene' ? 'Demo photo · Not your surroundings' : state.source === 'photo' ? 'Uploaded photo · Not a live view' : 'Camera off · No image selected';
+  const text = t(state.source === 'camera' ? 'source_live' : state.source === 'scene' ? 'source_demo' : state.source === 'photo' ? 'source_photo' : 'source_idle');
   $('source-status').textContent = text;
 }
 

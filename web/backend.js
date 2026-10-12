@@ -4,12 +4,16 @@
   let booted = false;
   let sessionGeneration = 0;
   let logoutPending = false;
+  let currentAccount = null;
+  let gateOpener = null;
   const LAST_ACCOUNT = 'astha.last_account.v2';
   const PENDING_LOGOUT = 'astha.logout_pending.v2';
   const validId = id => typeof id === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(id);
   const text = (en, bn) => typeof uiLang !== 'undefined' && uiLang === 'bn' ? bn : en;
   window.ASTHA_ACCOUNT_ID = null;
   window.ASTHA_LOCAL_ACCOUNT_ID = null;
+  // null: no verified session. false: a guest created on first start. true: phone and passcode.
+  window.ASTHA_ACCOUNT_REGISTERED = null;
   function pendingLogout() {
     try { return logoutPending || localStorage.getItem(PENDING_LOGOUT) === '1'; } catch (e) { return logoutPending; }
   }
@@ -39,10 +43,53 @@
     document.getElementById('auth-tab-login').setAttribute('aria-pressed', mode === 'login');
     document.getElementById('auth-name-field').hidden = mode === 'login';
     document.getElementById('auth-name').required = mode === 'signup';
+    document.getElementById('auth-passcode').setAttribute('autocomplete', mode === 'signup' ? 'new-password' : 'current-password');
     document.getElementById('auth-submit').textContent = mode === 'signup' ? text('Create my account', 'অ্যাকাউন্ট তৈরি করুন') : text('Log in', 'প্রবেশ করুন');
     document.getElementById('auth-status').textContent = '';
   }
   window.setAuthTab = setAuthTab;
+
+  // The app starts as a guest so nobody has to type before using it. The same dialog is
+  // opened from preferences to register that guest account or to sign in to an existing one.
+  function setBackgroundInert(inert) {
+    if (typeof document.querySelectorAll !== 'function') return;
+    for (const el of document.querySelectorAll('body > header, body > main')) {
+      if (inert) el.setAttribute('inert', ''); else el.removeAttribute('inert');
+    }
+  }
+  function renderAccount() {
+    const registered = Boolean(currentAccount && currentAccount.phone);
+    window.ASTHA_ACCOUNT_REGISTERED = currentAccount ? registered : null;
+    const row = document.getElementById('account-row');
+    if (row) row.textContent = !currentAccount ? text('Local mode. Account sync is unavailable.', 'স্থানীয় মোড। অ্যাকাউন্টের সাথে সমন্বয় বন্ধ।') :
+      registered ? text('Signed in as ', 'প্রবেশ করেছেন: ') + currentAccount.name + '.' :
+      text('You are using a guest account on this phone. Create an account to keep your notes if this phone is lost.', 'আপনি এই ফোনে অতিথি অ্যাকাউন্ট ব্যবহার করছেন। ফোন হারালেও নোট রাখতে একটি অ্যাকাউন্ট তৈরি করুন।');
+    const open = document.getElementById('account-open-btn'); if (open) open.hidden = registered;
+    const out = document.getElementById('sign-out-btn'); if (out) out.hidden = !registered;
+  }
+  window.ASTHA_RENDER_ACCOUNT = renderAccount;
+  function openAuthGate() {
+    const gate = document.getElementById('auth-gate');
+    if (!gate.hidden) return;
+    gateOpener = document.activeElement || null;
+    setAuthTab('signup');
+    gate.hidden = false; setBackgroundInert(true);
+    document.getElementById('auth-name').focus();
+  }
+  function closeAuthGate() {
+    const gate = document.getElementById('auth-gate');
+    if (gate.hidden) return;
+    gate.hidden = true; setBackgroundInert(false);
+    document.getElementById('auth-status').textContent = '';
+    document.getElementById('auth-passcode').value = '';
+    if (gateOpener && typeof gateOpener.focus === 'function') gateOpener.focus();
+    gateOpener = null;
+  }
+  window.openAuthGate = openAuthGate;
+  window.closeAuthGate = closeAuthGate;
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape' && booted) closeAuthGate();
+  });
 
   async function submitAuth() {
     const name = document.getElementById('auth-name').value.trim();
@@ -105,14 +152,15 @@
     window.ASTHA_LOCAL_ACCOUNT_ID = localAccount;
     if (typeof refreshOwnerContext === 'function') refreshOwnerContext();
     if (verified) try { localStorage.setItem(LAST_ACCOUNT, verified); } catch (e) {}
-    document.getElementById('auth-gate').hidden = true;
+    document.getElementById('auth-gate').hidden = true; setBackgroundInert(false);
+    document.getElementById('auth-passcode').value = '';
+    currentAccount = me;
     if (!booted && typeof window.__asthaBoot === 'function') { booted = true; window.__asthaBoot(); }
     else if (verified) {
       if (typeof refreshMemory === 'function') refreshMemory();
       if (typeof refreshRooms === 'function') refreshRooms();
     }
-    const row = document.getElementById('account-row');
-    if (row) row.textContent = me ? text('Signed in as ', 'প্রবেশ করেছেন: ') + me.name + '.' : text('Local mode. Account sync is unavailable.', 'স্থানীয় মোড। অ্যাকাউন্টের সাথে সমন্বয় বন্ধ।');
+    renderAccount();
   }
 
   async function boot() {

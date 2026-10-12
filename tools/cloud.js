@@ -18,7 +18,7 @@ function configuredClientModels() {
 
 function promptGeminiKey() {
   const current = cloud.key || '';
-  const input = window.prompt('Optional personal AI API key (Google Gemini or Gigalogy Maira). The configured ASTHA server is used first:', current);
+  const input = window.prompt(t('gemini_prompt'), current);
   if (input !== null) {
     setGeminiKey(input.trim());
     if ($('gemini-key')) $('gemini-key').value = input.trim();
@@ -728,9 +728,9 @@ function toggleOwnerLock() {
 }
 function renderOwner() {
   const s = $('owner-status'); if (!s) return;
-  const bits = [owner.face ? 'Face enrolled' : 'No face yet', owner.voice ? 'voiceprint saved' : 'no voiceprint', owner.lock ? 'lock on' : 'lock off', ownerVerified() ? 'verified ' + fmtTime(new Date(owner.verifiedAt), 'en') : 'not verified'];
+  const bits = [t(owner.face ? 'owner_face_yes' : 'owner_face_no'), t(owner.voice ? 'owner_voice_yes' : 'owner_voice_no'), t(owner.lock ? 'owner_lock_short_on' : 'owner_lock_short_off'), ownerVerified() ? t('owner_verified', { time: fmtTime(new Date(owner.verifiedAt), uiLang) }) : t('owner_unverified')];
   s.textContent = bits.join(' · ');
-  const b = $('owner-lock-btn'); if (b) { b.setAttribute('aria-pressed', owner.lock); b.textContent = owner.lock ? 'Owner lock: on' : 'Owner lock: off'; }
+  const b = $('owner-lock-btn'); if (b) { b.setAttribute('aria-pressed', owner.lock); b.textContent = t(owner.lock ? 'owner_lock_on' : 'owner_lock_off'); }
 }
 // Keep the owner verified quietly while a face is in view (auto-refresh every 20 s).
 async function ownerAutoCheck() {

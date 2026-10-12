@@ -1,7 +1,7 @@
-"""Build web/index.html from tools/base.html plus the companion modules (vocab, module, eye, cloud, styles).
+"""Build web/index.html from tools/base.html plus the companion modules (vocab, i18n, module, eye, cloud, account, styles).
 Run: python tools/build.py
 Every replacement asserts that its anchor occurs exactly once, so a silent mis-patch is impossible."""
-import pathlib, re, sys
+import json, pathlib, re, sys
 
 HERE = pathlib.Path(__file__).parent
 SRC = HERE / "base.html"
@@ -14,6 +14,9 @@ module = (HERE / "module.js").read_text(encoding="utf-8")
 agent_js = (HERE / "agent.js").read_text(encoding="utf-8")
 perceive_js = (HERE / "perceive.js").read_text(encoding="utf-8")
 offline_js = (HERE / "offline.js").read_text(encoding="utf-8")
+account_js = (HERE / "account.js").read_text(encoding="utf-8")
+i18n_js = (HERE / "i18n.js").read_text(encoding="utf-8")
+i18n = json.loads((HERE / "i18n.json").read_text(encoding="utf-8"))
 
 def rep(old, new, count=1):
     global html
@@ -400,7 +403,7 @@ rep_between("function toggleListening() {\n  if (state.listening) { stopListenin
 rep("function stopListening() {\n  state.listening = false;", "function stopListening() {\n  state.listening = false; clearTimeout(listenTimer);")
 # Speak by the dominant script and only with a voice that exists; strip symbols that get spelled out.
 rep("  const u = makeUtterance(text, /[\\u0980-\\u09ff]/.test(text) ? 'bn' : 'en');\n  if (!u) { stopReader(); $('reader-progress').textContent = 'No local voice available'; return; }",
-    "  const langFor = speechLangFor(text);\n  if (!langFor) { reader.index++; return readNextChunk(generation); }\n  const u = makeUtterance(sanitizeForSpeech(text), langFor);\n  if (!u) { stopReader(); $('reader-progress').textContent = 'No local voice available'; return; }")
+    "  const langFor = speechLangFor(text);\n  if (!langFor) { reader.index++; return readNextChunk(generation); }\n  const u = makeUtterance(sanitizeForSpeech(text), langFor);\n  if (!u) { stopReader(); $('reader-progress').textContent = t('reader_no_voice'); return; }")
 rep("    const lines = (data.lines || []).filter(l => l.confidence >= 55).map(l => l.text.replace(/\\s+/g, ' ').trim())\n      .filter(l => { const letters = l.replace(/[^\\p{L}\\p{N}]/gu, '').length; return letters >= 2 && letters / l.length >= 0.5; });\n    const text = lines.join('\\n');\n    if (!text) { $('ocr-result').hidden = true;",
     "    const lines = (data.lines || []).filter(l => l.confidence >= 55).map(l => cleanOcrLine(l.text))\n      .filter(l => { const letters = l.replace(/[^\\p{L}\\p{N}]/gu, '').length; return letters >= 2 && letters / l.length >= 0.5; });\n    const text = lines.join('\\n');\n    if (!text) { $('ocr-result').hidden = true;")
 # Listening language preference + OCR language follows the voice language by default.
@@ -423,8 +426,8 @@ rep("    const partsEn = fresh.slice(0, 3).map(o => `${labelWithArticle(o.id)} $
 # ---- Cloud reasoning, modes, owner ID, secure-connection banner ----
 cloud_js = (HERE / "cloud.js").read_text(encoding="utf-8")
 rep('<p class="prototype-note">Browser prototype · Camera recognition and reading are experimental. Use your usual mobility aid; Astha cannot confirm a safe path.</p>',
-    '<p class="prototype-note"><strong>Astha AI Companion</strong> · Experimental visual assistance. Use your usual mobility aid; Astha cannot confirm a safe path. আস্থা নিরাপদ পথ নিশ্চিত করতে পারে না।</p>\n'
-    '      <p class="prototype-note" id="secure-banner" hidden style="border-color:var(--danger)"><strong>This page is open on an insecure address.</strong> Chrome will ask for the microphone and camera every time and may block them. Open it as <code>http://localhost:8765</code> or over HTTPS. On Android, use Chrome\'s port forwarding (chrome://inspect on the computer) so the phone sees localhost, or a Cloudflare tunnel.</p>')
+    '<p class="prototype-note"><strong>Astha AI Companion</strong> <span id="safety-note">· Experimental visual assistance. Use your usual mobility aid; Astha cannot confirm a safe path. আস্থা নিরাপদ পথ নিশ্চিত করতে পারে না।</span></p>\n'
+    '      <p class="prototype-note" id="secure-banner" hidden style="border-color:var(--danger)"><strong>This page is open on an insecure address.</strong> <span id="secure-body">The browser will ask for the microphone and camera every time and may block them. Open the app on localhost or over HTTPS. On Android, use Chrome\'s port forwarding (chrome://inspect on the computer) so the phone sees localhost, or a Cloudflare tunnel.</span></p>')
 rep('        <button class="chip-btn" id="hf-btn" onclick="toggleHandsFree()" aria-pressed="false" title="Keep listening for “Astha, …”">🎧 <span id="hf-label">Hands-free: off</span></button>\n      </div>',
     '        <button class="chip-btn" id="hf-btn" onclick="toggleHandsFree()" aria-pressed="false" title="Keep listening for “Astha, …”">🎧 <span id="hf-label">Hands-free: off</span></button>\n'
     '        <div class="segmented" role="group" aria-label="AI Engine Mode" title="Choose online processing or on-device models">\n'
@@ -471,7 +474,12 @@ rep("  if (!privacyMode) logEvent('Request: ' + query);\n",
     "  if (/remember my face|learn my face|enrol+ my face|আমার মুখ মনে রাখো|মুখ শেখো/.test(q)) return enrollOwnerFace();\n"
     "  if (/remember my voice|learn my voice|enrol+ my voice|আমার কণ্ঠ মনে রাখো|গলা শেখো/.test(q)) return enrollOwnerVoice();\n"
     "  if (/^(it'?s me|this is me|unlock)\\b|আমি আস্থা|আনলক করো|এটা আমি/.test(q)) return ownerItsMe();\n"
-    "  if (/owner lock|মালিক লক/.test(q)) return toggleOwnerLock();\n")
+    "  if (/owner lock|মালিক লক/.test(q)) return toggleOwnerLock();\n"
+    "  if (/(delete|close|remove) my account|অ্যাকাউন্ট (মুছ|ডিলিট)|একাউন্ট (মুছ|ডিলিট)/.test(q)) return openDeleteAccount(true);\n"
+    "  if (/(download|export) my (data|information)|আমার (তথ্য|ডেটা) (ডাউনলোড|রপ্তানি)/.test(q)) return exportMyData();\n"
+    "  if (/(forget|delete|remove) my (face|voice)|(মুখ|কণ্ঠ|গলা) (ভুলে যাও|মুছ)/.test(q)) return forgetOwnerBiometrics();\n"
+    "  if (/create (an |my )?account|^(log|sign) ?in[.!]?$|(log|sign) ?in to my account|অ্যাকাউন্ট তৈরি|লগ ?ইন কর/.test(q)) return openAuthGate();\n"
+    "  if (/^(log|sign) ?out[.!]?$|(log|sign) ?out of my account|সাইন ?আউট কর|লগ ?আউট কর/.test(q)) return signOut();\n")
 # Keep the owner verified quietly while the camera runs
 rep("      drawOverlay(frame, objs, state.lastClipHits);\n      afterLiveUpdate();\n    }\n  } catch (e) { console.warn('coco tick', e); }",
     "      drawOverlay(frame, objs, state.lastClipHits);\n      afterLiveUpdate();\n      ownerAutoCheck();\n    }\n  } catch (e) { console.warn('coco tick', e); }")
@@ -492,8 +500,20 @@ rep('Memory is kept for this session unless you unlock encrypted storage.',
     'Notes are saved on this browser and synced to your account when permitted and connected. Browser notes are not encrypted.')
 rep('      <div class="card-head"><h2>Your preferences</h2></div>',
     '      <div class="card-head"><h2>Your preferences</h2></div>\n'
-    '      <p class="help" id="account-row" role="status">Signed in.</p>\n'
-    '      <button class="btn small" onclick="signOut()">Sign out</button>\n')
+    '      <p class="help" id="account-row" role="status"></p>\n'
+    '      <div class="utility-row"><button class="btn small" id="account-open-btn" onclick="openAuthGate()" hidden>Create account or log in</button>'
+    '<button class="btn small" id="sign-out-btn" onclick="signOut()" hidden>Sign out</button></div>\n'
+    '      <p class="help" id="data-help">You can download everything Astha has saved about you, remove your face and voice templates, or delete your account.</p>\n'
+    '      <div class="utility-row"><button class="btn small" onclick="exportMyData()">Download my data</button>'
+    '<button class="btn small" onclick="forgetOwnerBiometrics()">Forget my face and voice</button>'
+    '<button class="btn small danger" id="delete-account-btn" onclick="openDeleteAccount()" aria-expanded="false" aria-controls="delete-account-panel">Delete my account</button></div>\n'
+    '      <div id="delete-account-panel" role="group" aria-labelledby="delete-account-warning" hidden>\n'
+    '        <p class="help" id="delete-account-warning">This permanently deletes your Astha account, every saved memory, room note, activity record and personal note, and the copies on this phone. It cannot be undone.</p>\n'
+    '        <p class="help" id="delete-account-note" hidden></p>\n'
+    '        <label class="field" id="delete-account-pin-field" for="delete-account-pin">Enter your passcode to confirm<input id="delete-account-pin" type="password" inputmode="numeric" autocomplete="current-password" maxlength="128"></label>\n'
+    '        <div class="utility-row"><button class="btn danger" id="delete-account-confirm" onclick="confirmDeleteAccount()">Delete permanently</button><button class="btn" onclick="closeDeleteAccount()">Cancel</button></div>\n'
+    '      </div>\n'
+    '      <p class="help" id="data-status" role="status"></p>\n')
 
 # ---- PWA head tags ----
 rep('<title>Astha Vision — AI Visual Companion</title>',
@@ -521,6 +541,7 @@ AUTH_GATE = ('<div id="auth-gate" role="dialog" aria-modal="true" aria-labelledb
     '    </form>\n'
     '    <p class="help" id="auth-status" role="status"></p>\n'
     '    <p class="help">Your name and phone are used only to sign you back in. Everything Astha remembers stays tied to your account.</p>\n'
+    '    <button class="btn" type="button" id="auth-close" onclick="closeAuthGate()">Continue without an account</button>\n'
     '  </div>\n'
     '</div>\n')
 rep('<a class="skip-link" href="#companion-main">Skip to companion</a>\n',
@@ -541,7 +562,10 @@ rep("  if (/computer|code|programming|teach|summar|explain|navigate|guide me|ক
     "    return announce('I can read what is on your screen, describe your surroundings, read text, find your things and guide you to them.', 'আমি আপনার স্ক্রিনের লেখা পড়তে, চারপাশ বর্ণনা করতে, লেখা পড়তে, জিনিস খুঁজতে ও সেখানে নিয়ে যেতে পারি।');\n")
 
 # ---- module + boot ----
-rep("\n(function boot() {", module.rstrip("\n") + "\n" + eye_js.rstrip("\n") + "\n" + cloud_js.rstrip("\n") + "\n" + agent_js.rstrip("\n") + "\n" + perceive_js.rstrip("\n") + "\n" + offline_js.rstrip("\n") + "\n\n(function boot() {")
+assert "</script" not in json.dumps(i18n["strings"], ensure_ascii=False).lower()
+i18n_data = "const I18N_EXTRA = " + json.dumps(i18n["strings"], ensure_ascii=False, separators=(",", ":")) + ";\n"
+rep("  renderSeen(); renderMemory(); renderLog();\n}\n", "  applyStaticI18n();\n  renderSeen(); renderMemory(); renderLog();\n}\n")
+rep("\n(function boot() {", i18n_data + i18n_js.rstrip("\n") + "\n" + module.rstrip("\n") + "\n" + eye_js.rstrip("\n") + "\n" + cloud_js.rstrip("\n") + "\n" + agent_js.rstrip("\n") + "\n" + perceive_js.rstrip("\n") + "\n" + offline_js.rstrip("\n") + "\n" + account_js.rstrip("\n") + "\n\n(function boot() {")
 rep("  renderSpatialLayout();\n  enhancementBoot();\n})();", "  renderSpatialLayout();\n  enhancementBoot();\n  companionBoot();\n  eyeBoot();\n  cloudBoot();\n})();")
 
 # ---- boot(): expose it instead of self-invoking, so backend.js can run it after sign-in ----
@@ -552,6 +576,33 @@ rep('  companionBoot();\n  eyeBoot();\n  cloudBoot();\n})();',
     '  // so the first "describe" or camera start does not begin with a silent wait. Skipped on data-saver.\n'
     "  setTimeout(() => { if (typeof loadCoco === 'function' && engine.coco.status === 'idle' && !(navigator.connection && navigator.connection.saveData)) loadCoco().catch(() => {}); }, 1200);\n"
     '};')
+# ---- translation hooks: tag each listed element, verifying it still shows its English string ----
+def add_i18n_hooks():
+    global html
+    strings = i18n["strings"]
+    for anchor, hooks in i18n["hooks"]:
+        # Only page markup is tagged; the same tag text may also occur inside script templates.
+        markup_end = html.index("<script", html.index("<body"))
+        n = html.count(anchor, 0, markup_end)
+        assert n == 1, f"i18n anchor found {n}x (expected 1): {anchor[:90]!r}"
+        start = html.index(anchor)
+        close = html.index(">", start)
+        tag = html[start:close]
+        added = ""
+        for mode, key in hooks.items():
+            english = strings[key][0] if key in strings else None
+            if mode in ("text", "lead"):
+                end = html.index("<", close + 1)
+                assert english is None or html[close + 1:end].strip() == english.strip(), f"i18n text drifted for {key!r}: {html[close + 1:close + 61]!r}"
+                if mode == "text":
+                    assert html.startswith("</", end), f"data-i18n replaces all content; {key!r} is not a leaf element"
+                added += f' data-i18n="{key}"' if mode == "text" else f' data-i18n-lead="{key}"'
+            else:
+                assert mode in ("aria-label", "title", "placeholder", "alt"), f"unknown i18n hook {mode!r}"
+                assert english is None or f'{mode}="{english}"' in tag, f"i18n attribute drifted for {key!r}: {tag[:90]!r}"
+                added += f' data-i18n-{mode}="{key}"'
+        html = html[:close] + added + html[close:]
+add_i18n_hooks()
 DST.write_text(html, encoding="utf-8", newline="\n")
 print("wrote", DST, len(html.encode("utf-8")), "bytes")
 

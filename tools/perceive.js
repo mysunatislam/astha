@@ -76,7 +76,7 @@ const DepthEngine = {
     setEngineState('depth', 'loading');
     this.loading = (async () => {
       try {
-        const TF = engine.clip.lib || await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3/dist/transformers.min.js');
+        const TF = engine.clip.lib || await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1/dist/transformers.min.js');
         TF.env.allowLocalModels = false;
         engine.clip.lib = engine.clip.lib || TF;
         const files = {};

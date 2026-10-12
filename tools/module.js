@@ -242,28 +242,28 @@ function startReader(inputText) {
 function readNextChunk(generation) {
   if (!reader.active || generation !== reader.generation) return;
   if (reader.index >= reader.parts.length) {
-    reader.active = false; $('reader-progress').textContent = 'Finished';
+    reader.active = false; $('reader-progress').textContent = t('reader_finished');
     const done = reader.onFinish; reader.onFinish = null; if (done) done();
     return;
   }
   const text = reader.parts[reader.index];
   const lang = /[\u0980-\u09ff]/.test(text) ? 'bn' : 'en';
-  $('reader-progress').textContent = 'Part ' + (reader.index + 1) + ' of ' + reader.parts.length;
+  $('reader-progress').textContent = t('reader_part', { n: reader.index + 1, total: reader.parts.length });
   VoiceEngine.speak(text, lang).then(ok => {
     if (generation !== reader.generation || !reader.active) return;
-    if (!ok) { stopReader(); $('reader-progress').textContent = 'Speech failed. Try Read all again.'; return; }
+    if (!ok) { stopReader(); $('reader-progress').textContent = t('reader_failed'); return; }
     reader.index++;
     if (!reader.paused) readNextChunk(generation);
   });
 }
 function pauseReader() {
   if (!reader.active || reader.paused) return;
-  reader.paused = true; VoiceEngine.pause(); $('reader-progress').textContent = 'Paused';
+  reader.paused = true; VoiceEngine.pause(); $('reader-progress').textContent = t('reader_paused');
 }
 function resumeReader() {
   if (!reader.active || !reader.paused) return;
   reader.paused = false; VoiceEngine.resume();
-  if (reader.active) $('reader-progress').textContent = 'Reading';
+  if (reader.active) $('reader-progress').textContent = t('reader_reading');
 }
 function stopReader() {
   reader.active = false; reader.paused = false; reader.generation++; reader.parts = []; reader.index = 0;
@@ -271,7 +271,7 @@ function stopReader() {
 }
 function stopAllSpeech() {
   stopReader(); stopListening(); VoiceEngine.stop();
-  $('reader-progress').textContent = 'Stopped';
+  $('reader-progress').textContent = t('reader_stopped');
 }
 
 
@@ -741,7 +741,7 @@ function stopReading(silent) {
 function setReadButton(on) {
   const b = $('read-btn'); if (!b) return;
   b.classList.toggle('on', on); b.setAttribute('aria-pressed', on);
-  $('read-title').textContent = on ? 'Stop reading' : t('act_read');
+  $('read-title').textContent = on ? t('read_stop') : t('act_read');
 }
 function grayThumb(frame) {
   const W = 32, H = 24; const c = grayThumb.c || (grayThumb.c = document.createElement('canvas')); c.width = W; c.height = H;
@@ -900,9 +900,9 @@ const SiriVoice = {
     const btn = $('hf-btn');
     if (btn) btn.setAttribute('aria-pressed', 'true');
     const lbl = $('hf-label');
-    if (lbl) lbl.textContent = 'Voice: Siri-Active';
+    if (lbl) lbl.textContent = t('hf_on');
     $('mic')?.classList.add('listening');
-    $('mic-label') && ($('mic-label').textContent = 'Listening (Voice active)…');
+    $('mic-label') && ($('mic-label').textContent = t('mic_listening'));
     this._listen();
   },
 
@@ -918,7 +918,7 @@ const SiriVoice = {
     const btn = $('hf-btn');
     if (btn) btn.setAttribute('aria-pressed', 'false');
     const lbl = $('hf-label');
-    if (lbl) lbl.textContent = 'Voice: Paused';
+    if (lbl) lbl.textContent = t('hf_off');
     if (!state.listening) {
       $('mic')?.classList.remove('listening');
       $('mic-label') && ($('mic-label').textContent = t('mic_idle') || 'Microphone idle');
@@ -1869,9 +1869,9 @@ function startHomeCalibration(presetName) {
   if (nameInput) nameInput.value = defaultRoom;
 
   renderCalibFurnitureChips();
-  updateCalibStatus('Ready to scan', 'ok');
+  updateCalibStatus(t('calib_ready'), 'ok');
   const startBtn = $('calib-start-btn');
-  if (startBtn) startBtn.textContent = '🎥 Start Video Walkthrough';
+  if (startBtn) startBtn.textContent = t('calib_start');
   const saveBtn = $('calib-save-btn');
   if (saveBtn) saveBtn.disabled = true;
   const modal = $('calib-modal');
@@ -1891,7 +1891,7 @@ function recalibrateRoom(roomId) {
 
   startHomeCalibration(room.name);
   VideoRoomCalib.calibratingId = room.id;
-  updateCalibStatus(`Recalibrating ${room.name}`, 'warn');
+  updateCalibStatus(t('calib_recalibrating', { room: room.name }), 'warn');
 
   // Parse existing furniture from notes if available
   const match = (room.notes || '').match(/(?:furniture|landmarks?|detected|walkthrough)[:\s]+([^.]+)/i);
@@ -1949,8 +1949,8 @@ function toggleVideoCalibrationWalk() {
     clearInterval(VideoRoomCalib.timer);
     VideoRoomCalib.timer = null;
     const startBtn = $('calib-start-btn');
-    if (startBtn) startBtn.textContent = '🎥 Resume Walkthrough';
-    updateCalibStatus('Walkthrough paused', 'ok');
+    if (startBtn) startBtn.textContent = t('calib_resume');
+    updateCalibStatus(t('calib_paused'), 'ok');
     if (VideoRoomCalib.furniture.size > 0) {
       const saveBtn = $('calib-save-btn');
       if (saveBtn) saveBtn.disabled = false;
@@ -1965,8 +1965,8 @@ function toggleVideoCalibrationWalk() {
     VideoRoomCalib.roomName = (roomInput && roomInput.value.trim()) || 'Reading Room';
     VideoRoomCalib.active = true;
     const startBtn = $('calib-start-btn');
-    if (startBtn) startBtn.textContent = '⏹️ Stop Walkthrough';
-    updateCalibStatus('Walking & scanning room…', 'busy');
+    if (startBtn) startBtn.textContent = t('calib_stop');
+    updateCalibStatus(t('calib_scanning'), 'busy');
 
     const msgEn = `Walkthrough active for ${VideoRoomCalib.roomName}. Walk slowly and show your reading table, dressing table, bed, and shelves.`;
     const msgBn = `${VideoRoomCalib.roomName}-এর ওয়াকথ্রু চালু হয়েছে। ধীরে ধীরে হেঁটে টেবিল ও আসবাবপত্র দেখান।`;
@@ -2612,18 +2612,10 @@ async function togglePrivateMode() {
       clearPrivateSession();
     }
     $('private-btn').setAttribute('aria-pressed', privacyMode);
-    $('private-btn').textContent = 'Privacy mode: ' + (privacyMode ? 'on' : 'off');
-    $('privacy-status').textContent = privacyMode
-      ? 'New memories, room notes and activity are not saved while this is on. Existing account data is untouched.'
-      : 'Notes are saved on this browser; account sync needs permission and a connection. Browser notes are not encrypted.';
+    $('private-btn').textContent = t(privacyMode ? 'privacy_on' : 'privacy_off');
+    $('privacy-status').textContent = t(privacyMode ? 'privacy_status_on' : 'privacy_status_off');
     if (!privacyMode) { await refreshMemory(); await refreshRooms(); }
     announce(privacyMode ? 'Privacy mode is on. Nothing new will be saved until you turn it off.' : 'Privacy mode is off.',
       privacyMode ? 'গোপনীয়তা মোড চালু। বন্ধ না করা পর্যন্ত নতুন কিছু সংরক্ষণ হবে না।' : 'গোপনীয়তা মোড বন্ধ।');
   } finally { privacyTransition = false; $('private-btn').disabled = false; }
-}
-async function signOut() {
-  if (typeof window.ASTHA_CLEAR_ACCOUNT === 'function') window.ASTHA_CLEAR_ACCOUNT({ logout: true });
-  if (typeof stopAllSpeech === 'function') stopAllSpeech();
-  try { await apiSend('POST', '/api/auth/logout', {}); } catch (e) {}
-  location.reload();
 }

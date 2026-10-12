@@ -1,0 +1,1443 @@
+{
+ "strings": {
+  "skip_link": [
+   "Skip to companion",
+   "সরাসরি সহায়কে যান"
+  ],
+  "auth_sub": [
+   "Your voice-first visual companion. Create an account once; Astha remembers your things and rooms after that.",
+   "আপনার কণ্ঠ-নির্ভর দৃষ্টি-সহায়ক। একবার অ্যাকাউন্ট তৈরি করুন; এরপর আস্থা আপনার জিনিসপত্র ও ঘরের কথা মনে রাখবে।"
+  ],
+  "auth_action": [
+   "Account action",
+   "অ্যাকাউন্টের কাজ"
+  ],
+  "auth_create": [
+   "Create account",
+   "অ্যাকাউন্ট তৈরি"
+  ],
+  "auth_login": [
+   "Log in",
+   "প্রবেশ করুন"
+  ],
+  "auth_name": [
+   "Your name",
+   "আপনার নাম"
+  ],
+  "auth_phone": [
+   "Phone number",
+   "ফোন নম্বর"
+  ],
+  "auth_passcode": [
+   "Passcode (4 to 8 digits)",
+   "পাসকোড (৪ থেকে ৮টি সংখ্যা)"
+  ],
+  "auth_note": [
+   "Your name and phone are used only to sign you back in. Everything Astha remembers stays tied to your account.",
+   "আপনার নাম ও ফোন নম্বর শুধু আবার প্রবেশের জন্য ব্যবহৃত হয়। আস্থা যা মনে রাখে তা আপনার অ্যাকাউন্টের সঙ্গেই যুক্ত থাকে।"
+  ],
+  "auth_close": [
+   "Continue without an account",
+   "অ্যাকাউন্ট ছাড়াই চালিয়ে যান"
+  ],
+  "theme_title": [
+   "Contrast theme Selector",
+   "রঙের থিম বাছাই"
+  ],
+  "theme_label": [
+   "Contrast theme",
+   "রঙের থিম"
+  ],
+  "theme_navy": [
+   "🌊 Navy and cyan",
+   "🌊 গাঢ় নীল ও সায়ান"
+  ],
+  "theme_mono": [
+   "⚪ Monochrome (white on black)",
+   "⚪ সাদা-কালো (কালোর ওপর সাদা)"
+  ],
+  "theme_yellow": [
+   "🟡 Yellow on black (photophobia)",
+   "🟡 কালোর ওপর হলুদ (আলোয় অস্বস্তি হলে)"
+  ],
+  "font_label": [
+   "Font Size",
+   "লেখার আকার"
+  ],
+  "font_normal": [
+   "Text: Standard",
+   "লেখা: সাধারণ"
+  ],
+  "font_large": [
+   "Text: Large",
+   "লেখা: বড়"
+  ],
+  "font_xlarge": [
+   "Text: Extra large",
+   "লেখা: খুব বড়"
+  ],
+  "voice_delivery": [
+   "Voice Delivery",
+   "কণ্ঠের ভাষা"
+  ],
+  "voice_delivery_title": [
+   "Voice Delivery Language",
+   "আস্থা যে ভাষায় কথা বলবে"
+  ],
+  "voice_en_btn": [
+   "Voice: English",
+   "কণ্ঠ: English"
+  ],
+  "voice_en_title": [
+   "Voice output spoken in English",
+   "আস্থা ইংরেজিতে কথা বলবে"
+  ],
+  "voice_bn_btn": [
+   "Voice: বাংলা",
+   "কণ্ঠ: বাংলা"
+  ],
+  "voice_bn_title": [
+   "Voice output spoken in Bangla (বাংলা)",
+   "আস্থা বাংলায় কথা বলবে"
+  ],
+  "safety_brand": [
+   "Astha AI Companion",
+   "আস্থা এআই সহায়ক"
+  ],
+  "safety_note": [
+   "· Experimental visual assistance. Use your usual mobility aid; Astha cannot confirm a safe path. আস্থা নিরাপদ পথ নিশ্চিত করতে পারে না।",
+   "· পরীক্ষামূলক দৃষ্টি-সহায়তা। আপনার চলাচলের সহায়ক ব্যবহার করুন; আস্থা নিরাপদ পথ নিশ্চিত করতে পারে না।"
+  ],
+  "secure_title": [
+   "This page is open on an insecure address.",
+   "এই পাতাটি অনিরাপদ ঠিকানায় খোলা হয়েছে।"
+  ],
+  "secure_body": [
+   "The browser will ask for the microphone and camera every time and may block them. Open the app on localhost or over HTTPS. On Android, use Chrome's port forwarding (chrome://inspect on the computer) so the phone sees localhost, or a Cloudflare tunnel.",
+   "ব্রাউজার প্রতিবার মাইক্রোফোন ও ক্যামেরার অনুমতি চাইবে এবং আটকে দিতে পারে। অ্যাপটি localhost অথবা HTTPS ঠিকানায় খুলুন। অ্যান্ড্রয়েডে Chrome-এর পোর্ট ফরওয়ার্ডিং (কম্পিউটারে chrome://inspect) অথবা Cloudflare টানেল ব্যবহার করুন।"
+  ],
+  "hf_title": [
+   "Keep listening for “Astha, …”",
+   "“আস্থা, …” শোনার জন্য মাইক্রোফোন চালু রাখুন"
+  ],
+  "engine_mode": [
+   "AI Engine Mode",
+   "এআই প্রসেসিং মোড"
+  ],
+  "engine_mode_title": [
+   "Choose online processing or on-device models",
+   "অনলাইন প্রসেসিং অথবা ফোনের নিজস্ব মডেল বেছে নিন"
+  ],
+  "mode_online": [
+   "✨ Online AI",
+   "✨ অনলাইন এআই"
+  ],
+  "mode_offline": [
+   "📱 Offline",
+   "📱 অফলাইন"
+  ],
+  "speaking_mode": [
+   "Speaking mode",
+   "কথা বলার ধরন"
+  ],
+  "speaking_mode_title": [
+   "Auto: speaks up in busy places. Quiet: speaks only when asked.",
+   "অটো: ব্যস্ত জায়গায় নিজে থেকে জানায়। শান্ত: শুধু জিজ্ঞাসা করলে বলে।"
+  ],
+  "mode_auto": [
+   "Auto · busy area",
+   "অটো · ব্যস্ত জায়গা"
+  ],
+  "mode_quiet": [
+   "Quiet · ask me",
+   "শান্ত · জিজ্ঞাসা করলে"
+  ],
+  "command_label": [
+   "Ask Astha in Bangla or English",
+   "বাংলা বা ইংরেজিতে আস্থাকে জিজ্ঞাসা করুন"
+  ],
+  "command_placeholder": [
+   "Type a request, e.g. Where are my glasses?",
+   "অনুরোধ লিখুন, যেমন: আমার চশমা কোথায়?"
+  ],
+  "command_submit": [
+   "Ask Astha",
+   "আস্থাকে জিজ্ঞাসা করুন"
+  ],
+  "btn_repeat": [
+   "Repeat",
+   "আবার বলো"
+  ],
+  "btn_stop_speaking": [
+   "Stop speaking",
+   "কথা থামাও"
+  ],
+  "btn_voice_commands": [
+   "Voice commands",
+   "ভয়েস কমান্ড"
+  ],
+  "agent_title_label": [
+   "Autonomous Agent",
+   "স্বয়ংক্রিয় সহায়ক"
+  ],
+  "agent_goal": [
+   "Goal: ",
+   "লক্ষ্য: "
+  ],
+  "still_alt": [
+   "Visual Source",
+   "দৃশ্যের উৎস"
+  ],
+  "video_source": [
+   "Video source",
+   "ভিডিওর উৎস"
+  ],
+  "act_agent": [
+   "Autonomous task",
+   "স্বয়ংক্রিয় কাজ"
+  ],
+  "act_agent_desc": [
+   "Plan, RAG memory & verify loop",
+   "পরিকল্পনা, স্মৃতি খোঁজা ও যাচাই"
+  ],
+  "calib_heading": [
+   "🏠 Video Home & Room Calibration",
+   "🏠 ভিডিও দিয়ে ঘর চেনানো"
+  ],
+  "calib_instruction": [
+   "Choose a room name, then walk through with your camera. Astha will continuously identify furniture surfaces (dressing table, reading table, bed, chairs) and remember where items are placed.",
+   "ঘরের নাম বেছে নিন, তারপর ক্যামেরা নিয়ে ঘরটি ঘুরে দেখান। আস্থা আসবাবপত্র (ড্রেসিং টেবিল, পড়ার টেবিল, বিছানা, চেয়ার) শনাক্ত করবে এবং জিনিসপত্র কোথায় রাখা আছে তা মনে রাখবে।"
+  ],
+  "room_name": [
+   "Room name",
+   "ঘরের নাম"
+  ],
+  "room_placeholder": [
+   "Reading Room, Bedroom, etc.",
+   "পড়ার ঘর, শোবার ঘর ইত্যাদি"
+  ],
+  "calib_view_status": [
+   "Point camera at room furniture and tap \"Start Video Walkthrough\"",
+   "ঘরের আসবাবের দিকে ক্যামেরা ধরে “ভিডিও শুরু করুন” চাপুন"
+  ],
+  "calib_landmarks": [
+   "Detected Furniture & Landmarks in this Room:",
+   "এই ঘরে শনাক্ত হওয়া আসবাব ও চিহ্ন:"
+  ],
+  "calib_none": [
+   "None detected yet. Walk through room with camera.",
+   "এখনও কিছু শনাক্ত হয়নি। ক্যামেরা নিয়ে ঘরটি ঘুরে দেখান।"
+  ],
+  "calib_save": [
+   "✓ Save Calibrated Room",
+   "✓ ঘরটি সংরক্ষণ করুন"
+  ],
+  "cancel": [
+   "Cancel",
+   "বাতিল"
+  ],
+  "calib_ready": [
+   "Ready to scan",
+   "স্ক্যানের জন্য প্রস্তুত"
+  ],
+  "calib_start": [
+   "🎥 Start Video Walkthrough",
+   "🎥 ভিডিও শুরু করুন"
+  ],
+  "calib_resume": [
+   "🎥 Resume Walkthrough",
+   "🎥 আবার শুরু করুন"
+  ],
+  "calib_stop": [
+   "⏹️ Stop Walkthrough",
+   "⏹️ ভিডিও থামান"
+  ],
+  "calib_paused": [
+   "Walkthrough paused",
+   "ভিডিও বিরতিতে"
+  ],
+  "calib_scanning": [
+   "Walking & scanning room…",
+   "ঘর ঘুরে দেখা হচ্ছে…"
+  ],
+  "calib_recalibrating": [
+   "Recalibrating {room}",
+   "{room} আবার চেনানো হচ্ছে"
+  ],
+  "ocr_append": [
+   "Add this text to reader",
+   "এই লেখা পাঠকে যোগ করুন"
+  ],
+  "narrate_label": [
+   "Auto narrate",
+   "নিজে থেকে বর্ণনা"
+  ],
+  "reader_title": [
+   "Reading transcript",
+   "পড়া লেখার প্রতিলিপি"
+  ],
+  "reader_help": [
+   "Everything Astha reads from the camera is collected here. Say “Astha, read this” or tap “Read to me” to read a book or letter. Pasting text is optional.",
+   "ক্যামেরা থেকে আস্থা যা পড়ে তা এখানে জমা হয়। বই বা চিঠি পড়তে বলুন “আস্থা, এটা পড়ো” অথবা “পড়ে শোনাও” চাপুন। লেখা পেস্ট করা ঐচ্ছিক।"
+  ],
+  "reader_label": [
+   "Transcript",
+   "প্রতিলিপি"
+  ],
+  "reader_placeholder": [
+   "Pages Astha has read will appear here.",
+   "আস্থার পড়া পাতাগুলো এখানে দেখা যাবে।"
+  ],
+  "reader_again": [
+   "Read the transcript again",
+   "প্রতিলিপি আবার পড়ো"
+  ],
+  "reader_pause": [
+   "Pause",
+   "বিরতি"
+  ],
+  "reader_resume": [
+   "Resume",
+   "আবার শুরু"
+  ],
+  "reader_stop": [
+   "Stop",
+   "থামাও"
+  ],
+  "reader_clear": [
+   "Clear text",
+   "লেখা মুছুন"
+  ],
+  "eye_title": [
+   "♥ Astha on your screen",
+   "♥ আপনার স্ক্রিনে আস্থা"
+  ],
+  "eye_help": [
+   "The heart is Astha's eye. Share your screen once and Astha watches it: she tells you which app you are in, where a button is, when a pop-up has gone, and opens apps or sites for you when the browser allows. Say “Astha, watch my screen”.",
+   "হৃদয়-চিহ্নটি আস্থার চোখ। একবার স্ক্রিন শেয়ার করলে আস্থা তা দেখে: আপনি কোন অ্যাপে আছেন, কোন বোতাম কোথায়, পপ-আপ বন্ধ হয়েছে কি না তা জানায়, এবং ব্রাউজার অনুমতি দিলে অ্যাপ বা সাইট খুলে দেয়। বলুন “আস্থা, আমার স্ক্রিন দেখো”।"
+  ],
+  "eye_empty": [
+   "Screen not shared yet.",
+   "স্ক্রিন এখনও শেয়ার করা হয়নি।"
+  ],
+  "eye_whats": [
+   "What is on my screen?",
+   "আমার স্ক্রিনে কী আছে?"
+  ],
+  "eye_error": [
+   "Read the error",
+   "ত্রুটিটি পড়ো"
+  ],
+  "eye_vscode": [
+   "Open VS Code",
+   "VS Code খোলো"
+  ],
+  "eye_paste_label": [
+   "Or paste screen or terminal text",
+   "অথবা স্ক্রিন বা টার্মিনালের লেখা পেস্ট করুন"
+  ],
+  "eye_paste_placeholder": [
+   "Paste a terminal error here, then say “Astha, read the error”.",
+   "টার্মিনালের ত্রুটি এখানে পেস্ট করে বলুন “আস্থা, ত্রুটিটি পড়ো”।"
+  ],
+  "focus_text": [
+   "Keyboard guidance: name each control as I Tab to it",
+   "কিবোর্ড নির্দেশনা: Tab চাপলে প্রতিটি নিয়ন্ত্রণের নাম বলো"
+  ],
+  "focus_label": [
+   "Keyboard guidance",
+   "কিবোর্ড নির্দেশনা"
+  ],
+  "eye_note": [
+   "Astha opens websites and VS Code herself. Clicking inside other apps needs the small desktop agent from the roadmap; until then she guides your keys and confirms what she sees.",
+   "আস্থা নিজেই ওয়েবসাইট ও VS Code খুলতে পারে। অন্য অ্যাপের ভেতরে ক্লিক করার জন্য ভবিষ্যতের ডেস্কটপ এজেন্ট লাগবে; ততদিন সে কিবোর্ডে পথ দেখায় এবং যা দেখে তা নিশ্চিত করে।"
+  ],
+  "prefs_title": [
+   "Your preferences",
+   "আপনার পছন্দ"
+  ],
+  "account_open": [
+   "Create account or log in",
+   "অ্যাকাউন্ট তৈরি বা প্রবেশ"
+  ],
+  "sign_out": [
+   "Sign out",
+   "সাইন আউট"
+  ],
+  "data_help": [
+   "You can download everything Astha has saved about you, remove your face and voice templates, or delete your account.",
+   "আস্থা আপনার সম্পর্কে যা সংরক্ষণ করেছে তা ডাউনলোড করতে, মুখ ও কণ্ঠের নমুনা সরাতে অথবা অ্যাকাউন্ট মুছে ফেলতে পারেন।"
+  ],
+  "data_export": [
+   "Download my data",
+   "আমার তথ্য ডাউনলোড"
+  ],
+  "data_forget_bio": [
+   "Forget my face and voice",
+   "আমার মুখ ও কণ্ঠ ভুলে যাও"
+  ],
+  "data_delete": [
+   "Delete my account",
+   "আমার অ্যাকাউন্ট মুছুন"
+  ],
+  "data_delete_warn": [
+   "This permanently deletes your Astha account, every saved memory, room note, activity record and personal note, and the copies on this phone. It cannot be undone.",
+   "এতে আপনার আস্থা অ্যাকাউন্ট, সংরক্ষিত সব স্মৃতি, ঘরের নোট, কার্যক্রমের রেকর্ড ও ব্যক্তিগত নোট এবং এই ফোনে থাকা কপি স্থায়ীভাবে মুছে যাবে। এটি আর ফেরানো যাবে না।"
+  ],
+  "data_delete_pin": [
+   "Enter your passcode to confirm",
+   "নিশ্চিত করতে আপনার পাসকোড দিন"
+  ],
+  "data_delete_confirm": [
+   "Delete permanently",
+   "স্থায়ীভাবে মুছুন"
+  ],
+  "gemini_label": [
+   "Personal Gemini key (optional backup)",
+   "ব্যক্তিগত Gemini কী (ঐচ্ছিক বিকল্প)"
+  ],
+  "gemini_placeholder": [
+   "Leave blank -- the Astha server already provides this",
+   "খালি রাখুন -- আস্থার সার্ভার এটি দিয়ে থাকে"
+  ],
+  "cloud_help": [
+   "Cloud features require a configured server or your own provider key and your consent. Descriptions can be wrong; verify before acting. A personal key is kept on this browser and should only be used on a device you trust.",
+   "ক্লাউড সুবিধার জন্য কনফিগার করা সার্ভার অথবা আপনার নিজের কী এবং আপনার সম্মতি প্রয়োজন। বর্ণনা ভুল হতে পারে; কিছু করার আগে যাচাই করুন। ব্যক্তিগত কী এই ব্রাউজারে রাখা হয়, তাই শুধু বিশ্বস্ত ডিভাইসে ব্যবহার করুন।"
+  ],
+  "rate_label": [
+   "Speaking speed",
+   "কথা বলার গতি"
+  ],
+  "rate_slower": [
+   "Slower",
+   "ধীরে"
+  ],
+  "rate_normal": [
+   "Normal",
+   "স্বাভাবিক"
+  ],
+  "rate_faster": [
+   "Faster",
+   "দ্রুত"
+  ],
+  "rate_very_fast": [
+   "Very fast",
+   "খুব দ্রুত"
+  ],
+  "desc_label": [
+   "Description length",
+   "বর্ণনার দৈর্ঘ্য"
+  ],
+  "desc_short": [
+   "Short",
+   "সংক্ষিপ্ত"
+  ],
+  "desc_detailed": [
+   "Detailed",
+   "বিস্তারিত"
+  ],
+  "ocr_label": [
+   "Reading language",
+   "পড়ার ভাষা"
+  ],
+  "voice_label": [
+   "Astha's voice",
+   "আস্থার কণ্ঠ"
+  ],
+  "stt_label": [
+   "I speak",
+   "আমি যে ভাষায় বলি"
+  ],
+  "stt_auto": [
+   "Same as the voice language",
+   "কণ্ঠের ভাষার মতোই"
+  ],
+  "stt_bn": [
+   "বাংলা (Banglish works too)",
+   "বাংলা (বাংলিশও চলবে)"
+  ],
+  "hf_help": [
+   "Hands-free mode keeps the microphone open in this tab and waits for “Astha, …”. Browser speech recognition may use an online service.",
+   "হ্যান্ডস-ফ্রি মোডে এই ট্যাবে মাইক্রোফোন চালু থাকে এবং “আস্থা, …” শোনার অপেক্ষা করে। ব্রাউজারের কণ্ঠ শনাক্তকরণ অনলাইন পরিষেবা ব্যবহার করতে পারে।"
+  ],
+  "owner_title": [
+   "Owner ID",
+   "মালিক শনাক্তকরণ"
+  ],
+  "owner_help": [
+   "Face and voice matching are experimental convenience controls, not secure authentication. Templates are saved locally for this profile. Camera and microphone access require your browser permission.",
+   "মুখ ও কণ্ঠ মেলানো পরীক্ষামূলক সুবিধা মাত্র, নিরাপদ প্রমাণীকরণ নয়। নমুনাগুলো এই প্রোফাইলের জন্য এই ফোনেই সংরক্ষিত থাকে। ক্যামেরা ও মাইক্রোফোনের জন্য ব্রাউজারের অনুমতি লাগবে।"
+  ],
+  "owner_face": [
+   "Remember my face",
+   "আমার মুখ মনে রাখো"
+  ],
+  "owner_voice": [
+   "Remember my voice (experimental)",
+   "আমার কণ্ঠ মনে রাখো (পরীক্ষামূলক)"
+  ],
+  "owner_me": [
+   "It's me",
+   "এটা আমি"
+  ],
+  "diag_summary": [
+   "Advanced: AI model status",
+   "উন্নত: এআই মডেলের অবস্থা"
+  ],
+  "memory_item_label": [
+   "Object",
+   "জিনিস"
+  ],
+  "memory_item_placeholder": [
+   "Glasses / চশমা",
+   "চশমা"
+  ],
+  "memory_location_label": [
+   "Last seen location",
+   "শেষ যেখানে দেখা গেছে"
+  ],
+  "memory_location_placeholder": [
+   "Bedroom, on the bedside table",
+   "শোবার ঘর, বিছানার পাশের টেবিলে"
+  ],
+  "memory_submit": [
+   "Remember this",
+   "এটা মনে রাখো"
+  ],
+  "memory_search_label": [
+   "Search memories",
+   "স্মৃতি খুঁজুন"
+  ],
+  "memory_search_placeholder": [
+   "Find an object or room",
+   "জিনিস বা ঘর খুঁজুন"
+  ],
+  "distance_label": [
+   "Distance",
+   "দূরত্ব"
+  ],
+  "api_url_label": [
+   "Backend URL",
+   "ব্যাকএন্ড ঠিকানা"
+  ],
+  "guide_summary": [
+   "Voice Commands & Assistant Guide",
+   "ভয়েস কমান্ড ও সহায়িকা"
+  ],
+  "guide_text": [
+   "Always-listening Siri mode: Say “Astha” or ask directly: “What is in front of me?”, “Read this”, “Check clothes”, “Where are my keys?”. Say “Stop talking” to silence instantly.",
+   "সবসময় শোনার মোড: “আস্থা” বলুন অথবা সরাসরি জিজ্ঞাসা করুন: “আমার সামনে কী আছে?”, “এটা পড়ো”, “কাপড় দেখো”, “আমার চাবি কোথায়?”। সঙ্গে সঙ্গে থামাতে বলুন “কথা থামাও”।"
+  ],
+  "hf_on": [
+   "Hands-free: on",
+   "হ্যান্ডস-ফ্রি: চালু"
+  ],
+  "hf_off": [
+   "Hands-free: off",
+   "হ্যান্ডস-ফ্রি: বন্ধ"
+  ],
+  "privacy_on": [
+   "Privacy mode: on",
+   "গোপনীয়তা মোড: চালু"
+  ],
+  "privacy_off": [
+   "Privacy mode: off",
+   "গোপনীয়তা মোড: বন্ধ"
+  ],
+  "privacy_status_on": [
+   "New memories, room notes and activity are not saved while this is on. Existing account data is untouched.",
+   "এটি চালু থাকলে নতুন স্মৃতি, ঘরের নোট ও কার্যক্রম সংরক্ষণ হয় না। অ্যাকাউন্টের আগের তথ্য অপরিবর্তিত থাকে।"
+  ],
+  "privacy_status_off": [
+   "Notes are saved on this browser; account sync needs permission and a connection. Browser notes are not encrypted.",
+   "নোট এই ব্রাউজারে সংরক্ষিত হয়; অ্যাকাউন্টের সঙ্গে সমন্বয়ের জন্য অনুমতি ও সংযোগ লাগে। ব্রাউজারের নোট এনক্রিপ্ট করা নয়।"
+  ],
+  "owner_lock_on": [
+   "Owner lock: on",
+   "মালিক লক: চালু"
+  ],
+  "owner_lock_off": [
+   "Owner lock: off",
+   "মালিক লক: বন্ধ"
+  ],
+  "eye_start": [
+   "Let Astha see my screen",
+   "আস্থাকে আমার স্ক্রিন দেখতে দিন"
+  ],
+  "eye_stop": [
+   "Stop watching my screen",
+   "স্ক্রিন দেখা বন্ধ করো"
+  ],
+  "eye_idle": [
+   "Not watching",
+   "দেখছে না"
+  ],
+  "reader_ready": [
+   "Ready",
+   "প্রস্তুত"
+  ],
+  "reader_reading": [
+   "Reading",
+   "পড়ছে"
+  ],
+  "reader_paused": [
+   "Paused",
+   "বিরতিতে"
+  ],
+  "reader_stopped": [
+   "Stopped",
+   "থেমেছে"
+  ],
+  "reader_finished": [
+   "Finished",
+   "শেষ হয়েছে"
+  ],
+  "reader_part": [
+   "Part {n} of {total}",
+   "অংশ {n} / {total}"
+  ],
+  "reader_failed": [
+   "Speech failed. Try Read all again.",
+   "পড়া যায়নি। আবার পড়তে বলুন।"
+  ],
+  "reader_no_voice": [
+   "No local voice available",
+   "এই ফোনে কোনো কণ্ঠ নেই"
+  ],
+  "read_stop": [
+   "Stop reading",
+   "পড়া থামাও"
+  ],
+  "source_idle": [
+   "Camera off · No image selected",
+   "ক্যামেরা বন্ধ · কোনো ছবি বাছাই করা হয়নি"
+  ],
+  "source_live": [
+   "Live camera · Recognition is experimental",
+   "লাইভ ক্যামেরা · শনাক্তকরণ পরীক্ষামূলক"
+  ],
+  "source_demo": [
+   "Demo photo · Not your surroundings",
+   "নমুনা ছবি · আপনার চারপাশ নয়"
+  ],
+  "source_photo": [
+   "Uploaded photo · Not a live view",
+   "আপলোড করা ছবি · লাইভ দৃশ্য নয়"
+  ],
+  "eye_watching": [
+   "Watching",
+   "দেখছে"
+  ],
+  "memory_clear_confirm": [
+   "Delete all saved object memories and room notes from this phone and your Astha account?",
+   "এই ফোন ও আপনার আস্থা অ্যাকাউন্ট থেকে সংরক্ষিত সব জিনিসের স্মৃতি ও ঘরের নোট মুছে ফেলবেন?"
+  ],
+  "gemini_prompt": [
+   "Optional personal AI API key (Google Gemini or Gigalogy Maira). The configured ASTHA server is used first:",
+   "ঐচ্ছিক ব্যক্তিগত এআই এপিআই কী (Google Gemini বা Gigalogy Maira)। আগে কনফিগার করা আস্থা সার্ভার ব্যবহার হয়:"
+  ],
+  "data_delete_guest": [
+   "This is a guest account, so no passcode is needed.",
+   "এটি অতিথি অ্যাকাউন্ট, তাই পাসকোড লাগবে না।"
+  ],
+  "data_delete_local": [
+   "No account is connected. This removes the notes and templates saved on this phone.",
+   "কোনো অ্যাকাউন্ট সংযুক্ত নেই। এতে এই ফোনে সংরক্ষিত নোট ও নমুনা মুছে যাবে।"
+  ],
+  "owner_face_yes": [
+   "Face enrolled",
+   "মুখ নিবন্ধিত"
+  ],
+  "owner_face_no": [
+   "No face yet",
+   "মুখ এখনও নেই"
+  ],
+  "owner_voice_yes": [
+   "voiceprint saved",
+   "কণ্ঠের নমুনা আছে"
+  ],
+  "owner_voice_no": [
+   "no voiceprint",
+   "কণ্ঠের নমুনা নেই"
+  ],
+  "owner_lock_short_on": [
+   "lock on",
+   "লক চালু"
+  ],
+  "owner_lock_short_off": [
+   "lock off",
+   "লক বন্ধ"
+  ],
+  "owner_verified": [
+   "verified {time}",
+   "যাচাই হয়েছে {time}"
+  ],
+  "owner_unverified": [
+   "not verified",
+   "যাচাই হয়নি"
+  ]
+ },
+ "hooks": [
+  [
+   "<a class=\"skip-link\" href=\"#companion-main\">",
+   {
+    "text": "skip_link"
+   }
+  ],
+  [
+   "<p class=\"auth-sub\">",
+   {
+    "text": "auth_sub"
+   }
+  ],
+  [
+   "<div class=\"segmented\" role=\"group\" aria-label=\"Account action\" style=\"margin-bottom:14px\">",
+   {
+    "aria-label": "auth_action"
+   }
+  ],
+  [
+   "<button id=\"auth-tab-signup\" onclick=\"setAuthTab('signup')\" aria-pressed=\"true\">",
+   {
+    "text": "auth_create"
+   }
+  ],
+  [
+   "<button id=\"auth-tab-login\" onclick=\"setAuthTab('login')\" aria-pressed=\"false\">",
+   {
+    "text": "auth_login"
+   }
+  ],
+  [
+   "<label class=\"field\" id=\"auth-name-field\" for=\"auth-name\">",
+   {
+    "lead": "auth_name"
+   }
+  ],
+  [
+   "<label class=\"field\" for=\"auth-phone\">",
+   {
+    "lead": "auth_phone"
+   }
+  ],
+  [
+   "<label class=\"field\" for=\"auth-passcode\">",
+   {
+    "lead": "auth_passcode"
+   }
+  ],
+  [
+   "<p class=\"help\">Your name and phone are used only",
+   {
+    "text": "auth_note"
+   }
+  ],
+  [
+   "<button class=\"btn\" type=\"button\" id=\"auth-close\" onclick=\"closeAuthGate()\">",
+   {
+    "text": "auth_close"
+   }
+  ],
+  [
+   "<div class=\"flex items-center gap-1.5\" title=\"Contrast theme Selector\">",
+   {
+    "title": "theme_title"
+   }
+  ],
+  [
+   "<label for=\"theme-select\" class=\"sr-only\">",
+   {
+    "text": "theme_label"
+   }
+  ],
+  [
+   "<select id=\"theme-select\" onchange=\"applyClinicalTheme(this.value)\" class=\"select-dropdown\" aria-label=\"Contrast theme\">",
+   {
+    "aria-label": "theme_label"
+   }
+  ],
+  [
+   "<option value=\"navy-cyan\">",
+   {
+    "text": "theme_navy"
+   }
+  ],
+  [
+   "<option value=\"monochrome\">",
+   {
+    "text": "theme_mono"
+   }
+  ],
+  [
+   "<option value=\"clinical-yellow\">",
+   {
+    "text": "theme_yellow"
+   }
+  ],
+  [
+   "<div class=\"flex items-center gap-1\" title=\"Font Size\">",
+   {
+    "title": "font_label"
+   }
+  ],
+  [
+   "<label for=\"font-select\" class=\"sr-only\">",
+   {
+    "text": "font_label"
+   }
+  ],
+  [
+   "<select id=\"font-select\" onchange=\"applyFontSize(this.value)\" class=\"select-dropdown\" aria-label=\"Font Size\">",
+   {
+    "aria-label": "font_label"
+   }
+  ],
+  [
+   "<option value=\"normal\">",
+   {
+    "text": "font_normal"
+   }
+  ],
+  [
+   "<option value=\"large\">",
+   {
+    "text": "font_large"
+   }
+  ],
+  [
+   "<option value=\"xlarge\">",
+   {
+    "text": "font_xlarge"
+   }
+  ],
+  [
+   "<select id=\"ui-language\" class=\"select-dropdown\" onchange=\"setUiLanguage(this.value)\" aria-label=\"Interface language\">",
+   {
+    "aria-label": "ui_language"
+   }
+  ],
+  [
+   "<div class=\"segmented\" role=\"group\" aria-label=\"Voice Delivery\" title=\"Voice Delivery Language\">",
+   {
+    "aria-label": "voice_delivery",
+    "title": "voice_delivery_title"
+   }
+  ],
+  [
+   "<button id=\"voice-lang-en\" onclick=\"setVoiceLanguage('en')\" aria-pressed=\"false\" title=\"Voice output spoken in English\">",
+   {
+    "text": "voice_en_btn",
+    "title": "voice_en_title"
+   }
+  ],
+  [
+   "<button id=\"voice-lang-bn\" onclick=\"setVoiceLanguage('bn')\" aria-pressed=\"true\" title=\"Voice output spoken in Bangla (বাংলা)\">",
+   {
+    "text": "voice_bn_btn",
+    "title": "voice_bn_title"
+   }
+  ],
+  [
+   "<strong>Astha AI Companion",
+   {
+    "text": "safety_brand"
+   }
+  ],
+  [
+   "<span id=\"safety-note\">",
+   {
+    "text": "safety_note"
+   }
+  ],
+  [
+   "<strong>This page is open on an insecure address.",
+   {
+    "text": "secure_title"
+   }
+  ],
+  [
+   "<span id=\"secure-body\">",
+   {
+    "text": "secure_body"
+   }
+  ],
+  [
+   "<button class=\"mic\" id=\"mic\" onclick=\"toggleListening()\" aria-label=\"Tap to speak\">",
+   {
+    "aria-label": "mic_idle"
+   }
+  ],
+  [
+   "<button class=\"chip-btn\" id=\"hf-btn\" onclick=\"toggleHandsFree()\" aria-pressed=\"false\" title=\"Keep listening for “Astha, …”\">",
+   {
+    "title": "hf_title"
+   }
+  ],
+  [
+   "<div class=\"segmented\" role=\"group\" aria-label=\"AI Engine Mode\" title=\"Choose online processing or on-device models\">",
+   {
+    "aria-label": "engine_mode",
+    "title": "engine_mode_title"
+   }
+  ],
+  [
+   "<button id=\"btn-mode-gemini\" onclick=\"Subscription.setMode('gemini')\" aria-pressed=\"false\">",
+   {
+    "text": "mode_online"
+   }
+  ],
+  [
+   "<button id=\"btn-mode-offline\" onclick=\"Subscription.setMode('offline')\" aria-pressed=\"false\">",
+   {
+    "text": "mode_offline"
+   }
+  ],
+  [
+   "<div class=\"segmented\" role=\"group\" aria-label=\"Speaking mode\" title=\"Auto: speaks up in busy places. Quiet: speaks only when asked.\">",
+   {
+    "aria-label": "speaking_mode",
+    "title": "speaking_mode_title"
+   }
+  ],
+  [
+   "<button id=\"mode-auto\" onclick=\"setMode('auto')\" aria-pressed=\"true\">",
+   {
+    "text": "mode_auto"
+   }
+  ],
+  [
+   "<button id=\"mode-quiet\" onclick=\"setMode('quiet')\" aria-pressed=\"false\">",
+   {
+    "text": "mode_quiet"
+   }
+  ],
+  [
+   "<label class=\"sr-only\" for=\"command-input\">",
+   {
+    "text": "command_label"
+   }
+  ],
+  [
+   "<input id=\"command-input\" maxlength=\"500\" placeholder=\"Type a request, e.g. Where are my glasses?\" autocomplete=\"off\">",
+   {
+    "placeholder": "command_placeholder"
+   }
+  ],
+  [
+   "<button class=\"btn accent\" type=\"submit\">Ask Astha",
+   {
+    "text": "command_submit"
+   }
+  ],
+  [
+   "<button class=\"btn\" onclick=\"repeatResponse()\">",
+   {
+    "text": "btn_repeat"
+   }
+  ],
+  [
+   "<button class=\"btn\" onclick=\"stopAllSpeech()\">Stop speaking",
+   {
+    "text": "btn_stop_speaking"
+   }
+  ],
+  [
+   "<button class=\"btn\" onclick=\"showCommandHelp()\">",
+   {
+    "text": "btn_voice_commands"
+   }
+  ],
+  [
+   "<span id=\"agent-title\">",
+   {
+    "text": "agent_title_label"
+   }
+  ],
+  [
+   "<div style=\"font-weight: 700; font-size: 0.95rem; color: var(--accent); margin-bottom: 4px;\">Goal: ",
+   {
+    "lead": "agent_goal"
+   }
+  ],
+  [
+   "<img id=\"still\" alt=\"Visual Source\" crossorigin=\"anonymous\" hidden>",
+   {
+    "alt": "still_alt"
+   }
+  ],
+  [
+   "<div class=\"source-bar\" role=\"group\" aria-label=\"Video source\">",
+   {
+    "aria-label": "video_source"
+   }
+  ],
+  [
+   "<div class=\"title\">Autonomous task",
+   {
+    "text": "act_agent"
+   }
+  ],
+  [
+   "<div class=\"desc\">Plan, RAG memory",
+   {
+    "text": "act_agent_desc"
+   }
+  ],
+  [
+   "<h3 id=\"calib-heading\" tabindex=\"-1\">",
+   {
+    "text": "calib_heading"
+   }
+  ],
+  [
+   "<p class=\"help\" id=\"calib-instruction\">",
+   {
+    "text": "calib_instruction"
+   }
+  ],
+  [
+   "<label class=\"field\" for=\"room-name\" style=\"flex: 1; min-width: 180px; margin: 0;\">",
+   {
+    "lead": "room_name"
+   }
+  ],
+  [
+   "<input id=\"room-name\" list=\"room-presets\" maxlength=\"80\" required placeholder=\"Reading Room, Bedroom, etc.\">",
+   {
+    "placeholder": "room_placeholder"
+   }
+  ],
+  [
+   "<div id=\"calib-view-status\" style=\"color: var(--muted); font-weight: bold; text-align: center; padding: 1rem;\">",
+   {
+    "text": "calib_view_status"
+   }
+  ],
+  [
+   "<div style=\"font-size: 0.875rem; font-weight: 600; color: var(--muted); margin-bottom: 0.35rem;\">",
+   {
+    "text": "calib_landmarks"
+   }
+  ],
+  [
+   "<span class=\"empty-note\" style=\"margin: 0; font-size: 0.85rem;\">",
+   {
+    "text": "calib_none"
+   }
+  ],
+  [
+   "<button class=\"btn\" id=\"calib-save-btn\" type=\"button\" onclick=\"finishVideoRoomCalibration()\" disabled>",
+   {
+    "text": "calib_save"
+   }
+  ],
+  [
+   "<button class=\"btn\" type=\"button\" onclick=\"closeHomeCalibration()\">",
+   {
+    "text": "cancel"
+   }
+  ],
+  [
+   "<button class=\"btn\" onclick=\"appendOcrPage()\">",
+   {
+    "text": "ocr_append"
+   }
+  ],
+  [
+   "<button class=\"switch\" id=\"narrate-switch\" role=\"switch\" aria-checked=\"true\" onclick=\"toggleNarrate()\" aria-label=\"Auto narrate\">",
+   {
+    "aria-label": "narrate_label"
+   }
+  ],
+  [
+   "<h2>Reading transcript",
+   {
+    "text": "reader_title"
+   }
+  ],
+  [
+   "<p class=\"help\">Everything Astha reads from the camera",
+   {
+    "text": "reader_help"
+   }
+  ],
+  [
+   "<label class=\"field\" for=\"reader-text\">",
+   {
+    "lead": "reader_label"
+   }
+  ],
+  [
+   "<textarea id=\"reader-text\" placeholder=\"Pages Astha has read will appear here.\" oninput=\"readerTextChanged()\">",
+   {
+    "placeholder": "reader_placeholder"
+   }
+  ],
+  [
+   "<button class=\"btn accent\" onclick=\"startReader()\">",
+   {
+    "text": "reader_again"
+   }
+  ],
+  [
+   "<button class=\"btn\" onclick=\"pauseReader()\">",
+   {
+    "text": "reader_pause"
+   }
+  ],
+  [
+   "<button class=\"btn\" onclick=\"resumeReader()\">",
+   {
+    "text": "reader_resume"
+   }
+  ],
+  [
+   "<button class=\"btn\" onclick=\"stopAllSpeech()\">Stop<",
+   {
+    "text": "reader_stop"
+   }
+  ],
+  [
+   "<button class=\"btn\" onclick=\"clearReader()\">",
+   {
+    "text": "reader_clear"
+   }
+  ],
+  [
+   "<h2>♥ Astha on your screen",
+   {
+    "text": "eye_title"
+   }
+  ],
+  [
+   "<p class=\"help\">The heart is Astha's eye.",
+   {
+    "text": "eye_help"
+   }
+  ],
+  [
+   "<div>Screen not shared yet.",
+   {
+    "text": "eye_empty"
+   }
+  ],
+  [
+   "<button class=\"btn\" onclick=\"eyeWhatsOnScreen()\">",
+   {
+    "text": "eye_whats"
+   }
+  ],
+  [
+   "<button class=\"btn\" onclick=\"eyeReadError()\">",
+   {
+    "text": "eye_error"
+   }
+  ],
+  [
+   "<button class=\"btn\" onclick=\"eyeOpen('vs code')\">",
+   {
+    "text": "eye_vscode"
+   }
+  ],
+  [
+   "<label class=\"field\" for=\"eye-paste\">",
+   {
+    "lead": "eye_paste_label"
+   }
+  ],
+  [
+   "<textarea id=\"eye-paste\" placeholder=\"Paste a terminal error here, then say “Astha, read the error”.\">",
+   {
+    "placeholder": "eye_paste_placeholder"
+   }
+  ],
+  [
+   "<span>Keyboard guidance: name each control",
+   {
+    "text": "focus_text"
+   }
+  ],
+  [
+   "<button class=\"switch\" id=\"focus-switch\" role=\"switch\" aria-checked=\"false\" onclick=\"toggleFocusNarration()\" aria-label=\"Keyboard guidance\">",
+   {
+    "aria-label": "focus_label"
+   }
+  ],
+  [
+   "<p class=\"help\">Astha opens websites and VS Code herself.",
+   {
+    "text": "eye_note"
+   }
+  ],
+  [
+   "<h2>Your preferences",
+   {
+    "text": "prefs_title"
+   }
+  ],
+  [
+   "<button class=\"btn small\" id=\"account-open-btn\" onclick=\"openAuthGate()\" hidden>",
+   {
+    "text": "account_open"
+   }
+  ],
+  [
+   "<button class=\"btn small\" id=\"sign-out-btn\" onclick=\"signOut()\" hidden>",
+   {
+    "text": "sign_out"
+   }
+  ],
+  [
+   "<p class=\"help\" id=\"data-help\">",
+   {
+    "text": "data_help"
+   }
+  ],
+  [
+   "<button class=\"btn small\" onclick=\"exportMyData()\">",
+   {
+    "text": "data_export"
+   }
+  ],
+  [
+   "<button class=\"btn small\" onclick=\"forgetOwnerBiometrics()\">",
+   {
+    "text": "data_forget_bio"
+   }
+  ],
+  [
+   "<button class=\"btn small danger\" id=\"delete-account-btn\" onclick=\"openDeleteAccount()\" aria-expanded=\"false\" aria-controls=\"delete-account-panel\">",
+   {
+    "text": "data_delete"
+   }
+  ],
+  [
+   "<p class=\"help\" id=\"delete-account-warning\">",
+   {
+    "text": "data_delete_warn"
+   }
+  ],
+  [
+   "<label class=\"field\" id=\"delete-account-pin-field\" for=\"delete-account-pin\">",
+   {
+    "lead": "data_delete_pin"
+   }
+  ],
+  [
+   "<button class=\"btn danger\" id=\"delete-account-confirm\" onclick=\"confirmDeleteAccount()\">",
+   {
+    "text": "data_delete_confirm"
+   }
+  ],
+  [
+   "<button class=\"btn\" onclick=\"closeDeleteAccount()\">",
+   {
+    "text": "cancel"
+   }
+  ],
+  [
+   "<label class=\"field\" for=\"gemini-key\">",
+   {
+    "lead": "gemini_label"
+   }
+  ],
+  [
+   "<input id=\"gemini-key\" type=\"password\" autocomplete=\"off\" placeholder=\"Leave blank -- the Astha server already provides this\" onchange=\"setGeminiKey(this.value)\">",
+   {
+    "placeholder": "gemini_placeholder"
+   }
+  ],
+  [
+   "<p class=\"help\">Cloud features require a configured server",
+   {
+    "text": "cloud_help"
+   }
+  ],
+  [
+   "<label class=\"field\" for=\"speech-rate\">",
+   {
+    "lead": "rate_label"
+   }
+  ],
+  [
+   "<option value=\"0.8\">",
+   {
+    "text": "rate_slower"
+   }
+  ],
+  [
+   "<option value=\"1\" selected>",
+   {
+    "text": "rate_normal"
+   }
+  ],
+  [
+   "<option value=\"1.2\">",
+   {
+    "text": "rate_faster"
+   }
+  ],
+  [
+   "<option value=\"1.5\">",
+   {
+    "text": "rate_very_fast"
+   }
+  ],
+  [
+   "<label class=\"field\" for=\"description-style\">",
+   {
+    "lead": "desc_label"
+   }
+  ],
+  [
+   "<option value=\"short\">",
+   {
+    "text": "desc_short"
+   }
+  ],
+  [
+   "<option value=\"detailed\">",
+   {
+    "text": "desc_detailed"
+   }
+  ],
+  [
+   "<label class=\"field\" for=\"ocr-language\">",
+   {
+    "lead": "ocr_label"
+   }
+  ],
+  [
+   "<label class=\"field\" for=\"voice-select\">",
+   {
+    "lead": "voice_label"
+   }
+  ],
+  [
+   "<label class=\"field\" for=\"stt-lang\">",
+   {
+    "lead": "stt_label"
+   }
+  ],
+  [
+   "<option value=\"auto\">",
+   {
+    "text": "stt_auto"
+   }
+  ],
+  [
+   "<option value=\"bn-BD\">",
+   {
+    "text": "stt_bn"
+   }
+  ],
+  [
+   "<p class=\"help\">Hands-free mode keeps the microphone open",
+   {
+    "text": "hf_help"
+   }
+  ],
+  [
+   "<h2>Owner ID",
+   {
+    "text": "owner_title"
+   }
+  ],
+  [
+   "<p class=\"help\">Face and voice matching are experimental",
+   {
+    "text": "owner_help"
+   }
+  ],
+  [
+   "<button class=\"btn accent\" onclick=\"enrollOwnerFace()\">",
+   {
+    "text": "owner_face"
+   }
+  ],
+  [
+   "<button class=\"btn\" onclick=\"enrollOwnerVoice()\">",
+   {
+    "text": "owner_voice"
+   }
+  ],
+  [
+   "<button class=\"btn\" onclick=\"ownerItsMe()\">",
+   {
+    "text": "owner_me"
+   }
+  ],
+  [
+   "<summary>Advanced: AI model status",
+   {
+    "text": "diag_summary"
+   }
+  ],
+  [
+   "<label class=\"field\" for=\"memory-item\">",
+   {
+    "lead": "memory_item_label"
+   }
+  ],
+  [
+   "<input id=\"memory-item\" maxlength=\"80\" placeholder=\"Glasses / চশমা\" required>",
+   {
+    "placeholder": "memory_item_placeholder"
+   }
+  ],
+  [
+   "<label class=\"field\" for=\"memory-location\">",
+   {
+    "lead": "memory_location_label"
+   }
+  ],
+  [
+   "<input id=\"memory-location\" maxlength=\"160\" placeholder=\"Bedroom, on the bedside table\" required>",
+   {
+    "placeholder": "memory_location_placeholder"
+   }
+  ],
+  [
+   "<button class=\"btn accent\" type=\"submit\">Remember this",
+   {
+    "text": "memory_submit"
+   }
+  ],
+  [
+   "<label class=\"field\" for=\"memory-search\">",
+   {
+    "lead": "memory_search_label"
+   }
+  ],
+  [
+   "<input id=\"memory-search\" type=\"search\" maxlength=\"160\" oninput=\"renderMemory()\" placeholder=\"Find an object or room\">",
+   {
+    "placeholder": "memory_search_placeholder"
+   }
+  ],
+  [
+   "<input type=\"range\" id=\"distance\" min=\"15\" max=\"200\" value=\"120\" oninput=\"onDistance(this.value)\" aria-label=\"Distance\">",
+   {
+    "aria-label": "distance_label"
+   }
+  ],
+  [
+   "<input class=\"input\" id=\"api-url\" value=\"http://localhost:8000\" aria-label=\"Backend URL\">",
+   {
+    "aria-label": "api_url_label"
+   }
+  ],
+  [
+   "<summary>Voice Commands",
+   {
+    "text": "guide_summary"
+   }
+  ],
+  [
+   "<p>Always-listening Siri mode:",
+   {
+    "text": "guide_text"
+   }
+  ]
+ ]
+}
