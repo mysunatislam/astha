@@ -1,0 +1,16 @@
+.git
+**/node_modules
+**/.env
+**/.env.*
+**/*.db
+**/*.db-*
+**/*.jks
+**/*.keystore
+**/*.log
+android
+ios
+tests
+work
+release-artifacts
+# Historical installer is not a verified release artifact.
+web/downloads/astha.apk

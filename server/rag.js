@@ -2,7 +2,8 @@
 // Combines lexical + semantic retrieval over episodic memories, calibrated rooms, and personal knowledge docs.
 import { Router } from 'express';
 import { nanoid } from 'nanoid';
-import { all, get, run } from './db.js';
+import { all, run } from './db.js';
+import { asyncRoute } from './async-route.js';
 
 export const ragRouter = Router();
 
@@ -62,14 +63,14 @@ export async function searchRAG(userId, query, options = {}) {
   const now = Date.now();
 
   // 1. Fetch user memories
-  const rawMemories = all('SELECT * FROM memories WHERE user_id = ? ORDER BY created_at DESC LIMIT 100', [userId]);
+  const rawMemories = await all('SELECT * FROM memories WHERE user_id = ? ORDER BY created_at DESC LIMIT 100', [userId]);
   const scoredMemories = rawMemories.map(m => {
     const text = `${m.item} ${m.location} ${m.source || ''}`;
     let score = scoreLexical(text, terms);
     // Recency decay boost: up to +2 for very recent memories (< 2 hours)
     const hoursAgo = Math.max(0, (now - m.created_at) / (1000 * 3600));
-    if (hoursAgo < 2) score += 2;
-    else if (hoursAgo < 24) score += 1;
+    if (score > 0 && hoursAgo < 2) score += 2;
+    else if (score > 0 && hoursAgo < 24) score += 1;
     return { type: 'memory', id: m.id, title: m.item, content: m.location, source: m.source, time: m.created_at, score };
   }).filter(m => m.score > 0);
 
@@ -84,7 +85,7 @@ export async function searchRAG(userId, query, options = {}) {
   const roomSearchTerms = Array.from(associativeTerms);
 
   // 3. Fetch user calibrated rooms
-  const rawRooms = all('SELECT * FROM rooms WHERE user_id = ? ORDER BY updated_at DESC LIMIT 50', [userId]);
+  const rawRooms = await all('SELECT * FROM rooms WHERE user_id = ? ORDER BY updated_at DESC LIMIT 50', [userId]);
   const scoredRooms = rawRooms.map(r => {
     const text = `${r.name} ${r.notes}`;
     const score = scoreLexical(text, roomSearchTerms) * 1.2; // rooms carry high structural landmark weight
@@ -92,7 +93,7 @@ export async function searchRAG(userId, query, options = {}) {
   }).filter(r => r.score > 0);
 
   // 3. Fetch knowledge docs
-  const rawDocs = all('SELECT * FROM knowledge_docs WHERE user_id = ? ORDER BY updated_at DESC LIMIT 50', [userId]);
+  const rawDocs = await all('SELECT * FROM knowledge_docs WHERE user_id = ? ORDER BY updated_at DESC LIMIT 50', [userId]);
   const scoredDocs = rawDocs.map(d => {
     const text = `${d.title} ${d.content} ${d.tags_json || ''}`;
     const score = scoreLexical(text, terms);
@@ -135,9 +136,13 @@ export function formatRagContextForPrompt(ragData) {
 }
 
 // Routes
-ragRouter.post('/rag/query', async (req, res) => {
+ragRouter.post('/rag/query', asyncRoute(async (req, res) => {
   const { query, limit } = req.body || {};
   if (!query) return res.status(400).json({ error: 'query_required' });
+  if (typeof query !== 'string' || !query.trim() ||
+      (limit !== undefined && (!Number.isInteger(limit) || limit < 1 || limit > 20))) {
+    return res.status(400).json({ error: 'invalid_rag_input' });
+  }
   try {
     const data = await searchRAG(req.user.id, query, { limit: limit || 6 });
     res.json({
@@ -146,19 +151,24 @@ ragRouter.post('/rag/query', async (req, res) => {
       contextBlock: formatRagContextForPrompt(data)
     });
   } catch (err) {
-    console.error('RAG query error:', err);
-    res.status(500).json({ error: 'rag_failed', message: err.message });
+    console.error('RAG query failed');
+    res.status(500).json({ error: 'rag_failed', message: 'rag_failed' });
   }
-});
+}));
 
-ragRouter.post('/rag/docs', async (req, res) => {
+ragRouter.post('/rag/docs', asyncRoute(async (req, res) => {
   const { title, content, category, tags } = req.body || {};
   if (!title || !content) return res.status(400).json({ error: 'title_and_content_required' });
+  if (typeof title !== 'string' || !title.trim() || typeof content !== 'string' || !content.trim() ||
+      (category !== undefined && typeof category !== 'string') ||
+      (tags !== undefined && (!Array.isArray(tags) || !tags.every(tag => typeof tag === 'string')))) {
+    return res.status(400).json({ error: 'invalid_document_input' });
+  }
   const id = nanoid();
   const now = Date.now();
-  run(
+  await run(
     'INSERT INTO knowledge_docs (id, user_id, category, title, content, tags_json, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)',
     [id, req.user.id, category || 'general', title.slice(0, 100), content.slice(0, 4000), JSON.stringify(tags || []), now, now]
   );
   res.json({ ok: true, id });
-});
+}));

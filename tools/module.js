@@ -13,6 +13,48 @@
 // no-op.
 function apiUrl(path) { return (window.ASTHA_API_BASE || '') + path; }
 
+// Consent lasts only for this page session and is requested by the Online control.
+let remoteProcessingConsent = false;
+function requestRemoteConsent() {
+  if (privacyMode || privacyTransition || navigator.onLine === false) return false;
+  if (remoteProcessingConsent) return true;
+  const en = 'Allow online processing for this session? Camera or screen images, requests and selected personal notes may be sent to Google Gemini or Gigalogy Maira. Spoken text may be sent to Microsoft, and browser voice recognition may use an online service. Choose Cancel to keep processing on this phone. You can turn this off with On-device or Privacy mode.';
+  const bn = 'এই সেশনে অনলাইন প্রসেসিংয়ের অনুমতি দেবেন? ক্যামেরা বা স্ক্রিনের ছবি, অনুরোধ ও নির্বাচিত ব্যক্তিগত নোট Google Gemini বা Gigalogy Maira-তে পাঠানো হতে পারে। শোনানোর লেখা Microsoft-এ এবং ব্রাউজারের কণ্ঠ শনাক্তকরণ অনলাইন পরিষেবায় পাঠানো হতে পারে। এই ফোনে প্রসেসিং রাখতে Cancel চাপুন। ডিভাইস বা গোপনীয়তা মোডে অনুমতি বন্ধ করতে পারবেন।';
+  remoteProcessingConsent = window.confirm((typeof uiLang !== 'undefined' ? uiLang : voiceLang) === 'bn' ? bn : en);
+  return remoteProcessingConsent;
+}
+
+// Keep remote processing consistent across vision, voice and personal-data sync.
+function remoteProcessingAllowed() {
+  if (!remoteProcessingConsent) return false;
+  if ((typeof privacyMode !== 'undefined' && privacyMode) ||
+      (typeof privacyTransition !== 'undefined' && privacyTransition)) return false;
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return false;
+  return !(typeof Subscription !== 'undefined' && Subscription.getMode() === 'offline');
+}
+function personalDataSyncAllowed() {
+  return typeof window.ASTHA_ACCOUNT_ID === 'string' && Boolean(window.ASTHA_ACCOUNT_ID) && remoteProcessingAllowed();
+}
+function isPersonalDataPath(path) { return /^\/api\/(memories|rooms|log)(\/|$)/.test(path); }
+function deadlineSignal(timeoutMs, callerSignal) {
+  let timeoutSignal;
+  if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function') timeoutSignal = AbortSignal.timeout(timeoutMs);
+  else {
+    const timeoutController = new AbortController();
+    setTimeout(() => timeoutController.abort(), timeoutMs);
+    timeoutSignal = timeoutController.signal;
+  }
+  if (!callerSignal) return timeoutSignal;
+  if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.any === 'function') return AbortSignal.any([callerSignal, timeoutSignal]);
+  // Older mobile WebViews still retain caller cancellation and a bounded request.
+  const controller = new AbortController();
+  for (const signal of [callerSignal, timeoutSignal]) {
+    if (signal.aborted) controller.abort(signal.reason);
+    else signal.addEventListener('abort', () => controller.abort(signal.reason), { once: true });
+  }
+  return controller.signal;
+}
+
 const VoiceEchoFilter = {
   recentUtterances: [], // array of { text, words, time }
   recordMachineSpeech(text) {
@@ -54,12 +96,15 @@ const VoiceEngine = {
   audioEl: null,
   lastSpokeAt: 0,
   _currentResolve: null,
+  requestController: null, generation: 0,
   get speaking() {
     if (this.mode === 'audio') return !!this.audioEl && !this.audioEl.paused && !this.audioEl.ended;
     if (this.mode === 'synth') return !!(window.speechSynthesis && window.speechSynthesis.speaking);
     return false;
   },
   stop() {
+    this.generation++;
+    if (this.requestController) { this.requestController.abort(); this.requestController = null; }
     this.lastSpokeAt = Date.now();
     if (this._currentResolve) {
       const res = this._currentResolve;
@@ -92,6 +137,7 @@ const VoiceEngine = {
   // (voice off, nothing to say, and no fallback voice on this device).
   async speak(text, lang) {
     this.stop();
+    const generation = this.generation;
     if (!state.audio || !text) return false;
     VoiceEchoFilter.recordMachineSpeech(text);
     this.lastSpokeAt = Date.now();
@@ -99,10 +145,23 @@ const VoiceEngine = {
     try {
       // With no backend (static hosting, offline) go straight to the device voice instead of
       // paying a failed network round-trip before every sentence.
-      if (typeof backendReachable === 'function' && !backendReachable()) throw offlineError();
-      const res = await fetch(apiUrl('/api/speak?text=' + encodeURIComponent(text) + '&voice=' + voiceKey), { credentials: 'include' });
+      if (!remoteProcessingAllowed() || (typeof backendReachable === 'function' && !backendReachable())) throw offlineError();
+      const controller = new AbortController(); this.requestController = controller;
+      let res, blob;
+      try {
+        res = await fetch(apiUrl('/api/speak'), {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text, voice: voiceKey }), credentials: 'include',
+          cache: 'no-store', signal: deadlineSignal(10000, controller.signal),
+        });
+        if (generation !== this.generation) return false;
+        if (!remoteProcessingAllowed()) throw offlineError();
+        if (res.ok) blob = await res.blob();
+      }
+      finally { if (this.requestController === controller) this.requestController = null; }
+      if (generation !== this.generation) return false;
+      if (!remoteProcessingAllowed()) throw offlineError();
       if (res.ok) {
-        const blob = await res.blob();
         const audio = new Audio(URL.createObjectURL(blob));
         const rate = Number($('speech-rate') && $('speech-rate').value) || 1;
         audio.playbackRate = rate;
@@ -120,6 +179,7 @@ const VoiceEngine = {
         // fall through to the browser voice if playback itself failed
       }
     } catch (e) { /* offline, signed out, or the server is down: use the local voice instead */ }
+    if (generation !== this.generation) return false;
     if (!window.speechSynthesis) return false;
     const u = makeUtterance(sanitizeForSpeech(text), lang);
     if (!u) return false;
@@ -817,7 +877,7 @@ const STOP_TALKING_REGEX = /\b(stop|stop talking|shut up|be quiet|quiet|silence|
 const WAKE_RE = /(^|[\s,.!?])(astha|asta|ashtha|aastha|astar|হে আস্থা|আস্থা|আসথা|আস্তা)(?=$|[\s,.!?])/i;
 
 const SiriVoice = {
-  enabled: true,
+  enabled: false, // Hands-free listening requires an explicit user action each session.
   active: false,
   rec: null,
   restartTimer: null,
@@ -831,10 +891,9 @@ const SiriVoice = {
   set on(v) { if (v) this.start(); else this.stop(); },
 
   start() {
-    this.enabled = true;
+    if (!this.enabled || !remoteProcessingAllowed()) return;
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) return;
-    if (privacyMode) return;
     if (this.active && this.rec) return;
     this.active = true;
     this.lastCommandAt = Date.now();
@@ -872,12 +931,13 @@ const SiriVoice = {
       this.enabled = false;
       this.stop();
     } else {
+      this.enabled = true;
       this.start();
     }
   },
 
   _listen() {
-    if (!this.active || !this.enabled) return;
+    if (!this.active || !this.enabled || !remoteProcessingAllowed()) { this.stop(true); return; }
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) return;
     if (this.rec) {
@@ -1025,7 +1085,7 @@ const SiriVoice = {
 };
 
 function toggleHandsFree() { SiriVoice.toggle(); }
-function startHandsFree() { SiriVoice.start(); }
+function startHandsFree() { SiriVoice.enabled = true; SiriVoice.start(); }
 function stopHandsFree(silent) { SiriVoice.stop(silent); }
 const hf = SiriVoice;
 
@@ -1346,7 +1406,7 @@ async function handleOnDeviceVisualQA(query) {
           heartFlash({ x: 0.5, y: 0.5, mode: 'lock', label: 'ID Card' });
           recordConversationTurn('assistant', enMsg);
           if (typeof autoRecordMemory === 'function') {
-            autoRecordMemory({ item: 'ID card', location: `on the ${surfaceName} in the ${curRoom}`, room: curRoom, furniture: surfaceName, source: 'On-device OCR check', score: 0.95 });
+            autoRecordMemory({ item: 'ID card', location: `on the ${surfaceName} in the ${curRoom}`, room: curRoom, furniture: surfaceName, source: 'On-device OCR check', score: null });
           }
           return;
         }
@@ -1407,7 +1467,7 @@ async function handleOnDeviceVisualQA(query) {
             room: curRoom,
             furniture: surfaceName,
             source: 'Visual Q&A',
-            score: clipHit ? clipHit.p : (cocoHit ? cocoHit.score : 0.9)
+            score: clipHit ? clipHit.p : (cocoHit ? cocoHit.score : null)
           });
         }
         return;
@@ -1559,7 +1619,7 @@ async function handleOnDevicePlacement(query, statedItem) {
       room: curRoom,
       furniture: furniture,
       source: 'Voice placement observation',
-      score: 0.98
+      score: null, approved: true
     });
 
     const enMsg = `Got it. I see your ${finalItem}. Remembered: keeping your ${finalItem} on the ${furniture} in the ${curRoom}.`;
@@ -1622,7 +1682,7 @@ function stopListening() {
   state.listening = false;
   clearTimeout(listenTimer);
   if (recognizer) { try { recognizer.abort(); } catch (e) {} recognizer = null; }
-  $('mic')?.setAttribute('aria-label', 'Astha listening');
+  $('mic')?.setAttribute('aria-label', t('mic_idle'));
   $('mic')?.setAttribute('aria-pressed', 'false');
   $('mic')?.classList.remove('listening');
   $('mic-label') && ($('mic-label').textContent = t('mic_idle') || 'Microphone idle');
@@ -1637,18 +1697,8 @@ function companionBoot() {
   window.speechSynthesis?.addEventListener('voiceschanged', populateVoices);
   window.addEventListener('pagehide', () => { if (typeof SiriVoice !== 'undefined') SiriVoice.stop(true); });
 
-  // Voice-first activation: start Siri voice recognition on startup
-  setTimeout(() => {
-    if (typeof SiriVoice !== 'undefined') SiriVoice.start();
-  }, 400);
-
-  const unlockAudioAndVoice = () => {
-    if (typeof SiriVoice !== 'undefined' && !SiriVoice.active && SiriVoice.enabled) {
-      SiriVoice.start();
-    }
-  };
-  window.addEventListener('pointerdown', unlockAudioAndVoice, { once: true });
-  window.addEventListener('keydown', unlockAudioAndVoice, { once: true });
+  // The existing Hands-free control (or explicit voice command) grants consent.
+  // Loading the page or interacting with unrelated controls never opens the microphone.
 }
 
 /* =====================================================================
@@ -1661,17 +1711,23 @@ function companionBoot() {
 // health check has said so, skip the network instead of logging a 404 for every sync attempt.
 function backendReachable() { return !(typeof serverCloud !== 'undefined' && serverCloud.checked && serverCloud.reachable === false); }
 function offlineError() { const e = new Error('backend_unreachable'); e.status = 0; e.quiet = true; return e; }
-async function apiGet(path) {
+async function apiGet(path, options = {}) {
+  const accountId = window.ASTHA_ACCOUNT_ID;
+  if (isPersonalDataPath(path) && !personalDataSyncAllowed()) throw offlineError();
   if (typeof serverCloud !== 'undefined' && !serverCloud.checked && serverCloud.ready) await serverCloud.ready;
+  if (isPersonalDataPath(path) && (!personalDataSyncAllowed() || window.ASTHA_ACCOUNT_ID !== accountId)) throw offlineError();
   if (!backendReachable()) throw offlineError();
-  const r = await fetch(apiUrl(path), { credentials: 'include' });
+  const r = await fetch(apiUrl(path), { credentials: 'include', signal: deadlineSignal(10000, options.signal) });
   if (!r.ok) { const e = new Error('http_' + r.status); e.status = r.status; throw e; }
   return r.json();
 }
-async function apiSend(method, path, body) {
+async function apiSend(method, path, body, options = {}) {
+  const accountId = window.ASTHA_ACCOUNT_ID;
+  if (isPersonalDataPath(path) && !personalDataSyncAllowed()) throw offlineError();
   if (typeof serverCloud !== 'undefined' && !serverCloud.checked && serverCloud.ready) await serverCloud.ready;
+  if (isPersonalDataPath(path) && (!personalDataSyncAllowed() || window.ASTHA_ACCOUNT_ID !== accountId)) throw offlineError();
   if (!backendReachable()) throw offlineError();
-  const r = await fetch(apiUrl(path), { method, credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+  const r = await fetch(apiUrl(path), { method, credentials: 'include', headers: { 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined, signal: deadlineSignal(10000, options.signal) });
   if (!r.ok) { const e = new Error('http_' + r.status); e.status = r.status; throw e; }
   return r.json();
 }
@@ -1693,8 +1749,8 @@ async function refreshRooms() {
 // ---- Automatic Memory Recording Engine --------------------------------------
 // Persists every confident visual observation and placed object to personal memory.
 let _recentMemoryDedupe = []; // { item, time }
-async function autoRecordMemory({ item, location, source = 'Camera observation', score = null, room = null, furniture = null }) {
-  if (privacyMode || privacyTransition) return;
+async function autoRecordMemory({ item, location, source = 'Camera observation', score = null, room = null, furniture = null, approved = false }) {
+  if (!approved || privacyMode || privacyTransition) return;
   if (!item || !String(item).trim()) return;
   const cleanItem = String(item).trim().slice(0, 80);
   const now = Date.now();
@@ -2153,7 +2209,7 @@ async function trackItemPlacementOnFurniture(frame, cocoObjs) {
             room: recRoom,
             furniture: r.surface,
             source: 'Auto placement observation',
-            score: 0.96
+            score: null
           });
 
           if (r.en || r.bn) {
@@ -2255,7 +2311,7 @@ async function trackItemPlacementOnFurniture(frame, cocoObjs) {
           room,
           furniture: surface,
           source: 'Auto placement observation',
-          score: item.score || 0.88
+          score: item.score ?? null
         });
 
         const enMsg = `Noted: your ${detectedItemName} is on the ${surface} in the ${room}.`;
@@ -2459,10 +2515,8 @@ const EdgeAndStairsDetector = {
   async evaluate(frame, cocoObjs) {
     if (!frame) return null;
 
-    // 0. If Online AI (Gemini) is active, do not trigger false alarm emergency edge/stairs alerts from geometry gradients
-    if (typeof cloudReady === 'function' && cloudReady()) {
-      return null;
-    }
+    // Provider configuration/reachability is not evidence about this frame.
+    // Keep local checks active in every mode; retain the model/geometry and context guards below.
 
     // 1. Context suppression: If desk, table, keyboard, laptop, monitor, chair, book, mouse, or TV is present,
     // suppress stairs and high-stage drop-off alerts completely (they are false alarms caused by keyboard/desk rows)
@@ -2505,8 +2559,8 @@ const EdgeAndStairsDetector = {
             this.lastEdgeAlertAt = now;
             return {
               type: 'drop_off',
-              en: 'Stop! High stage edge and drop-off ahead!',
-              bn: 'থামুন! সামনে উঁচু মঞ্চের শেষ কিনারা ও খাদ!',
+              en: 'Caution: possible drop-off ahead. Verify with your usual mobility aid before moving.',
+              bn: 'সাবধান: সামনে খাদ থাকতে পারে। চলার আগে আপনার চলাচলের সহায়ক উপায় দিয়ে যাচাই করুন।',
               haptic: 'RAPID'
             };
           }
@@ -2516,8 +2570,8 @@ const EdgeAndStairsDetector = {
             this.lastStairsAlertAt = now;
             return {
               type: 'stairs',
-              en: 'Warning! Stairs directly ahead!',
-              bn: 'সতর্ক! সামনে সিঁড়ি!',
+              en: 'Caution: possible stairs ahead. Verify with your usual mobility aid before moving.',
+              bn: 'সাবধান: সামনে সিঁড়ি থাকতে পারে। চলার আগে আপনার চলাচলের সহায়ক উপায় দিয়ে যাচাই করুন।',
               haptic: 'RAPID'
             };
           }
@@ -2552,18 +2606,24 @@ async function togglePrivateMode() {
   try {
     stopAllSpeech();
     privacyMode = entering;
-    if (privacyMode) clearPrivateSession();
+    if (privacyMode) {
+      remoteProcessingConsent = false;
+      SiriVoice.enabled = false; SiriVoice.stop(true);
+      clearPrivateSession();
+    }
     $('private-btn').setAttribute('aria-pressed', privacyMode);
     $('private-btn').textContent = 'Privacy mode: ' + (privacyMode ? 'on' : 'off');
     $('privacy-status').textContent = privacyMode
       ? 'New memories, room notes and activity are not saved while this is on. Existing account data is untouched.'
-      : 'Session memory is on and saved to your account.';
+      : 'Notes are saved on this browser; account sync needs permission and a connection. Browser notes are not encrypted.';
     if (!privacyMode) { await refreshMemory(); await refreshRooms(); }
     announce(privacyMode ? 'Privacy mode is on. Nothing new will be saved until you turn it off.' : 'Privacy mode is off.',
       privacyMode ? 'গোপনীয়তা মোড চালু। বন্ধ না করা পর্যন্ত নতুন কিছু সংরক্ষণ হবে না।' : 'গোপনীয়তা মোড বন্ধ।');
   } finally { privacyTransition = false; $('private-btn').disabled = false; }
 }
 async function signOut() {
+  if (typeof window.ASTHA_CLEAR_ACCOUNT === 'function') window.ASTHA_CLEAR_ACCOUNT({ logout: true });
+  if (typeof stopAllSpeech === 'function') stopAllSpeech();
   try { await apiSend('POST', '/api/auth/logout', {}); } catch (e) {}
   location.reload();
 }

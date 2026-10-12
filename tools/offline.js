@@ -9,22 +9,67 @@
 
 // ---- Local, persistent memory (this phone) -----------------------------------
 const LocalStore = {
-  KEY: 'astha.local.v1', timer: null,
+  get KEY() {
+    const account = window.ASTHA_LOCAL_ACCOUNT_ID || window.ASTHA_ACCOUNT_ID;
+    return 'astha.local.v2.' + (typeof account === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(account) ? account : 'device');
+  },
+  timer: null, deletions: [], loadedKey: null, revision: 0,
   load() {
     try {
       const d = JSON.parse(localStorage.getItem(this.KEY) || '{}');
+      this.deletions = Array.isArray(d.deletions) ? d.deletions.filter(p => typeof p === 'string' && /^\/api\/(memories|rooms|log)(\/[A-Za-z0-9_-]{1,128})?$/.test(p)) : [];
+      this.loadedKey = this.KEY;
       const mem = Array.isArray(d.memory) ? d.memory.filter(m => m && typeof m.item === 'string' && typeof m.location === 'string' && m.uid) : [];
       const rooms = Array.isArray(d.rooms) ? d.rooms.filter(r => r && typeof r.name === 'string') : [];
       return { memory: mem, rooms };
-    } catch (e) { return { memory: [], rooms: [] }; }
+    } catch (e) { this.deletions = []; this.loadedKey = this.KEY; return { memory: [], rooms: [] }; }
   },
   save() {
     if (typeof privacyMode !== 'undefined' && privacyMode) return;
-    try { localStorage.setItem(this.KEY, JSON.stringify({ memory: state.memory.slice(0, 80), rooms: state.spatialHome.slice(0, 30), saved: Date.now() })); } catch (e) {}
+    if (this.loadedKey !== this.KEY) this.load();
+    try { localStorage.setItem(this.KEY, JSON.stringify({ memory: state.memory.slice(0, 80), rooms: state.spatialHome.slice(0, 30), deletions: this.deletions, saved: Date.now() })); } catch (e) {}
   },
-  scheduleSave() { clearTimeout(this.timer); this.timer = setTimeout(() => this.save(), 250); },
-  clear() { try { localStorage.removeItem(this.KEY); } catch (e) {} },
+  scheduleSave() { clearTimeout(this.timer); const key = this.KEY; this.timer = setTimeout(() => { if (key === this.KEY) this.save(); }, 250); },
+  queueDelete(path) {
+    if (this.loadedKey !== this.KEY) this.load();
+    if (!this.deletions.includes(path)) this.deletions.push(path);
+    this.revision += 1;
+    this.save();
+  },
+  hides(kind, id) { return this.deletions.includes('/api/' + kind) || this.deletions.includes('/api/' + kind + '/' + id); },
+  async flushDeletions() {
+    if (this.loadedKey !== this.KEY) this.load();
+    const key = this.KEY;
+    for (const path of [...this.deletions]) {
+      try {
+        await apiSend('DELETE', path);
+        if (key !== this.KEY) return false;
+        this.deletions = this.deletions.filter(p => p !== path); this.save();
+      } catch (e) { return false; }
+    }
+    return true;
+  },
+  clear() { clearTimeout(this.timer); this.deletions = []; this.loadedKey = this.KEY; try { localStorage.removeItem(this.KEY); } catch (e) {} },
 };
+// One note can be saved directly while a refresh also retries pending notes.
+// Share the in-flight create so those paths cannot create duplicate server records.
+const memoryUploads = new WeakMap();
+function uploadLocalMemory(entry, accountKey) {
+  if (memoryUploads.has(entry)) return memoryUploads.get(entry);
+  const upload = (async () => {
+    if (!entry.pending) return;
+    const result = await apiSend('POST', '/api/memories', { item: entry.item, location: entry.location, source: entry.source, score: entry.score });
+    if (accountKey !== LocalStore.KEY) return;
+    entry.pending = false;
+    if (result && result.id) {
+      entry.uid = String(result.id);
+      if (!state.memory.includes(entry)) LocalStore.queueDelete('/api/memories/' + encodeURIComponent(entry.uid));
+    }
+    LocalStore.save(); renderMemory();
+  })().finally(() => { if (memoryUploads.get(entry) === upload) memoryUploads.delete(entry); });
+  memoryUploads.set(entry, upload);
+  return upload;
+}
 function bnDigits(n) { return String(n).replace(/\d/g, d => '০১২৩৪৫৬৭৮৯'[d]); }
 function newUid() { return (typeof crypto !== 'undefined' && crypto.randomUUID) ? crypto.randomUUID() : 'mem_' + Date.now() + '_' + Math.random().toString(36).slice(2, 7); }
 function relativeTime(iso) {
@@ -45,6 +90,9 @@ function relativeTime(iso) {
 
 // Memory: local first, server as backup. Overrides the server-only versions in the module.
 async function refreshMemory() {
+  if (privacyMode || privacyTransition) return;
+  const accountKey = LocalStore.KEY;
+  if (LocalStore.loadedKey !== accountKey) LocalStore.load();
   if (!state.memory.length) {
     const d = LocalStore.load();
     if (d.memory.length) state.memory = d.memory;
@@ -52,24 +100,38 @@ async function refreshMemory() {
   }
   renderMemory();
   try {
+    await LocalStore.flushDeletions();
+    const revision = LocalStore.revision;
     const d = await apiGet('/api/memories');
-    const server = (d.memories || []).map(m => ({ uid: String(m.id), id: m.obj_id || undefined, item: m.item, location: m.location, source: m.source, score: m.score, time: new Date(m.created_at).toISOString() }));
+    if (accountKey !== LocalStore.KEY || privacyMode || privacyTransition || revision !== LocalStore.revision) return;
+    const server = (d.memories || []).filter(m => !LocalStore.hides('memories', String(m.id))).map(m => ({ uid: String(m.id), id: m.obj_id || undefined, item: m.item, location: m.location, source: m.source, score: m.score, time: new Date(m.created_at).toISOString() }));
     for (const m of state.memory.filter(x => x.pending)) {
-      try { const r = await apiSend('POST', '/api/memories', { item: m.item, location: m.location, source: m.source, score: m.score }); m.pending = false; if (r && r.id) m.uid = String(r.id); } catch (e) { break; }
+      try {
+        await uploadLocalMemory(m, accountKey);
+        if (accountKey !== LocalStore.KEY) return;
+        if (!m.pending && state.memory.includes(m)) server.push(m);
+      } catch (e) { break; }
     }
     const key = m => (m.item + '|' + m.location).toLowerCase();
     const merged = new Map(); server.forEach(m => merged.set(key(m), m));
     state.memory.forEach(m => { const k = key(m); if (m.pending || merged.has(k)) merged.set(k, Object.assign({}, merged.get(k) || {}, m)); });
-    state.memory = [...merged.values()].sort((a, b) => new Date(b.time) - new Date(a.time)).slice(0, 80);
+    if (accountKey !== LocalStore.KEY || privacyMode || privacyTransition || revision !== LocalStore.revision) return;
+    state.memory = [...merged.values()].filter(m => !LocalStore.hides('memories', m.uid)).sort((a, b) => new Date(b.time) - new Date(a.time)).slice(0, 80);
   } catch (e) { if (!e.quiet) console.warn('memory fetch failed', e); }
   renderMemory(); LocalStore.save();
 }
 async function refreshRooms() {
+  if (privacyMode || privacyTransition) return;
+  const accountKey = LocalStore.KEY;
+  if (LocalStore.loadedKey !== accountKey) LocalStore.load();
   if (!state.spatialHome.length) { const d = LocalStore.load(); if (d.rooms.length) state.spatialHome = d.rooms; }
   renderSpatialLayout();
   try {
+    await LocalStore.flushDeletions();
+    const revision = LocalStore.revision;
     const d = await apiGet('/api/rooms');
-    const server = (d.rooms || []).map(r => ({ id: String(r.id), name: r.name, notes: r.notes, updated: new Date(r.updated_at).toISOString() }));
+    if (accountKey !== LocalStore.KEY || privacyMode || privacyTransition || revision !== LocalStore.revision) return;
+    const server = (d.rooms || []).filter(r => !LocalStore.hides('rooms', String(r.id))).map(r => ({ id: String(r.id), name: r.name, notes: r.notes, updated: new Date(r.updated_at).toISOString() }));
     const byName = new Map(); server.forEach(r => byName.set(r.name.toLowerCase(), r));
     state.spatialHome.forEach(r => { if (!byName.has(r.name.toLowerCase())) byName.set(r.name.toLowerCase(), r); });
     state.spatialHome = [...byName.values()].sort((a, b) => new Date(b.updated) - new Date(a.updated)).slice(0, 30);
@@ -99,15 +161,16 @@ function renderSpatialLayout() {
   LocalStore.scheduleSave();
 }
 function addLocalMemory({ item, location, locationBn = null, source = 'Your note', score = null, id = undefined }) {
+  const accountKey = LocalStore.KEY;
   const entry = { uid: newUid(), id, item: String(item).trim().slice(0, 80), location: String(location).trim().slice(0, 160), locationBn: locationBn ? String(locationBn).slice(0, 160) : null, source: String(source).slice(0, 80), score: typeof score === 'number' ? score : null, time: new Date().toISOString(), pending: true };
   state.memory = [entry, ...state.memory.filter(m => m.item.toLowerCase() !== entry.item.toLowerCase())].slice(0, 80);
   renderMemory(); LocalStore.save();
-  (async () => { try { const r = await apiSend('POST', '/api/memories', { item: entry.item, location: entry.location, source: entry.source, score: entry.score }); entry.pending = false; if (r && r.id) entry.uid = String(r.id); LocalStore.save(); renderMemory(); } catch (e) { /* stays on the phone; synced on the next refresh */ } })();
+  uploadLocalMemory(entry, accountKey).catch(() => { /* stays in this account's local namespace */ });
   return entry;
 }
 let _recentMemoryDedupe2 = [];
-async function autoRecordMemory({ item, location, locationBn = null, source = 'Camera observation', score = null, room = null, furniture = null }) {
-  if (privacyMode || privacyTransition) return;
+async function autoRecordMemory({ item, location, locationBn = null, source = 'Camera observation', score = null, room = null, furniture = null, approved = false }) {
+  if (!approved || privacyMode || privacyTransition) return;
   if (!item || !String(item).trim()) return;
   const cleanItem = String(item).trim().slice(0, 80), now = Date.now();
   _recentMemoryDedupe2 = _recentMemoryDedupe2.filter(m => now - m.time < 45000);
@@ -118,8 +181,9 @@ async function autoRecordMemory({ item, location, locationBn = null, source = 'C
   if (furniture && curRoom) resolved = `on the ${furniture} in the ${curRoom}`;
   else if (furniture) resolved = `on the ${furniture}`;
   else if (curRoom && !resolved.toLowerCase().includes(curRoom.toLowerCase())) resolved = `${resolved} in the ${curRoom}`;
-  addLocalMemory({ item: cleanItem, location: resolved, locationBn, source, score });
+  const entry = addLocalMemory({ item: cleanItem, location: resolved, locationBn, source, score });
   logEvent(`Memory saved: ${cleanItem} (${resolved})`);
+  return entry;
 }
 async function saveManualMemory() {
   if (privacyTransition) return;
@@ -142,20 +206,24 @@ async function remember(id, pos) {
 async function deleteMemory(uid) {
   if (privacyTransition) return;
   state.memory = state.memory.filter(m => m.uid !== uid); renderMemory(); LocalStore.save();
-  try { await apiSend('DELETE', '/api/memories/' + encodeURIComponent(uid)); } catch (e) {}
+  LocalStore.queueDelete('/api/memories/' + encodeURIComponent(uid));
+  const synced = await LocalStore.flushDeletions();
+  if (!synced) announce('Deleted from this phone. Account deletion will retry when connected.', 'এই ফোন থেকে মুছে ফেলা হয়েছে। সংযোগ পেলে অ্যাকাউন্ট থেকে মুছে ফেলার চেষ্টা হবে।', 'system');
   $('memory-search')?.focus();
 }
 async function clearMemory() {
   if (!confirm('Delete all saved object memories and room notes from this phone and your Astha account?')) return;
   state.memory = []; state.spatialHome = []; state.log = []; LocalStore.clear();
   renderMemory(); renderSpatialLayout(); renderLog();
-  try { await Promise.all([apiSend('DELETE', '/api/memories'), apiSend('DELETE', '/api/rooms'), apiSend('DELETE', '/api/log')]); } catch (e) {}
-  announce('All personal memories and room notes deleted.', 'সব ব্যক্তিগত স্মৃতি ও ঘরের নোট মুছে ফেলা হয়েছে।', 'memory');
+  ['/api/memories', '/api/rooms', '/api/log'].forEach(path => LocalStore.queueDelete(path));
+  const synced = await LocalStore.flushDeletions();
+  announce(synced ? 'Personal memories and room notes deleted from this phone and account.' : 'Deleted from this phone. Account deletion is pending and will retry when connected.', synced ? 'এই ফোন ও অ্যাকাউন্ট থেকে ব্যক্তিগত স্মৃতি ও ঘরের নোট মুছে ফেলা হয়েছে।' : 'এই ফোন থেকে মুছে ফেলা হয়েছে। সংযোগ পেলে অ্যাকাউন্ট থেকে মুছে ফেলার চেষ্টা হবে।', 'system');
 }
 async function deleteCalibratedRoom(id) {
   if (privacyTransition) return;
   state.spatialHome = state.spatialHome.filter(r => r.id !== id); renderSpatialLayout(); LocalStore.save();
-  try { await apiSend('DELETE', '/api/rooms/' + encodeURIComponent(id)); } catch (e) {}
+  LocalStore.queueDelete('/api/rooms/' + encodeURIComponent(id));
+  if (!await LocalStore.flushDeletions()) announce('Deleted from this phone. Account deletion will retry when connected.', 'এই ফোন থেকে মুছে ফেলা হয়েছে। সংযোগ পেলে অ্যাকাউন্ট থেকে মুছে ফেলার চেষ্টা হবে।', 'system');
 }
 
 // ---- "I am keeping my wallet here": honest placement notes ----------------------
@@ -218,7 +286,7 @@ async function handleOnDevicePlacement(query, statedItem) {
     else if (landmarks.length) { locEn = 'near the ' + objLabel(landmarks[0]); locBn = objLabelBn(landmarks[0]) + '-এর কাছে'; }
     else { locEn = 'where the camera was pointing'; locBn = 'যেখানে ক্যামেরা তাক করা ছিল'; }
     if (room) { locEn += ' in the ' + room; locBn = room + '-এ, ' + locBn; }
-    addLocalMemory({ item, location: locEn, locationBn: locBn, source: 'Voice placement', score: seen ? 0.9 : null, id: targetId || undefined });
+    addLocalMemory({ item, location: locEn, locationBn: locBn, source: 'Voice placement', score: null, id: targetId || undefined });
     const seenEn = seen ? `I see your ${item}.` : `I did not clearly see the ${item}, but I noted the place.`;
     const seenBn = seen ? `আপনার ${itemBn || item} দেখতে পাচ্ছি।` : `${itemBn || item} স্পষ্ট দেখিনি, তবে জায়গাটা লিখে রাখলাম।`;
     const isAre = (VOCAB_BY_ID[targetId] || {}).pl ? 'are' : 'is';
@@ -241,10 +309,10 @@ const SEEK_TEXT = {
   found: ['Found it. Your {item} is straight ahead, {dist}. {next}', 'পেয়েছি। আপনার {item} ঠিক সামনে, {dist}। {next}'],
   found_nodist: ['Found it. Your {item} is straight ahead. {next}', 'পেয়েছি। আপনার {item} ঠিক সামনে। {next}'],
   next_reach: ['Reach forward slowly.', 'ধীরে হাত বাড়ান।'],
-  next_walk: ['Walk forward slowly; I will tell you when to stop.', 'ধীরে সামনে এগোন; কখন থামতে হবে আমি বলব।'],
-  next_obstacle: ['But there is {obs} between you and it. Step a little to the {side} first.', 'কিন্তু মাঝখানে {obs} আছে। আগে একটু {side} সরুন।'],
-  closer: ['Closer. Keep going, {dist}.', 'আরও কাছে। এগোতে থাকুন, {dist}।'],
-  stop_here: ['Stop. It is right in front of you.', 'থামুন। এটা ঠিক আপনার সামনে।'],
+  next_walk: ['The target appears ahead. Verify the route with your usual mobility aid before moving.', 'লক্ষ্যটি সামনে দেখা যাচ্ছে। চলার আগে আপনার চলাচলের সহায়ক উপায় দিয়ে পথ যাচাই করুন।'],
+  next_obstacle: ['There may be {obs} between you and it. Verify the route before moving.', 'মাঝখানে {obs} থাকতে পারে। চলার আগে পথ যাচাই করুন।'],
+  closer: ['The target appears larger. Physical distance is uncertain.', 'লক্ষ্যটি বড় দেখা যাচ্ছে। প্রকৃত দূরত্ব অনিশ্চিত।'],
+  stop_here: ['The target appears ahead. Verify its position before reaching.', 'লক্ষ্যটি সামনে দেখা যাচ্ছে। হাত বাড়ানোর আগে অবস্থান যাচাই করুন।'],
   lost: ['I lost sight of it. Move the phone back slowly.', 'এটা আর দেখছি না। ফোনটা ধীরে পেছনে আনুন।'],
   not_yet_1: ['Not seen yet. Keep turning slowly.', 'এখনো দেখছি না। ধীরে ঘুরতে থাকুন।'],
   not_yet_2: ['Try pointing the camera lower, at the table or the floor.', 'ক্যামেরা একটু নিচে, টেবিল বা মেঝের দিকে ধরুন।'],
@@ -476,7 +544,7 @@ function findItems(query) {
 const OfflineEar = {
   id: 'onnx-community/whisper-tiny', asr: null, loading: null,
   get status() { return (engine.ear && engine.ear.status) || 'idle'; }, active: false, cancelFlag: false,
-  wanted() { try { if (localStorage.getItem('astha.offline_voice') === '1') return true; } catch (e) {} return navigator.onLine === false; },
+  wanted() { if (typeof remoteProcessingAllowed === 'function' && !remoteProcessingAllowed()) return true; try { if (localStorage.getItem('astha.offline_voice') === '1') return true; } catch (e) {} return navigator.onLine === false; },
   async load() {
     if (this.status === 'ready') return true;
     if (this.loading) return this.loading;
@@ -632,15 +700,14 @@ const OfflinePack = {
   markDone(key) { const d = new Set(this.done()); d.add(key); try { localStorage.setItem('astha.offline.parts', JSON.stringify([...d])); localStorage.setItem('astha.offline.at', new Date().toISOString()); } catch (e) {} this.renderStatus(); },
   renderStatus() {
     const pill = $('offline-pill'), status = $('offline-status'); if (!pill) return;
-    const d = this.done(); const n = this.parts.filter(p => d.includes(p.key) || p.ready()).length;
+    const n = this.parts.filter(p => p.ready()).length;
     const online = navigator.onLine !== false;
-    pill.textContent = n >= this.parts.length ? 'Ready offline' : n ? `${n} of ${this.parts.length} parts on this phone` : 'Not prepared';
+    pill.textContent = n >= this.parts.length ? 'Models loaded' : n ? `${n} of ${this.parts.length} models loaded` : 'Models not verified';
     pill.className = 'pill ' + (n >= this.parts.length ? 'ok' : n ? 'warn' : '');
-    if (status) status.textContent = (online ? 'Connected. ' : 'No internet right now. ') + (n >= this.parts.length ? 'Everything Astha needs is stored on this phone; camera, reading, distance and voice input all work with the internet off.' : 'Tap Prepare while connected to download the parts once (about 260 MB in total). After that Astha works with the internet off.');
+    if (status) status.textContent = (online ? 'Connected. ' : 'No internet right now. ') + (n >= this.parts.length ? 'Models initialized in this session. Test again after reopening with the internet off; browser storage can be cleared or evicted.' : 'Tap Prepare to initialize the models (about 260 MB). Previous downloads do not guarantee availability after storage is cleared.');
   },
   async prepare() {
     if (this.running) return announce('Still preparing. I will tell you when it is done.', 'এখনো প্রস্তুত করছি। শেষ হলে বলব।', 'system');
-    if (navigator.onLine === false && !this.parts.every(p => p.ready() || this.done().includes(p.key))) return announce('I need an internet connection once to download the models. Try again when you are connected.', 'মডেল ডাউনলোডের জন্য একবার ইন্টারনেট দরকার। সংযোগ পেলে আবার চেষ্টা করুন।', 'system');
     this.running = true;
     const btn = $('offline-prepare-btn'); if (btn) btn.disabled = true;
     announce('Preparing Astha for offline use. This downloads the models once; keep the app open.', 'অফলাইনে চালানোর জন্য আস্থাকে প্রস্তুত করছি। মডেলগুলো একবার ডাউনলোড হবে; অ্যাপটি খোলা রাখুন।', 'system');
@@ -653,7 +720,7 @@ const OfflinePack = {
     }
     this.running = false; if (btn) btn.disabled = false;
     this.renderStatus();
-    if (ok >= this.parts.length) announce('Done. Astha is ready to work without internet: seeing, reading, distance and voice input all stay on this phone.', 'হয়ে গেছে। আস্থা এখন ইন্টারনেট ছাড়াই কাজ করতে পারবে: দেখা, পড়া, দূরত্ব ও কণ্ঠ শনাক্তকরণ সব এই ফোনেই থাকবে।', 'system');
+    if (ok >= this.parts.length) announce('Models loaded. Reopen with the internet off to check that the downloads are available.', 'মডেল লোড হয়েছে। ডাউনলোডগুলো পাওয়া যাচ্ছে কি না যাচাই করতে ইন্টারনেট বন্ধ করে অ্যাপটি আবার খুলুন।', 'system');
     else announce(`${ok} of ${this.parts.length} parts are ready. The rest could not download; try again later.`, `${bnDigits(ok)}টির মধ্যে ${bnDigits(this.parts.length)}টি অংশ প্রস্তুত। বাকিগুলো ডাউনলোড হয়নি; পরে আবার চেষ্টা করুন।`, 'system');
   },
 };
@@ -668,7 +735,7 @@ function offlineRoute(query, q) {
     if (Seeker.active && /\b(found it|got it|i have it|i got it|i see it|thanks|thank you)\b|পেয়েছি|পেয়ে গেছি|হয়েছে|peyechi/.test(q)) { Seeker.stop('found'); announce('Great.', 'বাহ, ভালো।', 'voice'); return true; }
     if (Seeker.active && /\b(stop (looking|searching|guiding)|cancel|never mind|forget it)\b|খোঁজা বন্ধ|থাক/.test(q)) { Seeker.stop('user'); return true; }
     if (/prepare (for |me for )?offline|download (the |all )?models|work offline|go offline|make (it|astha) work without internet|অফলাইন/.test(q)) { OfflinePack.prepare(); return true; }
-    if (/\b(am i|are we|are you) (online|offline|connected)\b|is there internet|do (i|we) have internet|ইন্টারনেট আছে|নেট আছে/.test(q)) { announce('You are connected to the internet and Gemini Online AI is active with your free pass.', 'আপনি ইন্টারনেটে যুক্ত আছেন এবং ফ্রি পাসসহ জেমিনি অনলাইন এআই চালু আছে।', 'system'); return true; }
+    if (/\b(am i|are we|are you) (online|offline|connected)\b|is there internet|do (i|we) have internet|ইন্টারনেট আছে|নেট আছে/.test(q)) { announce('Internet is connected. Cloud mode has permission and credentials; a successful model response has not yet been confirmed.', 'ইন্টারনেট সংযোগ আছে। ক্লাউড মোডে অনুমতি ও পরিচয়পত্র আছে; মডেলের সফল উত্তর এখনো নিশ্চিত করা হয়নি।', 'system'); return true; }
     return false;
   }
   if (Seeker.active && /\b(found it|got it|i have it|i got it|i see it|thanks|thank you)\b|পেয়েছি|পেয়ে গেছি|হয়েছে|peyechi/.test(q)) { Seeker.stop('found'); announce('Great.', 'বাহ, ভালো।', 'voice'); return true; }
@@ -718,7 +785,7 @@ function offlineBoot() {
   if (details && !$('offline-card')) {
     const card = document.createElement('div'); card.className = 'card'; card.id = 'offline-card';
     card.innerHTML = '<div class="card-head"><h2>Works without internet</h2><span class="pill" id="offline-pill">Checking…</span></div>' +
-      '<p class="help">Astha sees, reads, measures distance and understands your voice on this phone. Nothing is sent anywhere. Download the parts once; from then on the internet is optional.</p>' +
+      '<p class="help">Download models for on-device detection, reading and voice input. Select offline mode to keep requests on this phone. Distance estimates are approximate; test after reopening without internet.</p>' +
       '<div class="utility-row"><button class="btn accent" id="offline-prepare-btn" onclick="OfflinePack.prepare()">Prepare for offline use</button></div>' +
       '<p class="help" id="offline-status" role="status"></p>';
     details.parentElement.insertBefore(card, details);

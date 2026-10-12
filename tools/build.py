@@ -175,7 +175,7 @@ NEW_IDENTIFY = r"""function identifyObject(skipCloud) {
       heartFlash({ x: 0.5, y: 0.5, mode: 'lock', label: labelText });
       logEvent(t('log_identify', { a: labelText }));
       if (typeof autoRecordMemory === 'function' && labelText) {
-        autoRecordMemory({ item: labelText, location: 'In front of camera', source: 'Identified object', score: 0.95 });
+        autoRecordMemory({ item: labelText, location: 'In front of camera', source: 'Identified object', score: null });
       }
     };
     const ocrTail = ocrText.length >= 3 ? [` The text on it says: “${ocrText.slice(0, 80)}”.`, ` এর গায়ে লেখা: “${ocrText.slice(0, 80)}”।`] : ['', ''];
@@ -309,11 +309,11 @@ rep("const fresh = worldSorted().filter(o => (state.announced.get(o.id) || 0) < 
     "  const fresh = worldSorted().filter(o => (state.announced.get(o.id) || 0) < now - 10000 && o.score >= (o.src === 'coco' ? 0.55 : 0.28));\n  if (fresh.length && now - (state.lastNarration || 0) > 1500) {")
 
 # ---- voice: prefer the natural (female) voice, let the user pick ----
-rep("const selected = privacyMode ? matches.find(v => v.localService) : matches[0];", "const selected = privacyMode ? matches.find(v => v.localService) : pickVoice(matches, language);")
+rep("const selected = localOnly ? matches.find(v => v.localService) : matches[0];", "const selected = localOnly ? matches.find(v => v.localService) : pickVoice(matches, language);")
 rep('<label class="field" for="ocr-language">Reading language<select class="select-dropdown" id="ocr-language" onchange="savePreferences()"><option value="ben+eng">বাংলা + English</option><option value="eng">English</option></select></label>',
     '<label class="field" for="ocr-language">Reading language<select class="select-dropdown" id="ocr-language" onchange="savePreferences()"><option value="ben+eng">বাংলা + English</option><option value="eng">English</option></select></label>\n'
     '      <label class="field" for="voice-select">Astha\'s voice<select class="select-dropdown" id="voice-select" onchange="onVoiceChosen(this.value)"></select></label>')
-rep("  voiceLang = next;\n  updateVoiceSupport();", "  voiceLang = next;\n  updateVoiceSupport();\n  if (typeof populateVoices === 'function') populateVoices();")
+rep("  voiceLang = next === 'en' ? 'en' : 'bn';\n  updateVoiceSupport();", "  voiceLang = next === 'en' ? 'en' : 'bn';\n  updateVoiceSupport();\n  if (typeof populateVoices === 'function') populateVoices();")
 
 # If Bangla is selected but the device has no Bangla voice, speak the English text with the preferred English voice.
 rep("  const useBn = voiceLang === 'bn' && !!bnText;\n  const text = useBn ? bnText : enText;",
@@ -423,12 +423,12 @@ rep("    const partsEn = fresh.slice(0, 3).map(o => `${labelWithArticle(o.id)} $
 # ---- Cloud reasoning, modes, owner ID, secure-connection banner ----
 cloud_js = (HERE / "cloud.js").read_text(encoding="utf-8")
 rep('<p class="prototype-note">Browser prototype · Camera recognition and reading are experimental. Use your usual mobility aid; Astha cannot confirm a safe path.</p>',
-    '<p class="prototype-note"><strong>Astha AI Companion</strong> · Voice-activated visual assistant. Speak naturally or ask questions anytime.</p>\n'
+    '<p class="prototype-note"><strong>Astha AI Companion</strong> · Experimental visual assistance. Use your usual mobility aid; Astha cannot confirm a safe path. আস্থা নিরাপদ পথ নিশ্চিত করতে পারে না।</p>\n'
     '      <p class="prototype-note" id="secure-banner" hidden style="border-color:var(--danger)"><strong>This page is open on an insecure address.</strong> Chrome will ask for the microphone and camera every time and may block them. Open it as <code>http://localhost:8765</code> or over HTTPS. On Android, use Chrome\'s port forwarding (chrome://inspect on the computer) so the phone sees localhost, or a Cloudflare tunnel.</p>')
 rep('        <button class="chip-btn" id="hf-btn" onclick="toggleHandsFree()" aria-pressed="false" title="Keep listening for “Astha, …”">🎧 <span id="hf-label">Hands-free: off</span></button>\n      </div>',
     '        <button class="chip-btn" id="hf-btn" onclick="toggleHandsFree()" aria-pressed="false" title="Keep listening for “Astha, …”">🎧 <span id="hf-label">Hands-free: off</span></button>\n'
-    '        <div class="segmented" role="group" aria-label="AI Engine Mode" title="Switch between Online AI (Gemini with 20d Free Pass) and On-Device Offline Mode">\n'
-    '          <button id="btn-mode-gemini" onclick="Subscription.setMode(\'gemini\')" aria-pressed="true">✨ Online AI (20d Pass)</button>\n'
+    '        <div class="segmented" role="group" aria-label="AI Engine Mode" title="Choose online processing or on-device models">\n'
+    '          <button id="btn-mode-gemini" onclick="Subscription.setMode(\'gemini\')" aria-pressed="false">✨ Online AI</button>\n'
     '          <button id="btn-mode-offline" onclick="Subscription.setMode(\'offline\')" aria-pressed="false">📱 Offline</button>\n'
     '        </div>\n'
     '        <div class="segmented" role="group" aria-label="Speaking mode" title="Auto: speaks up in busy places. Quiet: speaks only when asked.">\n'
@@ -437,14 +437,14 @@ rep('        <button class="chip-btn" id="hf-btn" onclick="toggleHandsFree()" ar
     '        </div>\n      </div>')
 rep('      <label class="field" for="speech-rate">Speaking speed',
     '      <label class="field" for="gemini-key">Personal Gemini key (optional backup)<input id="gemini-key" type="password" autocomplete="off" placeholder="Leave blank -- the Astha server already provides this" onchange="setGeminiKey(this.value)"></label>\n'
-    '      <p class="help">Astha\'s own server holds a Gemini key so describing, identifying, clothes, reading and screen understanding are accurate out of the box, with a strict “never invent” instruction. Paste a personal key here only as a backup for when the server is unreachable.</p>\n'
+    '      <p class="help">Cloud features require a configured server or your own provider key and your consent. Descriptions can be wrong; verify before acting. A personal key is kept on this browser and should only be used on a device you trust.</p>\n'
     '      <label class="field" for="speech-rate">Speaking speed')
 rep('        <h2 data-i18n="engine_title">On-device AI engine</h2>\n        <button class="btn small accent" id="load-models-btn" onclick="loadAllModels()" data-i18n="engine_load">Load models</button>',
     '        <h2 data-i18n="engine_title">On-device AI engine</h2>\n        <span class="pill" id="cloud-pill">Checking cloud…</span>\n        <button class="btn small accent" id="load-models-btn" onclick="loadAllModels()" data-i18n="engine_load">Load models</button>')
 rep('    <!-- AI Model Diagnostics -->',
     '    <div class="card" id="owner-card">\n'
     '      <div class="card-head"><h2>Owner ID</h2></div>\n'
-    '      <p class="help">Astha can learn your face and, experimentally, your voice. With Owner lock on she only takes commands after recognising you. Browser permission prompts for the microphone and camera cannot be skipped by voice; keep the page on localhost or HTTPS so they are asked only once.</p>\n'
+    '      <p class="help">Face and voice matching are experimental convenience controls, not secure authentication. Templates are saved locally for this profile. Camera and microphone access require your browser permission.</p>\n'
     '      <div class="utility-row"><button class="btn accent" onclick="enrollOwnerFace()">Remember my face</button><button class="btn" onclick="enrollOwnerVoice()">Remember my voice (experimental)</button><button class="btn" onclick="ownerItsMe()">It\'s me</button><button class="btn" id="owner-lock-btn" aria-pressed="false" onclick="toggleOwnerLock()">Owner lock: off</button></div>\n'
     '      <p class="help" id="owner-status" role="status"></p>\n'
     '    </div>\n\n    <!-- AI Model Diagnostics -->')
@@ -488,6 +488,8 @@ rep('      <details><summary>Encrypted storage on this browser</summary>\n'
     '')
 
 # ---- account row: who is signed in, with a sign-out button ----
+rep('Memory is kept for this session unless you unlock encrypted storage.',
+    'Notes are saved on this browser and synced to your account when permitted and connected. Browser notes are not encrypted.')
 rep('      <div class="card-head"><h2>Your preferences</h2></div>',
     '      <div class="card-head"><h2>Your preferences</h2></div>\n'
     '      <p class="help" id="account-row" role="status">Signed in.</p>\n'
@@ -550,15 +552,22 @@ rep('  companionBoot();\n  eyeBoot();\n  cloudBoot();\n})();',
     '  // so the first "describe" or camera start does not begin with a silent wait. Skipped on data-saver.\n'
     "  setTimeout(() => { if (typeof loadCoco === 'function' && engine.coco.status === 'idle' && !(navigator.connection && navigator.connection.saveData)) loadCoco().catch(() => {}); }, 1200);\n"
     '};')
-DST.write_text(html, encoding="utf-8")
-print("wrote", DST, len(html), "bytes")
+DST.write_text(html, encoding="utf-8", newline="\n")
+print("wrote", DST, len(html.encode("utf-8")), "bytes")
 
 # ---- service worker: a new cache name per build, so stale shells are dropped on activate ----
 import hashlib
 sw_path = DST.parent / "sw.js"
 sw = sw_path.read_text(encoding="utf-8")
-stamp = hashlib.sha1(html.encode("utf-8")).hexdigest()[:10]
+shell_hash = hashlib.sha256(html.encode("utf-8"))
+# Bootstrap/config-only changes must invalidate cache-first resources, too. Normalize the
+# stamp itself to avoid a circular hash and keep successive builds byte-for-byte identical.
+shell_hash.update(re.sub(r"const CACHE = 'astha-shell-[^']*';", "const CACHE = 'astha-shell-STAMP';", sw).encode("utf-8"))
+for asset in ("config.js", "backend.js", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png"):
+    shell_hash.update(asset.encode("utf-8"))
+    shell_hash.update((DST.parent / asset).read_bytes())
+stamp = shell_hash.hexdigest()[:10]
 sw_new = re.sub(r"const CACHE = 'astha-shell-[^']*';", f"const CACHE = 'astha-shell-{stamp}';", sw, count=1)
+sw_path.write_text(sw_new, encoding="utf-8", newline="\n")
 if sw_new != sw:
-    sw_path.write_text(sw_new, encoding="utf-8")
     print("stamped", sw_path, "cache astha-shell-" + stamp)

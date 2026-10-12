@@ -18,22 +18,26 @@ tools/        Source files for the phone app: base.html (the whole UI + on-devic
               Edit these, never web/index.html directly -- it is generated.
 web/          The built PWA: index.html (generated), manifest.webmanifest, sw.js, icons/,
               config.js (deployment overrides), backend.js (sign-in gate + boot).
-server/       Express API: auth, per-user memory/rooms/activity log (SQLite via node:sqlite),
-              a Gemini vision proxy that keeps the API key server-side, and neural
+server/       Express API: auth, per-user storage (Supabase Postgres or existing SQLite),
+              a configured Maira/Gemini proxy that keeps deployment keys server-side, and neural
               text-to-speech (Microsoft Edge voices, including a real Bangla female voice).
 ```
 
-The phone talks to `/api/*` on the same origin it loaded the page from. The Gemini key lives
-only in `server/.env` -- the browser never sees it. On-device object detection (COCO-SSD + CLIP)
-still runs as a fast, offline fallback when the cloud is unreachable.
+The phone talks to `/api/*` on its configured ASTHA API origin. Maira is the selected AI
+provider and Supabase is the selected database service. Deployment credentials stay in
+server secret storage. Existing on-device detection remains available; model readiness,
+accuracy and cold offline behavior require device verification.
 
 ## Run it locally
 
 Requires Node 22.5+ (for the built-in `node:sqlite`) and Python 3 (only to run the build step).
 
 ```bash
+npm ci
 npm run install:server
-cp server/.env.example server/.env    # then fill in JWT_SECRET and GEMINI_API_KEY
+cp server/.env.example server/.env
+# For local SQLite development, set DB_PROVIDER=sqlite in server/.env.
+# Set a strong JWT_SECRET; fill in server-only Maira keys if testing cloud processing.
 npm run build                          # regenerates web/index.html from tools/
 npm start                              # serves the API + PWA on http://localhost:8787
 ```
@@ -45,25 +49,25 @@ http://localhost:8787`, which hands you a temporary `https://*.trycloudflare.com
 
 ## Deploy it for real
 
-**Render** (free tier, no credit card): push this repo to GitHub, then in Render choose
-*New → Blueprint* and point it at the repo -- `render.yaml` configures the service, a persistent
-disk for the SQLite database, and a generated `JWT_SECRET`. Add your `GEMINI_API_KEY` in the
-Render dashboard's environment variables (marked `sync: false` in the blueprint so it is never
-committed).
+The release is still a review candidate. Read [the audit and release plan](docs/source-audit-and-release-plan.md),
+[Maira setup and verification](docs/maira-integration.md), and [Supabase setup and migration](docs/supabase-integration.md).
+Configure `DB_PROVIDER=supabase` with the limited backend role, verified TLS and explicitly
+reviewed private schema. Startup verifies the database; it does not migrate or import data.
+Keep existing SQLite data and backups until a verified cutover.
 
-**Any Docker host** (Fly.io, a VPS, etc.): `docker build -t astha .`, then run it with a mounted
-volume at `/data` and `JWT_SECRET` / `GEMINI_API_KEY` set as environment variables.
-
-Once deployed, install it on a phone as a normal PWA -- Chrome's "Add to Home screen" -- and it
-opens full-screen with no browser chrome, with an icon like any other app.
+The current Express API still needs a permanent HTTPS Node/container host. Supabase's project
+URL identifies its services; it is not this Express API's origin. A separate Edge Functions
+migration needs runtime validation. The legacy `render.yaml` uses SQLite and requests a paid
+starter service/disk; no deployment or spending occurs automatically. Docker can run the
+existing server with externally supplied database, JWT and provider secrets. Its production default is Supabase; SQLite requires an explicit override. Read [container checks and request monitoring](docs/operations.md) for readiness, certificate mounts, sanitized logging and remaining hosting gates.
 
 ### GitHub Pages (frontend only)
 
-`.github/workflows/pages.yml` publishes `web/` to `https://<you>.github.io/astha/` on every push.
-GitHub Pages is static hosting -- it cannot run the server, hold the Gemini key, check
+`.github/workflows/pages.yml` checks review changes and deploys `web/` only from `main`.
+GitHub Pages is static hosting -- it cannot run the server, hold deployment provider keys, check
 passcodes, or write to the database, so this alone is not a working deployment. It becomes one
 once `web/config.js` points `window.ASTHA_API_BASE` at a real, separately-hosted backend (Render,
-Fly, a tunnel), and that backend's `CORS_ORIGIN` is set to the Pages origin (e.g.
+Fly), and that backend's `CORS_ORIGIN` is set to the Pages origin (e.g.
 `https://<you>.github.io`, no trailing path) so the cross-site cookie is accepted. Setting
 `CORS_ORIGIN` also switches the session cookie to `SameSite=None; Secure`, which is required for
 a fetch from one origin to carry a cookie from another.
@@ -81,11 +85,21 @@ build` and any manual edit will be overwritten. Change `tools/base.html` (struct
 | `PORT` | Port the server listens on (default 8787) |
 | `JWT_SECRET` | Long random string signing session cookies -- required |
 | `DB_PATH` | Where the SQLite file lives (default `./data/astha.db`) |
-| `GEMINI_API_KEY` | Optional but strongly recommended -- enables accurate cloud vision/reading |
-| `CORS_ORIGIN` | Restrict this in production if the frontend is ever hosted separately |
+| `DB_PROVIDER` | `supabase` for selected production storage; `sqlite` preserves the default development path |
+| `SUPABASE_DB_URL` | Server-only Postgres connection URL for the limited `astha_backend` role |
+| `SUPABASE_DB_CA_FILE` | Optional trusted CA certificate file; TLS verification stays enabled |
+| `CLOUD_AI_PROVIDER` | Explicit `maira` or `gemini`; `auto` supports existing deployments |
+| `MAIRA_API_KEY`, `MAIRA_PROJECT_KEY` | Server-only Maira credentials |
+| `MAIRA_PROFILE_ID` | Optional reviewed profile; omit to use the project default |
+| `GEMINI_API_KEY` | Optional for explicit Gemini configuration |
+| `PUBLIC_ORIGIN`, `CORS_ORIGIN` | Exact HTTPS API origin and additional allowed frontend origins |
+| `TRUST_PROXY_HOPS` | Explicit verified ingress hop count; default 0 |
 
 ## Privacy
 
-Camera and screen frames sent for cloud reasoning go straight to Google's Gemini API and are not
-stored by this server. Only what a user explicitly asks Astha to remember (an object location, a
-room note) is saved, tied to their account, and deletable at any time from the app.
+Cloud image/screen reasoning uses the configured Maira/Gemini provider after session consent.
+Speech may use Microsoft or the browser's speech service. The backend stores account data,
+PIN hashes, approved memories, rooms, settings, activity, agent tasks and documents; enrolled
+biometric data has additional privacy requirements. Offline mode blocks remote processing.
+The full Bangla/English retention, deletion/export, provider and backup policy remains a
+release gate; provider retention is not established by the local tests.

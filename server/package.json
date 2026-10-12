@@ -3,10 +3,13 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=22.5.0" },
+  "engines": {
+    "node": ">=22.5.0"
+  },
   "scripts": {
     "start": "node index.js",
-    "dev": "node --watch index.js"
+    "dev": "node --watch index.js",
+    "check:storage": "node check-storage.mjs"
   },
   "dependencies": {
     "cookie-parser": "^1.4.7",
@@ -16,6 +19,7 @@
     "jsonwebtoken": "^9.0.2",
     "msedge-tts": "^2.0.7",
     "nanoid": "^5.0.9",
+    "pg": "8.23.1",
     "ws": "^8.18.0"
   }
 }

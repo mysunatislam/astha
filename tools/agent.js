@@ -51,8 +51,8 @@ const ClientRAG = {
         if (text.includes(t)) score += (t.length >= 4 ? 3 : 1.5);
       }
       const hoursAgo = Math.max(0, (now - new Date(m.time).getTime()) / (1000 * 3600));
-      if (hoursAgo < 2) score += 2;
-      else if (hoursAgo < 24) score += 1;
+      if (score > 0 && hoursAgo < 2) score += 2;
+      else if (score > 0 && hoursAgo < 24) score += 1;
       return { type: 'memory', title: m.item, location: m.location, time: m.time, score };
     }).filter(m => m.score > 0).sort((a, b) => b.score - a.score);
 
@@ -120,16 +120,10 @@ AsthaToolRegistry.register('tool_rag_retrieve', 'Retrieves relevant memories and
   const q = args.search_query || '';
   const local = ClientRAG.search(q);
   // Try server RAG if online
-  if (typeof apiUrl === 'function' && serverCloud.available) {
+  if (typeof apiSend === 'function' && remoteProcessingAllowed() && serverCloud.available) {
     try {
-      const r = await fetch(apiUrl('/api/rag/query'), {
-        method: 'POST',
-        credentials: 'include',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query: q, limit: 5 })
-      });
-      if (r.ok) {
-        const srv = await r.json();
+      const srv = await apiSend('POST', '/api/rag/query', { query: q, limit: 5 });
+      if (srv) {
         return {
           found: true,
           memories: srv.memories || local.memories,
@@ -259,23 +253,25 @@ AsthaToolRegistry.register('tool_spatial_guidance', 'Provides directional alignm
   return { delivered: true, direction: args.direction };
 });
 
-AsthaToolRegistry.register('tool_memory_save', 'Saves a confirmed item location into memory', async (args) => {
+AsthaToolRegistry.register('tool_memory_save', 'Saves a confirmed item location into memory', async (args, ctx) => {
   const item = args.item;
   const loc = args.location;
-  if (!item || !loc) return { saved: false };
+  // Model-generated arguments cannot authorize persistence; the caller must own approval.
+  if (!item || !loc || ctx?.memorySaveApproved !== true) return { saved: false, error: 'explicit_approval_required' };
   if (typeof autoRecordMemory === 'function') {
-    autoRecordMemory({ item, location: loc, source: 'Autonomous Agent Verification', score: 0.95 });
+    const entry = await autoRecordMemory({ item, location: loc, source: 'Approved agent note', score: null, approved: true });
+    return { saved: !!entry, item, location: loc };
   }
-  return { saved: true, item, location: loc };
+  return { saved: false };
 });
 
 AsthaToolRegistry.register('tool_safety_scan', 'Evaluates walking path for stairs, drops, and obstacles', async (args, ctx) => {
   const frame = ctx.frame || captureFrame(640);
-  if (!frame) return { safe: true };
+  if (!frame) return { safe: null, error: 'no_frame' };
   const cocoObjs = await runCoco(frame);
   const hazard = EdgeAndStairsDetector.evaluate(frame, cocoObjs);
   return {
-    safe: !hazard,
+    safe: null, // A camera scan cannot establish a safe walking path.
     hazard: hazard ? hazard.labelEn : null,
     hazard_bn: hazard ? hazard.labelBn : null
   };
@@ -299,7 +295,10 @@ const AsthaEvaluator = {
     }
 
     if (step.tool === 'tool_vision_detect') {
-      if (toolOutput.found && toolOutput.confidence >= (step.args.min_confidence || 0.45)) {
+      const target = String(step.args?.target_item || '').toLowerCase().trim();
+      const item = typeof toolOutput.item === 'string' ? toolOutput.item.toLowerCase().trim() : '';
+      const matches = target && item && (target === item || ClientRAG.expandTerms(target).includes(item));
+      if (toolOutput.found === true && matches && Number.isFinite(toolOutput.confidence) && toolOutput.confidence <= 1 && toolOutput.confidence >= (step.args?.min_confidence || 0.45)) {
         return { verified: true, score: toolOutput.confidence, needsCorrection: false };
       }
       // Failure: Target not found in frame -> Autonomous self-correction (pan/tilt guidance)
@@ -332,7 +331,13 @@ const AsthaEvaluator = {
       };
     }
 
-    return { verified: true, score: 0.8, needsCorrection: false };
+    const supported = {
+      tool_rag_retrieve: () => toolOutput.found === true && [toolOutput.memories, toolOutput.rooms].some(rows => Array.isArray(rows) && rows.length > 0),
+      tool_spatial_guidance: () => toolOutput.delivered === true,
+      tool_memory_save: () => toolOutput.saved === true,
+    };
+    const verified = !toolOutput.error && !!supported[step.tool]?.();
+    return { verified, score: verified ? 1 : 0, needsCorrection: false };
   }
 };
 

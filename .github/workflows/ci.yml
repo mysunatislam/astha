@@ -2,51 +2,43 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, 'production/**']
   pull_request:
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  build-and-check:
-    runs-on: ubuntu-latest
+  check:
+    runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
-          node-version: '22'
-      - uses: actions/setup-python@v5
+          node-version-file: .node-version
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            server/package-lock.json
+      - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
-          python-version: '3.x'
-
-      - name: Install server dependencies
-        run: npm ci
-        working-directory: server
-
-      - name: Build the frontend from tools/
-        run: python tools/build.py
-
-      - name: Syntax-check the server
+          python-version: '3.11.9'
+      - name: Install locked dependencies
         run: |
-          for f in server/*.js; do node --check "$f"; done
-
-      - name: Syntax-check the built frontend's inline script
+          npm ci --ignore-scripts --no-fund
+          npm ci --prefix server --ignore-scripts --no-fund
+      - name: Reproducible web build, syntax checks and regressions
+        run: npm run check
+      - name: Dependency advisory gates
         run: |
-          node -e "
-            const fs = require('fs');
-            const html = fs.readFileSync('web/index.html', 'utf8');
-            const m = html.match(/<script>([\s\S]*?)<\/script>/);
-            fs.writeFileSync('_inline.js', m[1]);
-          "
-          node --check _inline.js
-
-      - name: Boot the server and hit /api/health
-        env:
-          JWT_SECRET: ci-only-not-a-real-secret
-          DB_PATH: ./data/ci.db
-        run: |
-          node server/index.js &
-          for i in $(seq 1 20); do
-            curl -sf http://localhost:8787/api/health && exit 0
-            sleep 0.5
-          done
-          echo "server did not become healthy in time" >&2
-          exit 1
+          npm audit --audit-level=moderate
+          npm audit --prefix server --audit-level=moderate
+      - name: Require committed generated assets to match the source
+        run: git diff --exit-code -- web/index.html web/sw.js
+      - name: Container isolation, readiness and persistence smoke
+        timeout-minutes: 15
+        run: node tools/check-container.mjs

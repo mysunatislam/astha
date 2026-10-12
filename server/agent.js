@@ -1,9 +1,10 @@
 // Autonomous Agent Engine with Tool Orchestration, Planning, and Verification Loop
 import { Router } from 'express';
 import { nanoid } from 'nanoid';
-import { callGemini, hasCloudAI } from './gemini.js';
-import { searchRAG, formatRagContextForPrompt } from './rag.js';
-import { all, get, run } from './db.js';
+import { callCloudAI, hasCloudAI } from './gemini.js';
+import { searchRAG, formatRagContextForPrompt, expandQueryTerms } from './rag.js';
+import { run } from './db.js';
+import { asyncRoute } from './async-route.js';
 
 export const agentRouter = Router();
 
@@ -191,7 +192,7 @@ export function generateHeuristicPlan(goal, ragData) {
   }
 
   // 2. Vision detect step
-  const targetMatch = g.match(/(?:find|where is|locate|see|detect|check|my)\s+([a-z\s]+?)(?:$|\s+and|\s+on|\s+in|\s+with)/i);
+  const targetMatch = g.match(/(?:find|where is|locate|see|detect|check|my)\s+([a-z\s]+?)(?:$|[,.;!?]|\s+and|\s+on|\s+in|\s+with)/i);
   const targetItem = targetMatch ? targetMatch[1].trim() : 'item';
   steps.push({
     id: 'step_detect',
@@ -245,9 +246,12 @@ export function evaluateHeuristicStep(step, toolOutput) {
   }
 
   if (step.tool === 'tool_vision_detect') {
-    const found = !!toolOutput.found || (toolOutput.objects && toolOutput.objects.length > 0);
-    const score = toolOutput.confidence || (found ? 0.8 : 0.2);
-    if (found && score >= 0.5) {
+    const target = String(step.args?.target_item || '').toLowerCase().trim();
+    const item = typeof toolOutput.item === 'string' ? toolOutput.item.toLowerCase().trim() : '';
+    const found = toolOutput.found === true && item && target && (target === item || expandQueryTerms(target).includes(item));
+    const score = Number.isFinite(toolOutput.confidence) && toolOutput.confidence >= 0 && toolOutput.confidence <= 1 ? toolOutput.confidence : 0;
+    const minimum = Number.isFinite(step.args?.min_confidence) ? Math.max(0.5, step.args.min_confidence) : 0.5;
+    if (found && score >= minimum) {
       return { verified: true, score, evaluation_reason: 'Target detected with acceptable confidence', needs_correction: false };
     }
     // Corrective action: advise user to pan/tilt
@@ -284,13 +288,19 @@ export function evaluateHeuristicStep(step, toolOutput) {
     };
   }
 
-  return { verified: true, score: 0.75, evaluation_reason: 'Step completed', needs_correction: false };
+  const supported = {
+    tool_rag_retrieve: () => toolOutput.found === true && [toolOutput.memories, toolOutput.rooms].some(rows => Array.isArray(rows) && rows.length > 0),
+    tool_spatial_guidance: () => toolOutput.delivered === true,
+    tool_memory_save: () => toolOutput.saved === true,
+  };
+  const verified = !toolOutput.error && !!supported[step.tool]?.();
+  return { verified, score: verified ? 1 : 0, evaluation_reason: verified ? 'Supported tool result received; this does not establish visual or path safety' : 'No supported verification evidence', needs_correction: false };
 }
 
 // ---- API Routes ----
 
 // 1. Plan Route
-agentRouter.post('/agent/plan', async (req, res) => {
+agentRouter.post('/agent/plan', asyncRoute(async (req, res) => {
   const { goal, image } = req.body || {};
   if (!goal) return res.status(400).json({ error: 'goal_required' });
 
@@ -302,9 +312,9 @@ agentRouter.post('/agent/plan', async (req, res) => {
     if (hasCloudAI()) {
       try {
         const prompt = PLANNER_PROMPT(goal, ragContext, image ? 'Camera frame provided' : 'No frame');
-        plan = await callGemini({ customPrompt: prompt, imageBase64: image, userId: req.user?.id || 'astha-user' });
+        plan = await callCloudAI({ customPrompt: prompt, imageBase64: image, userId: req.user?.id });
       } catch (err) {
-        console.warn('Planner fallback to heuristic:', err.message);
+        console.warn('Planner fallback to heuristic');
       }
     }
 
@@ -314,20 +324,20 @@ agentRouter.post('/agent/plan', async (req, res) => {
 
     const taskId = nanoid();
     const now = Date.now();
-    run(
+    await run(
       'INSERT INTO agent_tasks (id, user_id, goal, plan_json, status, created_at, updated_at) VALUES (?,?,?,?,?,?,?)',
       [taskId, req.user.id, goal, JSON.stringify(plan), 'planned', now, now]
     );
 
     res.json({ ok: true, taskId, plan, ragContext });
   } catch (err) {
-    console.error('Agent plan error:', err);
-    res.status(500).json({ error: 'agent_plan_failed', message: err.message });
+    console.error('Agent plan failed');
+    res.status(500).json({ error: 'agent_plan_failed', message: 'agent_plan_failed' });
   }
-});
+}));
 
 // 2. Evaluate / Verification Route
-agentRouter.post('/agent/evaluate', async (req, res) => {
+agentRouter.post('/agent/evaluate', asyncRoute(async (req, res) => {
   const { step, toolOutput, goal } = req.body || {};
   if (!step || !toolOutput) return res.status(400).json({ error: 'step_and_toolOutput_required' });
 
@@ -336,25 +346,28 @@ agentRouter.post('/agent/evaluate', async (req, res) => {
     if (hasCloudAI()) {
       try {
         const prompt = EVALUATOR_PROMPT(step, toolOutput, goal || 'General task');
-        evaluation = await callGemini({ customPrompt: prompt, userId: req.user?.id || 'astha-user' });
+        evaluation = await callCloudAI({ customPrompt: prompt, userId: req.user?.id });
       } catch (err) {
-        console.warn('Evaluator fallback to heuristic:', err.message);
+        console.warn('Evaluator fallback to heuristic');
       }
     }
 
     if (!evaluation || evaluation.verified === undefined) {
       evaluation = evaluateHeuristicStep(step, toolOutput);
     }
+    // Generated text cannot override missing target evidence or an unsupported tool.
+    const evidence = evaluateHeuristicStep(step, toolOutput);
+    if (!evidence.verified) evaluation = evidence;
 
     res.json({ ok: true, evaluation });
   } catch (err) {
-    console.error('Agent evaluate error:', err);
-    res.status(500).json({ error: 'agent_evaluate_failed', message: err.message });
+    console.error('Agent evaluate failed');
+    res.status(500).json({ error: 'agent_evaluate_failed', message: 'agent_evaluate_failed' });
   }
-});
+}));
 
-// 3. Full Autonomous Task Runner Route
-agentRouter.post('/agent/run', async (req, res) => {
+// 3. Planning/synthesis route. Actual tool execution remains in the client agent loop.
+agentRouter.post('/agent/run', asyncRoute(async (req, res) => {
   const { goal, image, observations = [] } = req.body || {};
   if (!goal) return res.status(400).json({ error: 'goal_required' });
 
@@ -367,13 +380,13 @@ agentRouter.post('/agent/run', async (req, res) => {
     let plan = null;
     if (hasCloudAI()) {
       try {
-        plan = await callGemini({
+        plan = await callCloudAI({
           customPrompt: PLANNER_PROMPT(goal, ragContext, image ? 'Camera frame provided' : 'No frame'),
           imageBase64: image,
-          userId: req.user?.id || 'astha-user'
+          userId: req.user?.id
         });
       } catch (e) {
-        console.warn('Planner fallback to heuristic:', e.message);
+        console.warn('Planner fallback to heuristic');
       }
     }
     if (!plan || !plan.steps) {
@@ -391,13 +404,13 @@ agentRouter.post('/agent/run', async (req, res) => {
 
     if (hasCloudAI()) {
       try {
-        response = await callGemini({
+        response = await callCloudAI({
           customPrompt: SYNTHESIZER_PROMPT(goal, plan.steps, combinedFindings),
           imageBase64: image,
-          userId: req.user?.id || 'astha-user'
+          userId: req.user?.id
         });
       } catch (e) {
-        console.warn('Synthesizer fallback:', e.message);
+        console.warn('Synthesizer fallback');
       }
     }
 
@@ -408,33 +421,38 @@ agentRouter.post('/agent/run', async (req, res) => {
         response = {
           en: `According to your saved records, your ${topMemory.title} was last seen at ${topMemory.content}.`,
           bn: `আপনার সংরক্ষিত তথ্য অনুযায়ী, আপনার ${topMemory.title} শেষবার দেখা গিয়েছিল ${topMemory.content}-এ।`,
-          success: true
+          success: false
         };
       } else {
         response = {
-          en: `I have planned and checked for ${goal}. Please point the camera directly at the surface so I can verify.`,
+          en: `I have planned the steps for ${goal}. Please point the camera directly at the surface so I can verify.`,
           bn: `${goal}-এর জন্য পরিকল্পনা করা হয়েছে। নিশ্চিত হতে ক্যামেরাটি টেবিল বা নির্দিষ্ট স্থানের দিকে ধরুন।`,
           success: false
         };
       }
     }
 
+    // A generated plan, historical memory or model's success claim is not verified tool execution.
+    // This route has not executed any declared tools; preserve the client loop and require verification.
+    response = { ...response, success: false, verification_reason: 'server_tools_not_executed' };
+    const status = 'needs_verification';
     const taskId = nanoid();
     const now = Date.now();
-    run(
+    await run(
       'INSERT INTO agent_tasks (id, user_id, goal, plan_json, status, result_json, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)',
-      [taskId, req.user.id, goal, JSON.stringify(plan), 'completed', JSON.stringify(response), now, now]
+      [taskId, req.user.id, goal, JSON.stringify(plan), status, JSON.stringify(response), now, now]
     );
 
     res.json({
       ok: true,
       taskId,
+      status,
       plan,
       rag: ragData,
       response
     });
   } catch (err) {
-    console.error('Agent run error:', err);
-    res.status(500).json({ error: 'agent_run_failed', message: err.message });
+    console.error('Agent run failed');
+    res.status(500).json({ error: 'agent_run_failed', message: 'agent_run_failed' });
   }
-});
+}));
