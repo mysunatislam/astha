@@ -109,6 +109,13 @@ test('proxy trust is explicit and public origins work behind TLS termination', a
   for (const value of ['true', '4', '-1', '1.5', '']) assert.throws(() => getTrustProxyHops({ TRUST_PROXY_HOPS: value }), /TRUST_PROXY_HOPS/);
   assert.equal(getPublicOrigin({ NODE_ENV: 'production', PUBLIC_ORIGIN: 'https://astha.example/' }), 'https://astha.example');
   assert.throws(() => getPublicOrigin({ NODE_ENV: 'production', PUBLIC_ORIGIN: 'http://astha.example' }), /PUBLIC_ORIGIN/);
+  // The host's own address is used only when no origin is configured, and is held to the same rules.
+  assert.equal(getPublicOrigin({}), null);
+  assert.equal(getPublicOrigin({ NODE_ENV: 'production', RENDER_EXTERNAL_URL: 'https://astha-demo.onrender.com' }), 'https://astha-demo.onrender.com');
+  assert.equal(getPublicOrigin({ NODE_ENV: 'production', PUBLIC_ORIGIN: 'https://astha.example', RENDER_EXTERNAL_URL: 'https://astha-demo.onrender.com' }), 'https://astha.example');
+  for (const invalid of ['http://astha-demo.onrender.com', 'https://astha-demo.onrender.com/path', 'https://user:pass@astha-demo.onrender.com', '*']) {
+    assert.throws(() => getPublicOrigin({ NODE_ENV: 'production', RENDER_EXTERNAL_URL: invalid }), /PUBLIC_ORIGIN/);
+  }
   for (const hops of [0, 1]) {
     const app = express();
     app.set('trust proxy', getTrustProxyHops({ TRUST_PROXY_HOPS: String(hops) }));

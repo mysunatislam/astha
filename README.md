@@ -58,9 +58,26 @@ Keep existing SQLite data and backups until a verified cutover.
 
 The current Express API still needs a permanent HTTPS Node/container host. Supabase's project
 URL identifies its services; it is not this Express API's origin. A separate Edge Functions
-migration needs runtime validation. The legacy `render.yaml` uses SQLite and requests a paid
-starter service/disk; no deployment or spending occurs automatically. Docker can run the
-existing server with externally supplied database, JWT and provider secrets. Its production default is Supabase; SQLite requires an explicit override. Read [container checks and request monitoring](docs/operations.md) for readiness, certificate mounts, sanitized logging and remaining hosting gates.
+migration needs runtime validation. Docker can run the existing server with externally supplied
+database, JWT and provider secrets. Its production default is Supabase; SQLite requires an
+explicit override. Read [container checks and request monitoring](docs/operations.md) for
+readiness, certificate mounts, sanitized logging and remaining hosting gates.
+
+### A shareable link with online AI and no visitor key (Render, free)
+
+A static page cannot keep a secret: a provider key placed in `web/` is readable by every visitor,
+and the Maira key pair opens the whole Gigalogy project, not only `/v1/maira/ask`. The server
+holds the keys instead, and `render.yaml` describes one free service that runs it:
+
+1. Open `https://render.com/deploy?repo=https://github.com/mysunatislam/astha` and sign in.
+2. Enter `MAIRA_API_KEY` and `MAIRA_PROJECT_KEY` when Render asks, then apply.
+3. When the deploy finishes, the app is at the service's `https://<name>.onrender.com`.
+
+Visitors choose "Online AI" once and accept the consent prompt; nobody is asked for a key. The
+free plan has no disk, so accounts and account-synced notes start empty whenever the service
+restarts or wakes from sleep, and the first request after about 15 idle minutes takes around a
+minute. Switch `DB_PROVIDER` to `supabase` for lasting accounts. `PUBLIC_ORIGIN` defaults to
+Render's own address; set it when you add a custom domain.
 
 ### GitHub Pages (frontend only)
 

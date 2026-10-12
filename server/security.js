@@ -81,8 +81,12 @@ export function getTrustProxyHops(env = process.env) {
 }
 
 export function getPublicOrigin(env = process.env) {
-  if (!env.PUBLIC_ORIGIN) return null;
-  const origin = normalizeOrigin(env.PUBLIC_ORIGIN);
+  // Render sets RENDER_EXTERNAL_URL to the service's own HTTPS address. It comes from the
+  // platform, not from a request, so it is a safe default; an explicit PUBLIC_ORIGIN wins
+  // and is required for a custom domain.
+  const configured = env.PUBLIC_ORIGIN || env.RENDER_EXTERNAL_URL;
+  if (!configured) return null;
+  const origin = normalizeOrigin(configured);
   if (!origin || !/^https?:/.test(origin) || (env.NODE_ENV === 'production' && !origin.startsWith('https://'))) {
     throw new Error('PUBLIC_ORIGIN must be an exact HTTP origin (HTTPS in production).');
   }

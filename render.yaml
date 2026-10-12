@@ -1,13 +1,25 @@
-# Legacy SQLite hosting example; the selected database is now Supabase.
-# Review docs/supabase-integration.md and choose the Node API host before deployment.
-# This blueprint still requests a paid service/disk and is not the Supabase cutover config.
+# One free Render service runs the API and serves the app from the same HTTPS origin. The
+# Maira keys stay on the server, so nobody who opens the link needs a key of their own.
+#
+# Deploy: https://render.com/deploy?repo=https://github.com/mysunatislam/astha
+# Render asks for MAIRA_API_KEY and MAIRA_PROJECT_KEY once; they are never written to this
+# repository or to the page. The app is then at the service's https://<name>.onrender.com.
+#
+# Storage here is SQLite inside the container. The free plan has no disk, so accounts and
+# account-synced notes start empty whenever the service restarts or wakes from sleep; notes
+# kept on each phone are unaffected. For lasting accounts set DB_PROVIDER=supabase with
+# SUPABASE_DB_URL and SUPABASE_DB_CA_FILE as described in docs/supabase-integration.md.
+# A free service sleeps after about 15 idle minutes and takes around a minute to wake.
 services:
   - type: web
     name: astha
-    env: docker
-    plan: starter
+    runtime: docker
+    plan: free
     dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
     envVars:
+      - key: NODE_ENV
+        value: production
       - key: JWT_SECRET
         generateValue: true
       - key: CLOUD_AI_PROVIDER
@@ -16,21 +28,13 @@ services:
         sync: false
       - key: MAIRA_PROJECT_KEY
         sync: false
-      - key: MAIRA_PROFILE_ID
-        sync: false
-      - key: NODE_ENV
-        value: production
-      # Render terminates TLS before the app. Enter the exact external HTTPS origin.
-      # Keep forwarded-header trust disabled until the deployed ingress hop count is verified.
-      - key: PUBLIC_ORIGIN
-        sync: false
-      - key: TRUST_PROXY_HOPS
-        value: "0"
-      - key: DB_PATH
-        value: /data/astha.db
       - key: DB_PROVIDER
         value: sqlite
-    disk:
-      name: astha-data
-      mountPath: /data
-      sizeGB: 1
+      - key: DB_PATH
+        value: /data/astha.db
+      # PUBLIC_ORIGIN defaults to Render's own RENDER_EXTERNAL_URL; set it for a custom domain.
+      # One hop trusts only what Render's router appends, never a header a visitor sends, so
+      # the sign-in limit is keyed to the address the router reports instead of to the router.
+      # Confirm the reported address on the live service before relying on per-visitor limits.
+      - key: TRUST_PROXY_HOPS
+        value: "1"
