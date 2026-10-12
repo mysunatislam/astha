@@ -20,6 +20,25 @@ Set `ASTHA_LOG_REQUEST_ERRORS=1` to enable sanitized JSON lines for 5xx response
 
 The focused regressions cover sensitive markers in paths, queries, bearer headers, bodies and error objects, variable resource IDs, duplicate finish/close events, disconnects, timeout categories, disabled/broken sinks, overload limits and real HTTP late errors. Ordinary success traffic produces no per-request log.
 
+## Account data and retention
+
+`server/retention.js` keeps each account's newest 500 memories, 100 rooms, 200 activity
+entries, 50 agent tasks and 200 personal notes. The limit runs after each write as a single
+owner-scoped delete; a failed prune never fails the save that triggered it, and the next write
+prunes again. Changing a limit changes what users keep, so update
+[data-handling.md](data-handling.md) and the published policy with it.
+
+`GET /api/account/export` returns the caller's records without credentials.
+`POST /api/account/delete` requires `confirm: "delete_my_account"` and, for a registered
+account, its PIN. It shares the sign-in attempt limiter, so repeated wrong PINs return 429
+together with sign-in attempts from the same address. One `DELETE` on `users` cascades to every
+owned table in both storage providers. Deletion does not reach backups: record how a restored
+backup is reconciled with deletions made since it was taken before relying on backups.
+
+Guest accounts that hold records and are never registered are not removed by any job. Decide a
+retention period before launch; it needs a last-used timestamp, which is a reviewed schema
+migration on Supabase.
+
 ## Deployment and incident gates
 
 Permanent HTTPS hosting remains unselected. Before deployment, configure exact `PUBLIC_ORIGIN`, trusted CORS origins and verified proxy-hop count. Verify the mounted CA and restricted database readiness on that host, then exercise same-origin and Capacitor clients through its HTTPS ingress. One API instance remains the supported initial configuration until the in-memory authentication rate limiter has a reviewed shared replacement.
