@@ -13,6 +13,7 @@ test('actual ASTHA routes use server-only Maira credentials and authenticated ac
   await new Promise(resolve => reserved.close(resolve));
   const root = fileURLToPath(new URL('..', import.meta.url));
   const env = { ...process.env, NODE_ENV: 'production', DB_PATH: ':memory:', PORT: String(port),
+    DB_PROVIDER: 'sqlite', SUPABASE_DB_URL: '', SUPABASE_DB_CA_FILE: '', RENDER_EXTERNAL_URL: '',
     JWT_SECRET: randomBytes(32).toString('hex'), PUBLIC_ORIGIN: '', CORS_ORIGIN: '', TRUST_PROXY_HOPS: '0',
     CLOUD_AI_PROVIDER: 'maira', MAIRA_API_KEY: 'server-only-maira-test-key',
     MAIRA_PROJECT_KEY: 'server-only-maira-test-project', MAIRA_PROFILE_ID: '',

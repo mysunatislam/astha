@@ -147,6 +147,8 @@ test('security regression requests run against an isolated server without cloud 
   const port = reserved.address().port;
   await new Promise(resolve => reserved.close(resolve));
   const childEnv = { ...process.env, NODE_ENV: 'production',
+    // Standalone execution must also isolate storage from an operator's server/.env.
+    DB_PROVIDER: 'sqlite', SUPABASE_DB_URL: '', SUPABASE_DB_CA_FILE: '', RENDER_EXTERNAL_URL: '',
     JWT_SECRET: randomBytes(32).toString('hex'), DB_PATH: path.join(temp, 'test.db'), PORT: String(port),
     CORS_ORIGIN: 'https://trusted.example,capacitor://localhost', PUBLIC_ORIGIN: '', TRUST_PROXY_HOPS: '0',
     CLOUD_AI_PROVIDER: 'auto', MAIRA_API_KEY: '', MAIRA_PROJECT_KEY: '', MAIRA_PROFILE_ID: '',

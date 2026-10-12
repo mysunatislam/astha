@@ -7,7 +7,8 @@ import { EventEmitter } from 'node:events';
 import vm from 'node:vm';
 
 // Real auth/origin/body middleware, isolated DB, injected audio; never contact a provider.
-process.env.DB_PATH = ':memory:';
+Object.assign(process.env, { DB_PROVIDER: 'sqlite', DB_PATH: ':memory:',
+  SUPABASE_DB_URL: '', SUPABASE_DB_CA_FILE: '', RENDER_EXTERNAL_URL: '' });
 process.env.NODE_ENV = 'production';
 process.env.JWT_SECRET = randomBytes(32).toString('hex');
 const { createSpeechRouter } = await import('../server/speech.js');

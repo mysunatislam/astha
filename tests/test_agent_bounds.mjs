@@ -2,7 +2,8 @@ import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 
 // Isolated in-memory database and a fake provider key; fetch is mocked in every test.
-process.env.DB_PATH = ':memory:';
+Object.assign(process.env, { DB_PROVIDER: 'sqlite', DB_PATH: ':memory:',
+  SUPABASE_DB_URL: '', SUPABASE_DB_CA_FILE: '', RENDER_EXTERNAL_URL: '' });
 process.env.CLOUD_AI_PROVIDER = 'auto';
 for (const name of ['MAIRA_API_KEY', 'MAIRA_PROJECT_KEY', 'MAIRA_PROFILE_ID', 'MAIRA_API_URL', 'API_KEY', 'PROJECT_KEY', 'GEMINI_API_KEY', 'GEMINI_MODELS']) process.env[name] = '';
 const { agentRouter, sanitizePlan, sanitizeEvaluation, sanitizeSpokenResponse, AGENT_TOOLS } = await import('../server/agent.js');
