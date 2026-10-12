@@ -6,6 +6,8 @@
 **/*.db-*
 **/*.jks
 **/*.keystore
+# Render copies secret files into the build context; keep the runtime CA out of the image.
+**/supabase-root-ca.crt
 **/*.log
 android
 ios

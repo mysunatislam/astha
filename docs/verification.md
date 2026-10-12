@@ -79,3 +79,29 @@ The GitHub connector returned HTTP 403 for branch/PR creation. After explicit pu
 ## Provider and storage continuation
 
 The production example selects Maira and Supabase, with blank server-only credentials. Protected local server configuration now contains the authorized Maira keys, newly generated local JWT and restricted Supabase connection with trusted CA; no deployed signing secret was rotated. SQLite remains the explicit/default development provider. Environment injection takes precedence; server/.env resolves independently of launch directory, with the legacy cwd fallback retained. Actual `npm run check:storage` passed against the selected project. Permanent HTTPS Node hosting, hosted authenticated user flows and any reviewed existing-data import remain required before cutover. Read maira-integration.md and supabase-integration.md for setup and evidence limits.
+# Render preview and standalone fixture isolation — October 13, 2026
+
+The reviewed Render blueprint selects the existing restricted Supabase backend, requests
+database/provider credentials through private host inputs, and reads the trusted CA from a
+runtime secret mount. It no longer overrides production storage with ephemeral SQLite.
+Automatic deployment and forwarded-header trust stay disabled until actual host verification.
+The free service is a preview, not evidence of an always-on production release.
+
+`npm run check` passed **214 regressions and both existing agent suites** after the hosting
+and fixture-isolation corrections. Direct deployment/security checks passed 17 checks, and
+six other standalone fixture files passed 32 checks. These fixtures now explicitly select
+disposable SQLite and blank operator Supabase/Render settings before importing application
+modules. The previous normal runner already isolated them; direct invocation exposed a gap.
+
+An actual local Express startup with the protected Supabase configuration and a synthetic
+Render HTTPS origin passed health/no-store/request-ID checks, unauthenticated rejection,
+same-origin validation (400), foreign-origin rejection (403) and graceful shutdown. That
+readiness check made no provider calls or account writes. The initial incorrectly isolated
+standalone run did create eight synthetic hosted accounts; exact IDs, timestamps, expected
+contents and cohort guards were verified, and a transaction removed only those fixtures.
+Zero fixture parents or children remained. No credentials or fixture identities are published.
+
+Docker runtime CA exclusion is covered by an additional synthetic canary in the existing
+image gate. The new hosted CI result must be recorded separately when it completes. No Render
+service, runtime CA mount, public HTTPS user flow, signed APK/AAB or physical device behavior
+is verified by these local checks.

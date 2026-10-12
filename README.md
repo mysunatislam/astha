@@ -63,21 +63,43 @@ database, JWT and provider secrets. Its production default is Supabase; SQLite r
 explicit override. Read [container checks and request monitoring](docs/operations.md) for
 readiness, certificate mounts, sanitized logging and remaining hosting gates.
 
-### A shareable link with online AI and no visitor key (Render, free)
+### A shareable preview with online AI and Supabase (Render, free)
 
 A static page cannot keep a secret: a provider key placed in `web/` is readable by every visitor,
 and the Maira key pair opens the whole Gigalogy project, not only `/v1/maira/ask`. The server
-holds the keys instead, and `render.yaml` describes one free service that runs it:
+holds the keys instead. `render.yaml` describes one free preview service with the selected
+Supabase database; accounts and synced records stay outside the disposable container:
 
-1. Open `https://render.com/deploy?repo=https://github.com/mysunatislam/astha` and sign in.
-2. Enter `MAIRA_API_KEY` and `MAIRA_PROJECT_KEY` when Render asks, then apply.
-3. When the deploy finishes, the app is at the service's `https://<name>.onrender.com`.
+1. After reviewing and merging the corrected blueprint, open
+   [Deploy to Render](https://render.com/deploy?repo=https://github.com/mysunatislam/astha)
+   and sign in. Confirm the service uses the reviewed source commit.
+2. Enter `MAIRA_API_KEY`, `MAIRA_PROJECT_KEY` and the restricted `SUPABASE_DB_URL` in Render's
+   private form. Use the approved `astha_backend` session-pool URL on port **5432**, with an
+   encoded password; do not use a project HTTP URL, administrator login or port 6543.
+   Render generates `JWT_SECRET`; preserve it on subsequent redeploys.
+3. In the service's **Environment > Secret Files**, upload the trusted Supabase CA as
+   `supabase-root-ca.crt`. It is mounted at `/etc/secrets/supabase-root-ca.crt`, matching the
+   blueprint. Use the verified certificate supplied for the selected project, not a Windows
+   pathname. Startup intentionally fails until the credentials, certificate and existing
+   private schema are valid. Then manually deploy the reviewed commit.
+4. When Render reports healthy, use its actual `https://<name>.onrender.com` address and verify
+   sign-in, account isolation, consent-gated AI and persistence across a restart. A generated
+   address or a successful image build alone does not verify these flows.
 
 Visitors choose "Online AI" once and accept the consent prompt; nobody is asked for a key. The
-free plan has no disk, so accounts and account-synced notes start empty whenever the service
-restarts or wakes from sleep, and the first request after about 15 idle minutes takes around a
-minute. Switch `DB_PROVIDER` to `supabase` for lasting accounts. `PUBLIC_ORIGIN` defaults to
-Render's own address; set it when you add a custom domain.
+existing server-side provider route remains unchanged. Leave `web/config.js` empty when the
+same Express service serves the PWA. `PUBLIC_ORIGIN` defaults to Render's verified-format
+external HTTPS address; set an explicit exact origin for a custom domain.
+
+The [free plan](https://render.com/docs/free) sleeps after 15 idle minutes and can take about
+a minute to wake. It is for preview/judging; select and approve an always-on plan before a
+production launch. Supabase account data is not stored on Render's ephemeral filesystem.
+Automatic redeploys are off, and only one process/instance is configured. Forwarded headers
+remain untrusted until the deployed ingress is checked; the authentication limit may group
+visitors behind the same router in the meantime. Read [operations](docs/operations.md) for
+the deployment checks. Neither a live Render deployment nor physical-device behavior is
+verified by this configuration. Secret files are runtime mounts, excluded from the image;
+see [Render's Docker secret guidance](https://render.com/docs/docker-secrets).
 
 ### GitHub Pages (frontend only)
 

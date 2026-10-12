@@ -1,20 +1,22 @@
-# One free Render service runs the API and serves the app from the same HTTPS origin. The
+# One free Render preview runs the API and serves the app from the same HTTPS origin. The
 # Maira keys stay on the server, so nobody who opens the link needs a key of their own.
 #
 # Deploy: https://render.com/deploy?repo=https://github.com/mysunatislam/astha
-# Render asks for MAIRA_API_KEY and MAIRA_PROJECT_KEY once; they are never written to this
-# repository or to the page. The app is then at the service's https://<name>.onrender.com.
+# Render asks for MAIRA_API_KEY, MAIRA_PROJECT_KEY and SUPABASE_DB_URL; they never enter the
+# repository or public page. The app is then at the service's https://<name>.onrender.com.
 #
-# Storage here is SQLite inside the container. The free plan has no disk, so accounts and
-# account-synced notes start empty whenever the service restarts or wakes from sleep; notes
-# kept on each phone are unaffected. For lasting accounts set DB_PROVIDER=supabase with
-# SUPABASE_DB_URL and SUPABASE_DB_CA_FILE as described in docs/supabase-integration.md.
-# A free service sleeps after about 15 idle minutes and takes around a minute to wake.
+# Accounts stay in the selected Supabase project, not the container filesystem. Use the
+# restricted backend role's session-pool URL (port 5432). Add the project's verified CA as a
+# Render secret file named supabase-root-ca.crt before expecting startup to succeed.
+# See README.md and docs/supabase-integration.md. No schema migration runs at startup.
+# Free hosting sleeps when idle and is a demo preview, not an always-on production service.
 services:
   - type: web
     name: astha
     runtime: docker
     plan: free
+    numInstances: 1
+    autoDeployTrigger: off
     dockerfilePath: ./Dockerfile
     healthCheckPath: /api/health
     envVars:
@@ -29,12 +31,14 @@ services:
       - key: MAIRA_PROJECT_KEY
         sync: false
       - key: DB_PROVIDER
-        value: sqlite
-      - key: DB_PATH
-        value: /data/astha.db
+        value: supabase
+      - key: SUPABASE_DB_URL
+        sync: false
+      - key: SUPABASE_DB_CA_FILE
+        value: /etc/secrets/supabase-root-ca.crt
       # PUBLIC_ORIGIN defaults to Render's own RENDER_EXTERNAL_URL; set it for a custom domain.
-      # One hop trusts only what Render's router appends, never a header a visitor sends, so
-      # the sign-in limit is keyed to the address the router reports instead of to the router.
-      # Confirm the reported address on the live service before relying on per-visitor limits.
+      # Keep forwarded headers untrusted until the live ingress hop count and header
+      # overwrite behavior are verified. Until then the auth limit may group proxy users.
+      # Keep a single instance until a shared auth-rate-limit store is reviewed.
       - key: TRUST_PROXY_HOPS
-        value: "1"
+        value: "0"

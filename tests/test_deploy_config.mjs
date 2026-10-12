@@ -9,8 +9,8 @@ const blueprint = read('render.yaml');
 const entries = new Map([...blueprint.matchAll(/^\s+- key: ([A-Z_]+)\n\s+(value|sync|generateValue): (.+)$/gm)]
   .map(match => [match[1], { kind: match[2], value: match[3].trim().replace(/^"|"$/g, '') }]));
 
-test('the host blueprint asks for provider keys at deploy time and never carries a secret', () => {
-  for (const key of ['MAIRA_API_KEY', 'MAIRA_PROJECT_KEY']) {
+test('the host blueprint asks for provider and database credentials at deploy time and never carries a secret', () => {
+  for (const key of ['MAIRA_API_KEY', 'MAIRA_PROJECT_KEY', 'SUPABASE_DB_URL']) {
     assert.deepEqual(entries.get(key), { kind: 'sync', value: 'false' }, key + ' must be entered on the host, not stored in the repository');
   }
   assert.deepEqual(entries.get('JWT_SECRET'), { kind: 'generateValue', value: 'true' });
@@ -23,17 +23,22 @@ test('the host blueprint asks for provider keys at deploy time and never carries
   assert.doesNotMatch(blueprint, /gAAAAA|AIza[0-9A-Za-z_-]{20}|postgres(ql)?:\/\/[^\s]+@/);
 });
 
-test('the blueprint is a free single-origin service the server accepts as configured', () => {
+test('the blueprint is a single-instance free demo with explicit Supabase storage and manual deployment', () => {
   assert.match(blueprint, /^\s+plan: free$/m);
-  assert.doesNotMatch(blueprint, /^\s+disk:/m, 'the free plan has no disk');
+  assert.match(blueprint, /^\s+numInstances: 1$/m);
+  assert.match(blueprint, /^\s+autoDeployTrigger: off$/m);
+  assert.doesNotMatch(blueprint, /^\s+(disk|scaling):/m, 'the demo uses external persistence and one instance');
   assert.match(blueprint, /^\s+runtime: docker$/m); assert.match(blueprint, /^\s+dockerfilePath: \.\/Dockerfile$/m);
   assert.match(blueprint, /^\s+healthCheckPath: \/api\/health$/m);
   assert.equal(entries.get('NODE_ENV').value, 'production');
   assert.equal(entries.get('CLOUD_AI_PROVIDER').value, 'maira');
-  // The image defaults to Supabase and refuses to start without it; SQLite must be explicit.
-  assert.equal(entries.get('DB_PROVIDER').value, 'sqlite'); assert.equal(entries.get('DB_PATH').value, '/data/astha.db');
+  // Missing private Supabase configuration must not redirect production writes to ephemeral SQLite.
+  assert.deepEqual(entries.get('DB_PROVIDER'), { kind: 'value', value: 'supabase' });
+  assert.deepEqual(entries.get('SUPABASE_DB_CA_FILE'), { kind: 'value', value: '/etc/secrets/supabase-root-ca.crt' });
+  assert(!entries.has('DB_PATH'), 'the selected database is Supabase, not a container-local SQLite file');
+  assert.match(read('Dockerfile'), /^ENV DB_PROVIDER=supabase$/m);
   assert.match(read('Dockerfile'), /chown node:node \/data/);
-  assert.match(entries.get('TRUST_PROXY_HOPS').value, /^[0-3]$/);
+  assert.deepEqual(entries.get('TRUST_PROXY_HOPS'), { kind: 'value', value: '0' }, 'proxy trust stays disabled until ingress is verified');
   assert(!entries.has('PUBLIC_ORIGIN'), 'the origin comes from the host unless a custom domain is configured');
 });
 
