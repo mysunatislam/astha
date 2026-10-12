@@ -97,7 +97,7 @@ try {
   }
   const marker = `astha-synthetic-ignore-canary-${id}`;
   const canaries = ['server/.env', 'server/.env.ca', 'server/container-check.db', 'server/container-check.db-wal',
-    'server/container-check.jks', 'server/node_modules/container-check-canary.txt',
+    'server/container-check.jks', 'server/supabase-root-ca.crt', 'server/node_modules/container-check-canary.txt',
     'web/.env', 'web/.env.local', 'web/container-check.db', 'web/container-check.keystore'];
   for (const file of canaries) {
     const target = path.join(context, file);

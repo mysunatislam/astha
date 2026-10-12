@@ -1,6 +1,6 @@
 # ASTHA operations and container verification
 
-The existing Express application is retained. Its production image defaults to `DB_PROVIDER=supabase` and refuses startup when the restricted database configuration is missing. Development or legacy SQLite operation requires the explicit `DB_PROVIDER=sqlite` override and a persisted `/data` volume. The legacy paid Render blueprint explicitly selects SQLite; it is not the selected Supabase deployment configuration.
+The existing Express application is retained. Its production image defaults to `DB_PROVIDER=supabase` and refuses startup when the restricted database configuration is missing. Development or legacy SQLite operation requires the explicit `DB_PROVIDER=sqlite` override and a persisted `/data` volume. The Render preview blueprint also selects Supabase, with no local database or paid disk; its free plan is not an always-on production service.
 
 ## Container and secrets
 
@@ -42,6 +42,23 @@ migration on Supabase.
 ## Deployment and incident gates
 
 Permanent HTTPS hosting remains unselected. Before deployment, configure exact `PUBLIC_ORIGIN`, trusted CORS origins and verified proxy-hop count. Verify the mounted CA and restricted database readiness on that host, then exercise same-origin and Capacitor clients through its HTTPS ingress. One API instance remains the supported initial configuration until the in-memory authentication rate limiter has a reviewed shared replacement.
+
+For the Render preview, follow the [README setup](../README.md). Set the restricted port-5432
+session-pool URL privately and upload the trusted CA as the runtime secret file
+`supabase-root-ca.crt`; the service reads `/etc/secrets/supabase-root-ca.crt`. The `node` user
+already belongs to group 1000, which Render requires for runtime secret-file access.
+`.dockerignore` excludes that filename and the image gate checks a synthetic CA canary.
+Do not add secret build arguments or copy the workstation's private environment into the
+image. [Render runtime secrets](https://render.com/docs/docker-secrets).
+
+`RENDER_EXTERNAL_URL` supplies the exact HTTPS origin when `PUBLIC_ORIGIN` is unset. The
+blueprint keeps `TRUST_PROXY_HOPS=0` until actual ingress/header behavior is verified and
+disables automatic deployments. The auth limiter can group router traffic at that setting;
+before public use, check actual visitor separation and spoofed `X-Forwarded-For` behavior,
+then select the verified supported hop count. Keep one instance. Record the deployed commit,
+CA readability, storage readiness, HTTPS cookies/origin rejection, signup, isolation and
+restart persistence before sharing a functioning judge link. Camera, speech and device
+accessibility need separate physical-device evidence.
 
 Configure host alerts for availability, health-check failures, 5xx/timeout rates and resource saturation. Choose the provider log retention and access policy before enabling failure logs; this code does not send telemetry to a new external service. Exercise an outage and confirm alert delivery and recovery. Provider/model fallback measurements, telemetry retention, backup restoration, privacy/deletion policy and operator rollback rehearsal remain open release gates.
 

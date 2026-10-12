@@ -2,7 +2,8 @@ import test, { after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
-process.env.DB_PATH = ':memory:';
+Object.assign(process.env, { DB_PROVIDER: 'sqlite', DB_PATH: ':memory:',
+  SUPABASE_DB_URL: '', SUPABASE_DB_CA_FILE: '', RENDER_EXTERNAL_URL: '' });
 process.env.CLOUD_AI_PROVIDER = 'auto';
 process.env.MAIRA_API_KEY = ''; process.env.MAIRA_PROJECT_KEY = '';
 process.env.MAIRA_PROFILE_ID = ''; process.env.MAIRA_API_URL = '';

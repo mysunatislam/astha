@@ -1,7 +1,10 @@
 import assert from 'node:assert';
-import { expandQueryTerms, searchRAG, formatRagContextForPrompt } from '../server/rag.js';
-import { generateHeuristicPlan, evaluateHeuristicStep, AGENT_TOOLS } from '../server/agent.js';
-import { run, get } from '../server/db.js';
+// Select disposable storage before evaluating application imports, even in a configured shell.
+Object.assign(process.env, { DB_PROVIDER: 'sqlite', DB_PATH: ':memory:',
+  SUPABASE_DB_URL: '', SUPABASE_DB_CA_FILE: '', RENDER_EXTERNAL_URL: '' });
+const { expandQueryTerms, searchRAG, formatRagContextForPrompt } = await import('../server/rag.js');
+const { generateHeuristicPlan, evaluateHeuristicStep, AGENT_TOOLS } = await import('../server/agent.js');
+const { run, get } = await import('../server/db.js');
 
 console.log('=== Running Server RAG & Agent Unit Tests ===');
 

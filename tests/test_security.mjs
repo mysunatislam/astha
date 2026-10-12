@@ -109,6 +109,13 @@ test('proxy trust is explicit and public origins work behind TLS termination', a
   for (const value of ['true', '4', '-1', '1.5', '']) assert.throws(() => getTrustProxyHops({ TRUST_PROXY_HOPS: value }), /TRUST_PROXY_HOPS/);
   assert.equal(getPublicOrigin({ NODE_ENV: 'production', PUBLIC_ORIGIN: 'https://astha.example/' }), 'https://astha.example');
   assert.throws(() => getPublicOrigin({ NODE_ENV: 'production', PUBLIC_ORIGIN: 'http://astha.example' }), /PUBLIC_ORIGIN/);
+  // The host's own address is used only when no origin is configured, and is held to the same rules.
+  assert.equal(getPublicOrigin({}), null);
+  assert.equal(getPublicOrigin({ NODE_ENV: 'production', RENDER_EXTERNAL_URL: 'https://astha-demo.onrender.com' }), 'https://astha-demo.onrender.com');
+  assert.equal(getPublicOrigin({ NODE_ENV: 'production', PUBLIC_ORIGIN: 'https://astha.example', RENDER_EXTERNAL_URL: 'https://astha-demo.onrender.com' }), 'https://astha.example');
+  for (const invalid of ['http://astha-demo.onrender.com', 'https://astha-demo.onrender.com/path', 'https://user:pass@astha-demo.onrender.com', '*']) {
+    assert.throws(() => getPublicOrigin({ NODE_ENV: 'production', RENDER_EXTERNAL_URL: invalid }), /PUBLIC_ORIGIN/);
+  }
   for (const hops of [0, 1]) {
     const app = express();
     app.set('trust proxy', getTrustProxyHops({ TRUST_PROXY_HOPS: String(hops) }));
@@ -140,6 +147,8 @@ test('security regression requests run against an isolated server without cloud 
   const port = reserved.address().port;
   await new Promise(resolve => reserved.close(resolve));
   const childEnv = { ...process.env, NODE_ENV: 'production',
+    // Standalone execution must also isolate storage from an operator's server/.env.
+    DB_PROVIDER: 'sqlite', SUPABASE_DB_URL: '', SUPABASE_DB_CA_FILE: '', RENDER_EXTERNAL_URL: '',
     JWT_SECRET: randomBytes(32).toString('hex'), DB_PATH: path.join(temp, 'test.db'), PORT: String(port),
     CORS_ORIGIN: 'https://trusted.example,capacitor://localhost', PUBLIC_ORIGIN: '', TRUST_PROXY_HOPS: '0',
     CLOUD_AI_PROVIDER: 'auto', MAIRA_API_KEY: '', MAIRA_PROJECT_KEY: '', MAIRA_PROFILE_ID: '',
