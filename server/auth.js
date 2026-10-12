@@ -28,6 +28,25 @@ export async function createUser({ name, phone, passcode }) {
     [id, name, phone || null, hash, salt, Date.now()]);
   return id;
 }
+// A guest who registers keeps the same account row, so notes saved before signing up stay
+// theirs. Returns null when the row is no longer a guest (a concurrent registration won).
+export async function registerGuest(id, { name, phone, passcode }) {
+  const { hash, salt } = hashPasscode(passcode);
+  const result = await run('UPDATE users SET name = ?, phone = ?, passcode_hash = ?, passcode_salt = ? WHERE id = ? AND phone IS NULL',
+    [name, phone, hash, salt, id]);
+  return result.changes ? id : null;
+}
+// Each first visit creates a guest. Once that device signs in to a registered account the
+// guest can never be reached again, so an untouched one is removed instead of left orphaned.
+export async function discardEmptyGuest(id) {
+  try {
+    const owned = await get('SELECT (SELECT COUNT(*) FROM memories WHERE user_id = ?) + (SELECT COUNT(*) FROM rooms WHERE user_id = ?) + (SELECT COUNT(*) FROM events WHERE user_id = ?) + (SELECT COUNT(*) FROM agent_tasks WHERE user_id = ?) + (SELECT COUNT(*) FROM knowledge_docs WHERE user_id = ?) AS total FROM users WHERE id = ? AND phone IS NULL',
+      [id, id, id, id, id, id]);
+    if (owned && Number(owned.total) === 0) await run('DELETE FROM users WHERE id = ? AND phone IS NULL', [id]);
+  } catch {
+    // Housekeeping must never turn a correct sign-in into a failure.
+  }
+}
 export async function findByPhone(phone) { return await get('SELECT * FROM users WHERE phone = ?', [phone]); }
 export async function findByPhoneEquivalent(phone) {
   const exact = await findByPhone(phone);

@@ -5,10 +5,11 @@ import cors from 'cors';
 import path from 'node:path';
 import { randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import { createUser, findByPhone, findByPhoneEquivalent, verifyPasscode, signToken, authMiddleware, getAuthenticatedUser } from './auth.js';
+import { createUser, registerGuest, discardEmptyGuest, findByPhone, findByPhoneEquivalent, verifyPasscode, signToken, authMiddleware, getAuthenticatedUser } from './auth.js';
 import { memoryRouter } from './memory.js';
 import { ragRouter } from './rag.js';
 import { agentRouter } from './agent.js';
+import { createAccountRouter } from './account.js';
 import { callCloudAI, hasCloudAI, getCloudProvider } from './gemini.js';
 import { synthesize } from './tts.js';
 import { createSpeechRouter } from './speech.js';
@@ -16,6 +17,7 @@ import { asyncRoute } from './async-route.js';
 import { createRequestObservability } from './observability.js';
 import { db, storageReady } from './db.js';
 import { getAllowedOrigins, getTrustProxyHops, getPublicOrigin, isAllowedOrigin, originGuard, createAuthRateLimiter, validateAuthBody } from './security.js';
+import { isBody, isText, isFrame } from './validate.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const WEB_DIR = path.join(__dirname, '..', 'web');
@@ -52,6 +54,11 @@ app.use('/api/auth', (req, res, next) => {
   }
   next();
 }, express.json({ limit: '8kb' }));
+// Account deletion re-checks the PIN, so it shares sign-in's attempt limit and small body.
+app.use('/api/account', (req, res, next) => {
+  if (req.method === 'POST' && req.path === '/delete') return authRateLimiter(req, res, next);
+  next();
+}, express.json({ limit: '8kb' }));
 app.use(cookieParser());
 app.use('/api/speak', express.json({ limit: '8kb' }));
 app.use(express.json({ limit: '12mb' })); // camera frames as base64 JPEG can be a few MB
@@ -73,8 +80,13 @@ app.post('/api/auth/signup', asyncRoute(async (req, res) => {
   // after clearing cookies -- the 180-day session cookie alone is not enough for a blind user
   // who cannot easily read back a lost token.
   if (await findByPhoneEquivalent(phone)) return res.status(409).json({ error: 'phone_taken' });
+  // The app starts as a guest; registering from that session claims the same account.
+  const guest = await getAuthenticatedUser(req);
   let id;
-  try { id = await createUser({ name: String(name).slice(0, 80), phone, passcode }); }
+  try {
+    const account = { name: String(name).slice(0, 80), phone, passcode };
+    id = (guest?.phone === null && await registerGuest(guest.id, account)) || await createUser(account);
+  }
   catch (err) {
     // Concurrent signup can reach the unique constraint after the initial lookup.
     if (err.code === '23505' || err.code === 'ERR_SQLITE_ERROR' && err.errcode === 2067) return res.status(409).json({ error: 'phone_taken' });
@@ -93,6 +105,8 @@ app.post('/api/auth/login', asyncRoute(async (req, res) => {
   const matches = user && (verifyPasscode(passcode, user.passcode_hash, user.passcode_salt) ||
     (req.body.passcode !== passcode && verifyPasscode(req.body.passcode, user.passcode_hash, user.passcode_salt)));
   if (!matches) return res.status(401).json({ error: 'invalid_credentials' });
+  const previous = await getAuthenticatedUser(req);
+  if (previous?.phone === null && previous.id !== user.id) await discardEmptyGuest(previous.id);
   const token = signToken(user.id);
   res.cookie('astha_session', token, COOKIE_OPTS);
   res.json({ token, userId: user.id });
@@ -118,23 +132,33 @@ app.get('/api/auth/me', authMiddleware, (req, res) => {
 app.use('/api', authMiddleware, memoryRouter);
 app.use('/api', authMiddleware, ragRouter);
 app.use('/api', authMiddleware, agentRouter);
+app.use('/api', authMiddleware, createAccountRouter(COOKIE_OPTS));
 
 // ---- Configured cloud vision proxy: deployment keys never reach the browser ----
+const VISION_STATUS = Object.freeze({ no_key: 503, bad_key: 502, rate_limit: 429, bad_request: 400, network: 502, upstream: 502, bad_response: 502 });
 app.post('/api/vision', authMiddleware, async (req, res) => {
   const { task, image, prompt, maxTokens } = req.body || {};
+  if (!isBody(req.body) || (task === undefined && prompt === undefined) ||
+      (task !== undefined && !isText(task, 32)) || (prompt !== undefined && !isText(prompt, 32000)) ||
+      !isFrame(image) || (maxTokens !== undefined && (!Number.isInteger(maxTokens) || maxTokens < 16 || maxTokens > 4096))) {
+    return res.status(400).json({ error: 'bad_request', message: 'bad_request' });
+  }
   try {
     const result = await callCloudAI({ task, customPrompt: prompt, imageBase64: image, maxTokens, userId: req.user.id });
     res.json(result);
   } catch (e) {
     requestMonitor.markError(req, e);
-    const code = e.code || 'error';
-    const status = { no_key: 503, bad_key: 502, rate_limit: 429, bad_request: 400, network: 502, upstream: 502, bad_response: 502 }[code] || 500;
-    res.status(status).json({ error: code, message: e.message });
+    // Only the fixed category leaves the server; provider and runtime messages stay private.
+    const code = Object.hasOwn(VISION_STATUS, e?.code) ? e.code : 'error';
+    res.status(VISION_STATUS[code] || 500).json({ error: code, message: code });
   }
 });
 
 // ---- Speech: real neural voices (Bangla female included), MP3 streamed back ----
 app.use('/api', authMiddleware, createSpeechRouter(synthesize));
+
+// Unknown API paths answer in the API's own JSON shape instead of the HTML shell or a framework page.
+app.use('/api', (req, res) => res.status(404).json({ error: 'not_found' }));
 
 // ---- Static PWA ----
 app.use(express.static(WEB_DIR, { maxAge: IS_PROD ? '1d' : 0 }));

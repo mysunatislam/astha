@@ -212,7 +212,7 @@ async function deleteMemory(uid) {
   $('memory-search')?.focus();
 }
 async function clearMemory() {
-  if (!confirm('Delete all saved object memories and room notes from this phone and your Astha account?')) return;
+  if (!confirm(t('memory_clear_confirm'))) return;
   state.memory = []; state.spatialHome = []; state.log = []; LocalStore.clear();
   renderMemory(); renderSpatialLayout(); renderLog();
   ['/api/memories', '/api/rooms', '/api/log'].forEach(path => LocalStore.queueDelete(path));
@@ -551,7 +551,7 @@ const OfflineEar = {
     setEngineState('ear', 'loading');
     this.loading = (async () => {
       try {
-        const TF = engine.clip.lib || await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3/dist/transformers.min.js');
+        const TF = engine.clip.lib || await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1/dist/transformers.min.js');
         TF.env.allowLocalModels = false; engine.clip.lib = engine.clip.lib || TF;
         const files = {};
         const progress = p => { if (p.status === 'progress' && p.file) files[p.file] = (p.loaded || 0) / (p.total || 1); const vals = Object.values(files); if (vals.length) setProgress('ear', vals.reduce((a, b) => a + b, 0) / Math.max(vals.length, 3)); };
@@ -683,7 +683,7 @@ function stopAllSpeech() {
   stopReader(); stopListening(); VoiceEngine.stop();
   if (typeof Seeker !== 'undefined' && Seeker.active) Seeker.stop('user');
   if (OfflineEar.active) OfflineEar.cancel();
-  $('reader-progress').textContent = 'Stopped';
+  $('reader-progress').textContent = t('reader_stopped');
 }
 
 // ---- "Works without internet": download everything once, then never need it ------

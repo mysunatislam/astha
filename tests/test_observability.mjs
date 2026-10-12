@@ -77,7 +77,7 @@ test('varied IDs, unknown routes and arbitrary methods have fixed counter cardin
     request(monitor, { path: `/api/unknown/private-${i}`, method: `PRIVATE_METHOD_${i}`, status: 404 }).finish();
   }
   const snapshot = monitor.snapshot();
-  assert.equal(snapshot.capacity, 120);
+  assert.equal(snapshot.capacity, 138);
   assert.equal(snapshot.counters.length, 2);
   assert.equal(snapshot.inFlight, 0);
   assert.deepEqual(snapshot.counters.map(({ route, status, count }) => ({ route, status, count })), [

@@ -34,6 +34,16 @@ The source repository is mysunatislam/astha; the requested astha-live repository
 | Request monitoring/privacy | Nine regressions pass, including real HTTP failures and interrupted responses | Generated IDs, fixed counters and optional bounded failure logs; host alerts, retention and external monitoring remain unconfigured. |
 | Authenticated hosted storage smoke | Seven checks passed using two temporary synthetic accounts with exact guarded cleanup | Existing personal rows unchanged; no Maira request. Hosted signup, agent/provider, HTTPS/client and real-device flows unverified. |
 
+### Follow-up checks, 13 October 2026
+
+| Check | Result | Limit |
+| --- | --- | --- |
+| `npm run check` after the account-data, input-bound and interface-language work | Passed: 211 regressions plus both existing agent suites; build reproducible | Same isolated SQLite, PGlite and mocked-provider boundaries as above. Run with the Android NDK's Python 3.11.4 through `ASTHA_PYTHON`; the Store Python alias could not be started on this host. |
+| Account export, deletion, guest registration, retention and input bounds | Real HTTP against disposable SQLite, and against PGlite PostgreSQL with the reviewed migration, restricted role and RLS | Synthetic accounts only. Not run against hosted Supabase; no schema change was needed, so the provisioned v1 schema is unchanged. |
+| Root and server `npm audit` | 0 reported advisories each | Checked 13 October; same exclusions as above. |
+| Browser check on `http://localhost:8787` | Bangla and English interface switch across static text, labels, ARIA attributes and state labels; sign-in dialog open, Escape and focus return; a guest registering in place and keeping its memory; export contents; face and voice removal; wrong-PIN refusal; deletion followed by a clean restart as a new guest | Desktop Chromium with a synthetic account and disposable database. The export was captured in the page instead of saved. No camera, microphone, speech output, screen reader or phone was involved. |
+| Bangla wording | Written for this change | Not reviewed by a Bangla speaker or tested with TalkBack or VoiceOver. |
+
 Local versions: Node 24.13.0, Python 3.12.14, Java 21.0.9, Gradle 8.14.3, Android API/build-tools 36. Workflows pin Node 24.21.0, Python 3.11.9, Ubuntu 24.04, explicit Android SDK packages and Xcode 26.3. The pinned Linux/Node/Python source CI environment passed at 3acd000; hosted native/iOS environments remain unverified.
 
 The final Android ZIP must contain the exact generated index.html, backend.js, config.js and sw.js and no archived downloads/astha.apk; checksums are supplied with the debug artifact. This debug APK is for verification and cannot be presented as the Google Play release.

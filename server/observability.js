@@ -7,8 +7,8 @@ const ROUTES = Object.freeze([
   '/api/health', '/api/auth/signup', '/api/auth/login', '/api/auth/guest',
   '/api/auth/logout', '/api/auth/me', '/api/memories', '/api/memories/:id',
   '/api/rooms', '/api/rooms/:id', '/api/log', '/api/settings', '/api/rag/query',
-  '/api/rag/docs', '/api/agent/plan', '/api/agent/evaluate', '/api/agent/run',
-  '/api/vision', '/api/speak', 'other',
+  '/api/rag/docs', '/api/rag/docs/:id', '/api/agent/plan', '/api/agent/evaluate', '/api/agent/run',
+  '/api/account/export', '/api/account/delete', '/api/vision', '/api/speak', 'other',
 ]);
 const STATUSES = Object.freeze(['1xx', '2xx', '3xx', '4xx', '5xx', 'aborted']);
 const METHODS = new Set(['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS']);
@@ -30,6 +30,7 @@ function routeIndex(req) {
   if (exact >= 0 && exact < ROUTES.length - 1) return exact;
   if (/^\/api\/memories\/[^/]+$/.test(pathname)) return ROUTES.indexOf('/api/memories/:id');
   if (/^\/api\/rooms\/[^/]+$/.test(pathname)) return ROUTES.indexOf('/api/rooms/:id');
+  if (/^\/api\/rag\/docs\/[^/]+$/.test(pathname)) return ROUTES.indexOf('/api/rag/docs/:id');
   return ROUTES.length - 1;
 }
 

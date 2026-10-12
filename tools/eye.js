@@ -52,9 +52,9 @@ async function eyeStart() {
     eye.stream = stream; eye.active = true;
     const v = $('eye-video'); v.srcObject = stream; v.hidden = false; await v.play();
     $('eye-empty').hidden = true; $('eye-heart').hidden = false;
-    $('eye-start').textContent = 'Stop watching my screen';
+    $('eye-start').textContent = t('eye_stop');
     stream.getVideoTracks()[0].addEventListener('ended', () => eyeStop(true));
-    eyePill('Watching', 'ok'); playEarcon('confirm');
+    eyePill(t('eye_watching'), 'ok'); playEarcon('confirm');
     eyeSay('I can see your screen now. I will tell you which app you are in and guide you when you ask.', 'এখন আমি আপনার স্ক্রিন দেখতে পাচ্ছি। কোন অ্যাপে আছেন বলব, আর চাইলে পথ দেখাব।');
     logEvent('Screen eye on');
     ensureOcr().catch(() => {});
@@ -62,6 +62,8 @@ async function eyeStart() {
     eye.prevGray = null; clearTimeout(eye.motionTimer); eye.motionTimer = setTimeout(eyeMotionLoop, 1000);
   } catch (e) {
     console.warn('screen share', e);
+    // Playback can fail after the browser granted capture; never leave that stream running.
+    if (eye.active) eyeStop(true);
     eyeSay('Screen sharing was not allowed. Choose “Entire screen” in the dialog and press Share.', 'স্ক্রিন শেয়ারের অনুমতি পাওয়া যায়নি। ডায়ালগে “Entire screen” বেছে Share চাপুন।');
   }
 }
@@ -70,8 +72,8 @@ function eyeStop(silent) {
   eye.active = false; clearTimeout(eye.timer); eye.timer = null; clearTimeout(eye.motionTimer); eye.motionTimer = null;
   if (eye.stream) { eye.stream.getTracks().forEach(t => t.stop()); eye.stream = null; }
   const v = $('eye-video'); v.srcObject = null; v.hidden = true; $('eye-empty').hidden = false; $('eye-heart').hidden = true;
-  $('eye-start').textContent = 'Let Astha see my screen';
-  eyePill('Not watching', ''); eye.app = null; eye.dialog = null; eye.target = null;
+  $('eye-start').textContent = t('eye_start');
+  eyePill(t('eye_idle'), ''); eye.app = null; eye.dialog = null; eye.target = null;
   if (!silent) eyeSay('I have stopped watching your screen.', 'আপনার স্ক্রিন দেখা বন্ধ করেছি।');
   logEvent('Screen eye off');
 }

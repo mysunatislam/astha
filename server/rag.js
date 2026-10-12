@@ -4,6 +4,8 @@ import { Router } from 'express';
 import { nanoid } from 'nanoid';
 import { all, run } from './db.js';
 import { asyncRoute } from './async-route.js';
+import { applyRetention } from './retention.js';
+import { isBody, isText } from './validate.js';
 
 export const ragRouter = Router();
 
@@ -139,7 +141,7 @@ export function formatRagContextForPrompt(ragData) {
 ragRouter.post('/rag/query', asyncRoute(async (req, res) => {
   const { query, limit } = req.body || {};
   if (!query) return res.status(400).json({ error: 'query_required' });
-  if (typeof query !== 'string' || !query.trim() ||
+  if (!isBody(req.body) || !isText(query, 240) ||
       (limit !== undefined && (!Number.isInteger(limit) || limit < 1 || limit > 20))) {
     return res.status(400).json({ error: 'invalid_rag_input' });
   }
@@ -159,16 +161,32 @@ ragRouter.post('/rag/query', asyncRoute(async (req, res) => {
 ragRouter.post('/rag/docs', asyncRoute(async (req, res) => {
   const { title, content, category, tags } = req.body || {};
   if (!title || !content) return res.status(400).json({ error: 'title_and_content_required' });
-  if (typeof title !== 'string' || !title.trim() || typeof content !== 'string' || !content.trim() ||
-      (category !== undefined && typeof category !== 'string') ||
-      (tags !== undefined && (!Array.isArray(tags) || !tags.every(tag => typeof tag === 'string')))) {
+  // Reject instead of silently truncating: a stored note must be exactly what was sent.
+  if (!isBody(req.body) || !isText(title, 100) || !isText(content, 4000) ||
+      (category !== undefined && !isText(category, 40)) ||
+      (tags !== undefined && (!Array.isArray(tags) || tags.length > 20 || !tags.every(tag => isText(tag, 40))))) {
     return res.status(400).json({ error: 'invalid_document_input' });
   }
   const id = nanoid();
   const now = Date.now();
   await run(
     'INSERT INTO knowledge_docs (id, user_id, category, title, content, tags_json, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)',
-    [id, req.user.id, category || 'general', title.slice(0, 100), content.slice(0, 4000), JSON.stringify(tags || []), now, now]
+    [id, req.user.id, category || 'general', title, content, JSON.stringify(tags || []), now, now]
   );
+  await applyRetention('knowledge_docs', req.user.id);
   res.json({ ok: true, id });
+}));
+
+// Personal notes can be reviewed and removed by their owner, like memories and rooms.
+ragRouter.get('/rag/docs', asyncRoute(async (req, res) => {
+  const rows = await all('SELECT id, category, title, content, tags_json, created_at, updated_at FROM knowledge_docs WHERE user_id = ? ORDER BY updated_at DESC LIMIT 200', [req.user.id]);
+  res.json({ docs: rows });
+}));
+ragRouter.delete('/rag/docs/:id', asyncRoute(async (req, res) => {
+  await run('DELETE FROM knowledge_docs WHERE id = ? AND user_id = ?', [req.params.id, req.user.id]);
+  res.json({ ok: true });
+}));
+ragRouter.delete('/rag/docs', asyncRoute(async (req, res) => {
+  await run('DELETE FROM knowledge_docs WHERE user_id = ?', [req.user.id]);
+  res.json({ ok: true });
 }));

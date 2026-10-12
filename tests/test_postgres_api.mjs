@@ -91,4 +91,48 @@ test('real Express API preserves account and storage contracts on local PostgreS
     await api('/memories/' + note.id, { method: 'DELETE', token: account.token });
     assert.equal((await api('/memories', { token: account.token })).memories.length, 0);
   });
+  const status = async (route, { method = 'GET', token, body } = {}) => (await fetch(base + '/api' + route, { method, signal: AbortSignal.timeout(8000),
+    headers: { ...(token ? { Authorization: 'Bearer ' + token } : {}), ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}) },
+    ...(body !== undefined ? { body: JSON.stringify(body) } : {}) })).status;
+  await t.test('rolling retention prunes through the restricted role and export returns only owned rows', async () => {
+    // 51 further tasks join the one above: the limited role must delete the oldest rows.
+    for (let index = 0; index < 51; index++) await api('/agent/plan', { method: 'POST', token: account.token, body: { goal: 'find item ' + index } });
+    await api('/agent/plan', { method: 'POST', token: guest.token, body: { goal: 'guest goal' } });
+    await api('/log', { method: 'POST', token: account.token, body: { text: 'বাংলা কার্যক্রম' } });
+    const exported = await api('/account/export', { token: account.token });
+    assert.equal(exported.format, 'astha-export-v1'); assert.deepEqual(exported.truncated, []);
+    assert.equal(exported.account.id, account.userId); assert.equal(exported.account.phone, '01700000081');
+    assert(Number.isSafeInteger(exported.account.created_at));
+    assert.equal(exported.agent_tasks.length, 50);
+    assert(exported.agent_tasks.some(task => task.goal === 'find item 50'), 'the newest task is kept');
+    assert(exported.agent_tasks.every(task => /^find item \d+$/.test(task.goal)), 'the oldest task and other accounts are absent');
+    assert(exported.agent_tasks.every(task => Array.isArray(task.plan.steps) && Number.isSafeInteger(task.updated_at)));
+    assert.deepEqual(exported.events.map(event => event.text), ['বাংলা কার্যক্রম']);
+    assert.deepEqual(exported.rooms.map(room => room.name.toLowerCase()), ['desk']);
+    assert.deepEqual(exported.knowledge_docs.map(doc => [doc.title, doc.tags]), [['চশমা', ['bn']]]);
+    assert.doesNotMatch(JSON.stringify(exported), /passcode|user_id|guest goal|other fixture/);
+    const docs = (await api('/rag/docs', { token: account.token })).docs;
+    assert.equal(docs.length, 1);
+    await api('/rag/docs/' + docs[0].id, { method: 'DELETE', token: guest.token });
+    assert.equal((await api('/rag/docs', { token: account.token })).docs.length, 1);
+    await api('/log', { method: 'DELETE', token: account.token });
+    const cleared = await api('/account/export', { token: account.token });
+    assert.equal(cleared.events.length + cleared.agent_tasks.length, 0);
+    assert.equal((await api('/account/export', { token: guest.token })).agent_tasks.length, 1);
+  });
+  await t.test('account deletion cascades under row-level security and ends that account only', async () => {
+    await api('/memories', { method: 'POST', token: account.token, body: { item: 'চাবি', location: 'দরজা' } });
+    assert.equal(await status('/account/delete', { method: 'POST', token: account.token, body: { confirm: 'delete_my_account', passcode: '9999' } }), 403);
+    assert.equal((await api('/memories', { token: account.token })).memories.length, 1);
+    assert.deepEqual(await api('/account/delete', { method: 'POST', token: account.token, body: { confirm: 'delete_my_account', passcode: '১২৩৪' } }), { ok: true });
+    for (const route of ['/auth/me', '/memories', '/account/export']) assert.equal(await status(route, { token: account.token }), 401);
+    // The unique phone is released, and no earlier row is visible to the new account.
+    const again = await api('/auth/signup', { method: 'POST', body: { name: 'নতুন', phone: '01700000081', passcode: '2468' } });
+    const fresh = await api('/account/export', { token: again.token });
+    assert.equal(fresh.memories.length + fresh.rooms.length + fresh.events.length + fresh.agent_tasks.length + fresh.knowledge_docs.length, 0);
+    const kept = await api('/account/export', { token: guest.token });
+    assert.deepEqual(kept.rooms.map(room => room.notes), ['other fixture']); assert.equal(kept.agent_tasks.length, 1);
+    assert.deepEqual(await api('/account/delete', { method: 'POST', token: guest.token, body: { confirm: 'delete_my_account' } }), { ok: true });
+    assert.equal(await status('/auth/me', { token: guest.token }), 401);
+  });
 });

@@ -14,7 +14,8 @@ what is intentionally out of scope for now.
 
 ```
 tools/        Source files for the phone app: base.html (the whole UI + on-device logic) plus
-              vocab.js, module.js, eye.js, cloud.js, styles.css that build.py inlines into it.
+              vocab.js, module.js, eye.js, cloud.js, account.js, i18n.js, styles.css that
+              build.py inlines into it, and i18n.json (interface strings, English and Bangla).
               Edit these, never web/index.html directly -- it is generated.
 web/          The built PWA: index.html (generated), manifest.webmanifest, sw.js, icons/,
               config.js (deployment overrides), backend.js (sign-in gate + boot).
@@ -76,7 +77,16 @@ a fetch from one origin to carry a cookie from another.
 
 Never edit `web/index.html` by hand -- it is regenerated from `tools/*` on every `npm run
 build` and any manual edit will be overwritten. Change `tools/base.html` (structure/CSS) or
-`tools/{vocab,module,eye,cloud}.js` (behaviour), then rebuild.
+`tools/{vocab,module,eye,cloud,account}.js` (behaviour), then rebuild.
+
+Interface text added since the original dictionary lives in `tools/i18n.json`: `strings` maps
+each key to an `[English, Bangla]` pair, and `hooks` lists the elements that show it. A hook
+names an element by its opening tag and says what to translate: `text` (the whole content),
+`lead` (the text before a child control, as in a label that wraps its input) or an attribute
+(`aria-label`, `title`, `placeholder`, `alt`). The build stops if a listed element is missing
+or its English text no longer matches, and `npm run check` fails on any visible label left in
+English only. Labels that show a state are set from code with `t('key')` and redrawn by
+`refreshStateLabels()` when the language changes.
 
 ## Environment variables (`server/.env`)
 
@@ -101,5 +111,12 @@ Cloud image/screen reasoning uses the configured Maira/Gemini provider after ses
 Speech may use Microsoft or the browser's speech service. The backend stores account data,
 PIN hashes, approved memories, rooms, settings, activity, agent tasks and documents; enrolled
 biometric data has additional privacy requirements. Offline mode blocks remote processing.
-The full Bangla/English retention, deletion/export, provider and backup policy remains a
-release gate; provider retention is not established by the local tests.
+Each account keeps a rolling newest-N of its records on the server. Your preferences offers
+"Download my data", "Forget my face and voice" and "Delete my account"; deletion needs the PIN
+for a registered account and removes every record that account owns.
+[What Astha stores](docs/data-handling.md) describes this in English and Bangla. The published
+policy, provider retention and backup handling remain a release gate; provider retention is
+not established by the local tests.
+
+The app starts as a guest so nobody has to type first. "Create account or log in" in Your
+preferences registers that guest in place, keeping its notes, or signs in to an existing account.

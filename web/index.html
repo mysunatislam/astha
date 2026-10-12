@@ -524,23 +524,24 @@
 </style>
 </head>
 <body>
-<a class="skip-link" href="#companion-main">Skip to companion</a>
+<a class="skip-link" href="#companion-main" data-i18n="skip_link">Skip to companion</a>
 <div id="auth-gate" role="dialog" aria-modal="true" aria-labelledby="auth-title">
   <div class="auth-card">
     <h1 id="auth-title">Astha — আস্থা</h1>
-    <p class="auth-sub">Your voice-first visual companion. Create an account once; Astha remembers your things and rooms after that.</p>
-    <div class="segmented" role="group" aria-label="Account action" style="margin-bottom:14px">
-      <button id="auth-tab-signup" onclick="setAuthTab('signup')" aria-pressed="true">Create account</button>
-      <button id="auth-tab-login" onclick="setAuthTab('login')" aria-pressed="false">Log in</button>
+    <p class="auth-sub" data-i18n="auth_sub">Your voice-first visual companion. Create an account once; Astha remembers your things and rooms after that.</p>
+    <div class="segmented" role="group" aria-label="Account action" style="margin-bottom:14px" data-i18n-aria-label="auth_action">
+      <button id="auth-tab-signup" onclick="setAuthTab('signup')" aria-pressed="true" data-i18n="auth_create">Create account</button>
+      <button id="auth-tab-login" onclick="setAuthTab('login')" aria-pressed="false" data-i18n="auth_login">Log in</button>
     </div>
     <form id="auth-form" onsubmit="event.preventDefault(); submitAuth();">
-      <label class="field" id="auth-name-field" for="auth-name">Your name<input id="auth-name" autocomplete="name" maxlength="80" required></label>
-      <label class="field" for="auth-phone">Phone number<input id="auth-phone" type="tel" inputmode="numeric" autocomplete="tel" maxlength="20" required placeholder="01XXXXXXXXX"></label>
-      <label class="field" for="auth-passcode">Passcode (4 to 8 digits)<input id="auth-passcode" type="password" inputmode="numeric" autocomplete="new-password" minlength="4" maxlength="8" required></label>
+      <label class="field" id="auth-name-field" for="auth-name" data-i18n-lead="auth_name">Your name<input id="auth-name" autocomplete="name" maxlength="80" required></label>
+      <label class="field" for="auth-phone" data-i18n-lead="auth_phone">Phone number<input id="auth-phone" type="tel" inputmode="numeric" autocomplete="tel" maxlength="20" required placeholder="01XXXXXXXXX"></label>
+      <label class="field" for="auth-passcode" data-i18n-lead="auth_passcode">Passcode (4 to 8 digits)<input id="auth-passcode" type="password" inputmode="numeric" autocomplete="new-password" minlength="4" maxlength="8" required></label>
       <button class="btn accent" type="submit" id="auth-submit" style="width:100%">Create my account</button>
     </form>
     <p class="help" id="auth-status" role="status"></p>
-    <p class="help">Your name and phone are used only to sign you back in. Everything Astha remembers stays tied to your account.</p>
+    <p class="help" data-i18n="auth_note">Your name and phone are used only to sign you back in. Everything Astha remembers stays tied to your account.</p>
+    <button class="btn" type="button" id="auth-close" onclick="closeAuthGate()" data-i18n="auth_close">Continue without an account</button>
   </div>
 </div>
 
@@ -558,36 +559,36 @@
 
   <div class="controls">
     <!-- Contrast theme Switcher -->
-    <div class="flex items-center gap-1.5" title="Contrast theme Selector">
-      <label for="theme-select" class="sr-only">Contrast theme</label>
-      <select id="theme-select" onchange="applyClinicalTheme(this.value)" class="select-dropdown" aria-label="Contrast theme">
-        <option value="navy-cyan">🌊 Navy and cyan</option>
-        <option value="monochrome">⚪ Monochrome (white on black)</option>
-        <option value="clinical-yellow">🟡 Yellow on black (photophobia)</option>
+    <div class="flex items-center gap-1.5" title="Contrast theme Selector" data-i18n-title="theme_title">
+      <label for="theme-select" class="sr-only" data-i18n="theme_label">Contrast theme</label>
+      <select id="theme-select" onchange="applyClinicalTheme(this.value)" class="select-dropdown" aria-label="Contrast theme" data-i18n-aria-label="theme_label">
+        <option value="navy-cyan" data-i18n="theme_navy">🌊 Navy and cyan</option>
+        <option value="monochrome" data-i18n="theme_mono">⚪ Monochrome (white on black)</option>
+        <option value="clinical-yellow" data-i18n="theme_yellow">🟡 Yellow on black (photophobia)</option>
       </select>
     </div>
 
     <!-- Font Scaling Selector -->
-    <div class="flex items-center gap-1" title="Font Size">
-      <label for="font-select" class="sr-only">Font Size</label>
-      <select id="font-select" onchange="applyFontSize(this.value)" class="select-dropdown" aria-label="Font Size">
-        <option value="normal">Text: Standard</option>
-        <option value="large">Text: Large</option>
-        <option value="xlarge">Text: Extra large</option>
+    <div class="flex items-center gap-1" title="Font Size" data-i18n-title="font_label">
+      <label for="font-select" class="sr-only" data-i18n="font_label">Font Size</label>
+      <select id="font-select" onchange="applyFontSize(this.value)" class="select-dropdown" aria-label="Font Size" data-i18n-aria-label="font_label">
+        <option value="normal" data-i18n="font_normal">Text: Standard</option>
+        <option value="large" data-i18n="font_large">Text: Large</option>
+        <option value="xlarge" data-i18n="font_xlarge">Text: Extra large</option>
       </select>
     </div>
 
     <div class="flex items-center gap-1">
       <label for="ui-language" class="sr-only" data-i18n="ui_language">Interface language</label>
-      <select id="ui-language" class="select-dropdown" onchange="setUiLanguage(this.value)" aria-label="Interface language">
+      <select id="ui-language" class="select-dropdown" onchange="setUiLanguage(this.value)" aria-label="Interface language" data-i18n-aria-label="ui_language">
         <option value="bn" lang="bn">বাংলা</option><option value="en" lang="en">English</option>
       </select>
     </div>
 
     <!-- Voice Delivery Selector (independent of the interface language) -->
-    <div class="segmented" role="group" aria-label="Voice Delivery" title="Voice Delivery Language">
-      <button id="voice-lang-en" onclick="setVoiceLanguage('en')" aria-pressed="false" title="Voice output spoken in English">Voice: English</button>
-      <button id="voice-lang-bn" onclick="setVoiceLanguage('bn')" aria-pressed="true" title="Voice output spoken in Bangla (বাংলা)">Voice: বাংলা</button>
+    <div class="segmented" role="group" aria-label="Voice Delivery" title="Voice Delivery Language" data-i18n-aria-label="voice_delivery" data-i18n-title="voice_delivery_title">
+      <button id="voice-lang-en" onclick="setVoiceLanguage('en')" aria-pressed="false" title="Voice output spoken in English" data-i18n="voice_en_btn" data-i18n-title="voice_en_title">Voice: English</button>
+      <button id="voice-lang-bn" onclick="setVoiceLanguage('bn')" aria-pressed="true" title="Voice output spoken in Bangla (বাংলা)" data-i18n="voice_bn_btn" data-i18n-title="voice_bn_title">Voice: বাংলা</button>
     </div>
 
     <!-- Voice On/Off Toggle -->
@@ -609,33 +610,33 @@
   <!-- ================= Companion Main View ================= -->
   <section class="stack">
     <div class="card companion">
-      <p class="prototype-note"><strong>Astha AI Companion</strong> · Experimental visual assistance. Use your usual mobility aid; Astha cannot confirm a safe path. আস্থা নিরাপদ পথ নিশ্চিত করতে পারে না।</p>
-      <p class="prototype-note" id="secure-banner" hidden style="border-color:var(--danger)"><strong>This page is open on an insecure address.</strong> Chrome will ask for the microphone and camera every time and may block them. Open it as <code>http://localhost:8765</code> or over HTTPS. On Android, use Chrome's port forwarding (chrome://inspect on the computer) so the phone sees localhost, or a Cloudflare tunnel.</p>
+      <p class="prototype-note"><strong data-i18n="safety_brand">Astha AI Companion</strong> <span id="safety-note" data-i18n="safety_note">· Experimental visual assistance. Use your usual mobility aid; Astha cannot confirm a safe path. আস্থা নিরাপদ পথ নিশ্চিত করতে পারে না।</span></p>
+      <p class="prototype-note" id="secure-banner" hidden style="border-color:var(--danger)"><strong data-i18n="secure_title">This page is open on an insecure address.</strong> <span id="secure-body" data-i18n="secure_body">The browser will ask for the microphone and camera every time and may block them. Open the app on localhost or over HTTPS. On Android, use Chrome's port forwarding (chrome://inspect on the computer) so the phone sees localhost, or a Cloudflare tunnel.</span></p>
       <!-- Accessible Microphone Area -->
       <div class="mic-area">
-        <button class="mic" id="mic" onclick="toggleListening()" aria-label="Tap to speak">
+        <button class="mic" id="mic" onclick="toggleListening()" aria-label="Tap to speak" data-i18n-aria-label="mic_idle">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0014 0"/><path d="M12 17v5M8 22h8"/></svg>
         </button>
         <span class="mic-label" id="mic-label" data-i18n="mic_idle">Tap to speak</span>
         <span class="mic-hint" data-i18n="mic_hint">Ask in Bangla or English: “What is in front of me?”, “Read this”, “Where is my charger?”</span>
-        <button class="chip-btn" id="hf-btn" onclick="toggleHandsFree()" aria-pressed="false" title="Keep listening for “Astha, …”">🎧 <span id="hf-label">Hands-free: off</span></button>
-        <div class="segmented" role="group" aria-label="AI Engine Mode" title="Choose online processing or on-device models">
-          <button id="btn-mode-gemini" onclick="Subscription.setMode('gemini')" aria-pressed="false">✨ Online AI</button>
-          <button id="btn-mode-offline" onclick="Subscription.setMode('offline')" aria-pressed="false">📱 Offline</button>
+        <button class="chip-btn" id="hf-btn" onclick="toggleHandsFree()" aria-pressed="false" title="Keep listening for “Astha, …”" data-i18n-title="hf_title">🎧 <span id="hf-label">Hands-free: off</span></button>
+        <div class="segmented" role="group" aria-label="AI Engine Mode" title="Choose online processing or on-device models" data-i18n-aria-label="engine_mode" data-i18n-title="engine_mode_title">
+          <button id="btn-mode-gemini" onclick="Subscription.setMode('gemini')" aria-pressed="false" data-i18n="mode_online">✨ Online AI</button>
+          <button id="btn-mode-offline" onclick="Subscription.setMode('offline')" aria-pressed="false" data-i18n="mode_offline">📱 Offline</button>
         </div>
-        <div class="segmented" role="group" aria-label="Speaking mode" title="Auto: speaks up in busy places. Quiet: speaks only when asked.">
-          <button id="mode-auto" onclick="setMode('auto')" aria-pressed="true">Auto · busy area</button>
-          <button id="mode-quiet" onclick="setMode('quiet')" aria-pressed="false">Quiet · ask me</button>
+        <div class="segmented" role="group" aria-label="Speaking mode" title="Auto: speaks up in busy places. Quiet: speaks only when asked." data-i18n-aria-label="speaking_mode" data-i18n-title="speaking_mode_title">
+          <button id="mode-auto" onclick="setMode('auto')" aria-pressed="true" data-i18n="mode_auto">Auto · busy area</button>
+          <button id="mode-quiet" onclick="setMode('quiet')" aria-pressed="false" data-i18n="mode_quiet">Quiet · ask me</button>
         </div>
       </div>
 
 
       <form class="command-bar" onsubmit="event.preventDefault(); submitCommand()">
-        <label class="sr-only" for="command-input">Ask Astha in Bangla or English</label>
-        <input id="command-input" maxlength="500" placeholder="Type a request, e.g. Where are my glasses?" autocomplete="off">
-        <button class="btn accent" type="submit">Ask Astha</button>
+        <label class="sr-only" for="command-input" data-i18n="command_label">Ask Astha in Bangla or English</label>
+        <input id="command-input" maxlength="500" placeholder="Type a request, e.g. Where are my glasses?" autocomplete="off" data-i18n-placeholder="command_placeholder">
+        <button class="btn accent" type="submit" data-i18n="command_submit">Ask Astha</button>
       </form>
-      <div class="utility-row"><button class="btn" onclick="repeatResponse()">Repeat</button><button class="btn" onclick="stopAllSpeech()">Stop speaking</button><button class="btn" onclick="showCommandHelp()">Voice commands</button></div>
+      <div class="utility-row"><button class="btn" onclick="repeatResponse()" data-i18n="btn_repeat">Repeat</button><button class="btn" onclick="stopAllSpeech()" data-i18n="btn_stop_speaking">Stop speaking</button><button class="btn" onclick="showCommandHelp()" data-i18n="btn_voice_commands">Voice commands</button></div>
         <!-- Accessible High-Contrast Caption Card (WCAG AAA) -->
         <div class="caption" id="caption" aria-live="polite" aria-atomic="true">
           <div class="caption-row">
@@ -649,14 +650,14 @@
         <!-- Accessible Autonomous Agentic Card (WCAG AAA) -->
         <div class="card" id="agent-status-card" hidden style="margin-bottom: 1rem; border: 2px solid var(--accent); background: var(--surface);">
           <div class="card-head">
-            <h3>🤖 <span id="agent-title">Autonomous Agent</span></h3>
+            <h3>🤖 <span id="agent-title" data-i18n="agent_title_label">Autonomous Agent</span></h3>
             <div style="display:flex; gap:6px; align-items:center;">
               <span class="pill" id="agent-retry-count"></span>
               <span class="pill accent" id="agent-state-badge">IDLE</span>
             </div>
           </div>
           <div style="padding: 0.5rem 0;">
-            <div style="font-weight: 700; font-size: 0.95rem; color: var(--accent); margin-bottom: 4px;">Goal: <span id="agent-goal-text" style="color: var(--text);"></span></div>
+            <div style="font-weight: 700; font-size: 0.95rem; color: var(--accent); margin-bottom: 4px;" data-i18n-lead="agent_goal">Goal: <span id="agent-goal-text" style="color: var(--text);"></span></div>
             <div id="agent-step-list" style="margin-top: 6px;"></div>
           </div>
         </div>
@@ -671,7 +672,7 @@
           </div>
         </div>
         <video id="cam" autoplay playsinline muted hidden></video>
-        <img id="still" alt="Visual Source" crossorigin="anonymous" hidden>
+        <img id="still" alt="Visual Source" crossorigin="anonymous" hidden data-i18n-alt="still_alt">
         <canvas id="overlay" hidden></canvas>
         <div class="shade"></div>
 
@@ -684,7 +685,7 @@
       </div>
 
         <!-- Video Source Selection Bar with Real, Verified Images -->
-        <div class="source-bar" role="group" aria-label="Video source">
+        <div class="source-bar" role="group" aria-label="Video source" data-i18n-aria-label="video_source">
           <button id="cam-btn" onclick="toggleCamera()" aria-pressed="false">📷 <span id="cam-btn-label" data-i18n="src_camera">Camera</span></button>
           <button onclick="document.getElementById('file-input').click()">🖼️ <span data-i18n="src_upload">Upload photo</span></button>
           <input id="file-input" type="file" accept="image/*" capture="environment" hidden onchange="onPhotoChosen(this.files)">
@@ -730,7 +731,7 @@
         </button>
         <button class="action" onclick="promptAgentTask()">
           <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l3 3"/></svg></span>
-          <span><div class="title">Autonomous task</div><div class="desc">Plan, RAG memory & verify loop</div></span>
+          <span><div class="title" data-i18n="act_agent">Autonomous task</div><div class="desc" data-i18n="act_agent_desc">Plan, RAG memory & verify loop</div></span>
         </button>
         <button class="action" onclick="startHomeCalibration()">
           <span class="icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></span>
@@ -745,14 +746,14 @@
       <div class="calib-overlay" id="calib-modal" hidden role="dialog" aria-modal="true" aria-labelledby="calib-heading">
         <div class="calib-card" style="max-width: 580px; width: 92%;">
           <div class="card-head" style="margin-bottom: 0.5rem;">
-            <h3 id="calib-heading" tabindex="-1">🏠 Video Home & Room Calibration</h3>
+            <h3 id="calib-heading" tabindex="-1" data-i18n="calib_heading">🏠 Video Home & Room Calibration</h3>
             <span class="pill ok" id="calib-status-pill">Ready to scan</span>
           </div>
-          <p class="help" id="calib-instruction">Choose a room name, then walk through with your camera. Astha will continuously identify furniture surfaces (dressing table, reading table, bed, chairs) and remember where items are placed.</p>
+          <p class="help" id="calib-instruction" data-i18n="calib_instruction">Choose a room name, then walk through with your camera. Astha will continuously identify furniture surfaces (dressing table, reading table, bed, chairs) and remember where items are placed.</p>
           
           <div style="display: flex; gap: 0.5rem; margin-bottom: 0.75rem; flex-wrap: wrap;">
-            <label class="field" for="room-name" style="flex: 1; min-width: 180px; margin: 0;">Room name
-              <input id="room-name" list="room-presets" maxlength="80" required placeholder="Reading Room, Bedroom, etc.">
+            <label class="field" for="room-name" style="flex: 1; min-width: 180px; margin: 0;" data-i18n-lead="room_name">Room name
+              <input id="room-name" list="room-presets" maxlength="80" required placeholder="Reading Room, Bedroom, etc." data-i18n-placeholder="room_placeholder">
               <datalist id="room-presets">
                 <option value="Reading Room">
                 <option value="Bedroom">
@@ -765,23 +766,23 @@
           </div>
 
           <div id="calib-video-preview" style="position: relative; aspect-ratio: 16/9; background: #000; border-radius: 8px; overflow: hidden; margin-bottom: 0.75rem; border: 2px solid var(--border); display: flex; align-items: center; justify-content: center;">
-            <div id="calib-view-status" style="color: var(--muted); font-weight: bold; text-align: center; padding: 1rem;">
+            <div id="calib-view-status" style="color: var(--muted); font-weight: bold; text-align: center; padding: 1rem;" data-i18n="calib_view_status">
               Point camera at room furniture and tap "Start Video Walkthrough"
             </div>
             <div id="calib-live-tags" style="position: absolute; bottom: 8px; left: 8px; right: 8px; display: flex; flex-wrap: wrap; gap: 4px; pointer-events: none;"></div>
           </div>
 
           <div style="margin-bottom: 0.75rem;">
-            <div style="font-size: 0.875rem; font-weight: 600; color: var(--muted); margin-bottom: 0.35rem;">Detected Furniture & Landmarks in this Room:</div>
+            <div style="font-size: 0.875rem; font-weight: 600; color: var(--muted); margin-bottom: 0.35rem;" data-i18n="calib_landmarks">Detected Furniture & Landmarks in this Room:</div>
             <div id="calib-furniture-chips" style="display: flex; flex-wrap: wrap; gap: 6px; min-height: 32px; padding: 6px; background: var(--surface); border: 1px dashed var(--border); border-radius: 6px;">
-              <span class="empty-note" style="margin: 0; font-size: 0.85rem;">None detected yet. Walk through room with camera.</span>
+              <span class="empty-note" style="margin: 0; font-size: 0.85rem;" data-i18n="calib_none">None detected yet. Walk through room with camera.</span>
             </div>
           </div>
 
           <div class="utility-row">
             <button class="btn accent" id="calib-start-btn" type="button" onclick="toggleVideoCalibrationWalk()">🎥 Start Video Walkthrough</button>
-            <button class="btn" id="calib-save-btn" type="button" onclick="finishVideoRoomCalibration()" disabled>✓ Save Calibrated Room</button>
-            <button class="btn" type="button" onclick="closeHomeCalibration()">Cancel</button>
+            <button class="btn" id="calib-save-btn" type="button" onclick="finishVideoRoomCalibration()" disabled data-i18n="calib_save">✓ Save Calibrated Room</button>
+            <button class="btn" type="button" onclick="closeHomeCalibration()" data-i18n="cancel">Cancel</button>
           </div>
         </div>
       </div>
@@ -790,70 +791,79 @@
       <div class="ocr-result" id="ocr-result" hidden>
         <h4 data-i18n="ocr_heading">Text found</h4>
         <pre id="ocr-text"></pre>
-        <button class="btn" onclick="appendOcrPage()">Add this text to reader</button>
+        <button class="btn" onclick="appendOcrPage()" data-i18n="ocr_append">Add this text to reader</button>
       </div>
 
       <div class="toggle-row">
         <span data-i18n="auto_narrate">Narrate new objects automatically while the camera is on</span>
-        <button class="switch" id="narrate-switch" role="switch" aria-checked="true" onclick="toggleNarrate()" aria-label="Auto narrate"></button>
+        <button class="switch" id="narrate-switch" role="switch" aria-checked="true" onclick="toggleNarrate()" aria-label="Auto narrate" data-i18n-aria-label="narrate_label"></button>
       </div>
     </div>
     <div class="card" id="reader-card">
-      <div class="card-head"><h2>Reading transcript</h2><span id="reader-progress" class="pill" role="status">Ready</span></div>
-      <p class="help">Everything Astha reads from the camera is collected here. Say “Astha, read this” or tap “Read to me” to read a book or letter. Pasting text is optional.</p>
-      <label class="field" for="reader-text">Transcript<textarea id="reader-text" placeholder="Pages Astha has read will appear here." oninput="readerTextChanged()"></textarea></label>
-      <div class="utility-row"><button class="btn accent" onclick="startReader()">Read the transcript again</button><button class="btn" onclick="pauseReader()">Pause</button><button class="btn" onclick="resumeReader()">Resume</button><button class="btn" onclick="stopAllSpeech()">Stop</button><button class="btn" onclick="clearReader()">Clear text</button></div>
+      <div class="card-head"><h2 data-i18n="reader_title">Reading transcript</h2><span id="reader-progress" class="pill" role="status">Ready</span></div>
+      <p class="help" data-i18n="reader_help">Everything Astha reads from the camera is collected here. Say “Astha, read this” or tap “Read to me” to read a book or letter. Pasting text is optional.</p>
+      <label class="field" for="reader-text" data-i18n-lead="reader_label">Transcript<textarea id="reader-text" placeholder="Pages Astha has read will appear here." oninput="readerTextChanged()" data-i18n-placeholder="reader_placeholder"></textarea></label>
+      <div class="utility-row"><button class="btn accent" onclick="startReader()" data-i18n="reader_again">Read the transcript again</button><button class="btn" onclick="pauseReader()" data-i18n="reader_pause">Pause</button><button class="btn" onclick="resumeReader()" data-i18n="reader_resume">Resume</button><button class="btn" onclick="stopAllSpeech()" data-i18n="reader_stop">Stop</button><button class="btn" onclick="clearReader()" data-i18n="reader_clear">Clear text</button></div>
     </div>
     <div class="card" id="eye-card">
       <div class="card-head">
-        <h2>♥ Astha on your screen</h2>
+        <h2 data-i18n="eye_title">♥ Astha on your screen</h2>
         <span class="pill" id="eye-pill">Not watching</span>
       </div>
-      <p class="help">The heart is Astha's eye. Share your screen once and Astha watches it: she tells you which app you are in, where a button is, when a pop-up has gone, and opens apps or sites for you when the browser allows. Say “Astha, watch my screen”.</p>
+      <p class="help" data-i18n="eye_help">The heart is Astha's eye. Share your screen once and Astha watches it: she tells you which app you are in, where a button is, when a pop-up has gone, and opens apps or sites for you when the browser allows. Say “Astha, watch my screen”.</p>
       <div class="eye-view">
-        <div class="empty" id="eye-empty"><div>Screen not shared yet.</div></div>
+        <div class="empty" id="eye-empty"><div data-i18n="eye_empty">Screen not shared yet.</div></div>
         <video id="eye-video" autoplay muted playsinline hidden></video>
         <div class="heart idle" id="eye-heart" hidden aria-hidden="true">
           <svg viewBox="0 0 24 24"><path d="M12 21s-7.5-4.6-9.6-9.1C.9 8.5 2.6 5 6.1 5c2 0 3.3 1.1 3.9 2.1C10.6 6.1 11.9 5 13.9 5c3.5 0 5.2 3.5 3.7 6.9C19.5 16.4 12 21 12 21z"/></svg>
           <span class="heart-label" id="eye-heart-label" hidden></span>
         </div>
       </div>
-      <div class="utility-row"><button class="btn accent" id="eye-start" onclick="toggleEye()">Let Astha see my screen</button><button class="btn" onclick="eyeWhatsOnScreen()">What is on my screen?</button><button class="btn" onclick="eyeReadError()">Read the error</button><button class="btn" onclick="eyeOpen('vs code')">Open VS Code</button></div>
-      <label class="field" for="eye-paste">Or paste screen or terminal text<textarea id="eye-paste" placeholder="Paste a terminal error here, then say “Astha, read the error”."></textarea></label>
-      <div class="toggle-row"><span>Keyboard guidance: name each control as I Tab to it</span><button class="switch" id="focus-switch" role="switch" aria-checked="false" onclick="toggleFocusNarration()" aria-label="Keyboard guidance"></button></div>
-      <p class="help">Astha opens websites and VS Code herself. Clicking inside other apps needs the small desktop agent from the roadmap; until then she guides your keys and confirms what she sees.</p>
+      <div class="utility-row"><button class="btn accent" id="eye-start" onclick="toggleEye()">Let Astha see my screen</button><button class="btn" onclick="eyeWhatsOnScreen()" data-i18n="eye_whats">What is on my screen?</button><button class="btn" onclick="eyeReadError()" data-i18n="eye_error">Read the error</button><button class="btn" onclick="eyeOpen('vs code')" data-i18n="eye_vscode">Open VS Code</button></div>
+      <label class="field" for="eye-paste" data-i18n-lead="eye_paste_label">Or paste screen or terminal text<textarea id="eye-paste" placeholder="Paste a terminal error here, then say “Astha, read the error”." data-i18n-placeholder="eye_paste_placeholder"></textarea></label>
+      <div class="toggle-row"><span data-i18n="focus_text">Keyboard guidance: name each control as I Tab to it</span><button class="switch" id="focus-switch" role="switch" aria-checked="false" onclick="toggleFocusNarration()" aria-label="Keyboard guidance" data-i18n-aria-label="focus_label"></button></div>
+      <p class="help" data-i18n="eye_note">Astha opens websites and VS Code herself. Clicking inside other apps needs the small desktop agent from the roadmap; until then she guides your keys and confirms what she sees.</p>
     </div>
   </section>
 
   <!-- ================= Diagnostics & Hardware Aside ================= -->
   <aside class="stack">
     <div class="card">
-      <div class="card-head"><h2>Your preferences</h2></div>
-      <p class="help" id="account-row" role="status">Signed in.</p>
-      <button class="btn small" onclick="signOut()">Sign out</button>
+      <div class="card-head"><h2 data-i18n="prefs_title">Your preferences</h2></div>
+      <p class="help" id="account-row" role="status"></p>
+      <div class="utility-row"><button class="btn small" id="account-open-btn" onclick="openAuthGate()" hidden data-i18n="account_open">Create account or log in</button><button class="btn small" id="sign-out-btn" onclick="signOut()" hidden data-i18n="sign_out">Sign out</button></div>
+      <p class="help" id="data-help" data-i18n="data_help">You can download everything Astha has saved about you, remove your face and voice templates, or delete your account.</p>
+      <div class="utility-row"><button class="btn small" onclick="exportMyData()" data-i18n="data_export">Download my data</button><button class="btn small" onclick="forgetOwnerBiometrics()" data-i18n="data_forget_bio">Forget my face and voice</button><button class="btn small danger" id="delete-account-btn" onclick="openDeleteAccount()" aria-expanded="false" aria-controls="delete-account-panel" data-i18n="data_delete">Delete my account</button></div>
+      <div id="delete-account-panel" role="group" aria-labelledby="delete-account-warning" hidden>
+        <p class="help" id="delete-account-warning" data-i18n="data_delete_warn">This permanently deletes your Astha account, every saved memory, room note, activity record and personal note, and the copies on this phone. It cannot be undone.</p>
+        <p class="help" id="delete-account-note" hidden></p>
+        <label class="field" id="delete-account-pin-field" for="delete-account-pin" data-i18n-lead="data_delete_pin">Enter your passcode to confirm<input id="delete-account-pin" type="password" inputmode="numeric" autocomplete="current-password" maxlength="128"></label>
+        <div class="utility-row"><button class="btn danger" id="delete-account-confirm" onclick="confirmDeleteAccount()" data-i18n="data_delete_confirm">Delete permanently</button><button class="btn" onclick="closeDeleteAccount()" data-i18n="cancel">Cancel</button></div>
+      </div>
+      <p class="help" id="data-status" role="status"></p>
 
-      <label class="field" for="gemini-key">Personal Gemini key (optional backup)<input id="gemini-key" type="password" autocomplete="off" placeholder="Leave blank -- the Astha server already provides this" onchange="setGeminiKey(this.value)"></label>
-      <p class="help">Cloud features require a configured server or your own provider key and your consent. Descriptions can be wrong; verify before acting. A personal key is kept on this browser and should only be used on a device you trust.</p>
-      <label class="field" for="speech-rate">Speaking speed<select class="select-dropdown" id="speech-rate" onchange="savePreferences()"><option value="0.8">Slower</option><option value="1" selected>Normal</option><option value="1.2">Faster</option><option value="1.5">Very fast</option></select></label>
-      <label class="field" for="description-style">Description length<select class="select-dropdown" id="description-style" onchange="savePreferences()"><option value="short">Short</option><option value="detailed">Detailed</option></select></label>
-      <label class="field" for="ocr-language">Reading language<select class="select-dropdown" id="ocr-language" onchange="savePreferences()"><option value="ben+eng">বাংলা + English</option><option value="eng">English</option></select></label>
-      <label class="field" for="voice-select">Astha's voice<select class="select-dropdown" id="voice-select" onchange="onVoiceChosen(this.value)"></select></label>
-      <label class="field" for="stt-lang">I speak<select class="select-dropdown" id="stt-lang" onchange="try{localStorage.setItem('astha.stt',this.value)}catch(e){}"><option value="auto">Same as the voice language</option><option value="en-US">English</option><option value="bn-BD">বাংলা (Banglish works too)</option></select></label>
+      <label class="field" for="gemini-key" data-i18n-lead="gemini_label">Personal Gemini key (optional backup)<input id="gemini-key" type="password" autocomplete="off" placeholder="Leave blank -- the Astha server already provides this" onchange="setGeminiKey(this.value)" data-i18n-placeholder="gemini_placeholder"></label>
+      <p class="help" data-i18n="cloud_help">Cloud features require a configured server or your own provider key and your consent. Descriptions can be wrong; verify before acting. A personal key is kept on this browser and should only be used on a device you trust.</p>
+      <label class="field" for="speech-rate" data-i18n-lead="rate_label">Speaking speed<select class="select-dropdown" id="speech-rate" onchange="savePreferences()"><option value="0.8" data-i18n="rate_slower">Slower</option><option value="1" selected data-i18n="rate_normal">Normal</option><option value="1.2" data-i18n="rate_faster">Faster</option><option value="1.5" data-i18n="rate_very_fast">Very fast</option></select></label>
+      <label class="field" for="description-style" data-i18n-lead="desc_label">Description length<select class="select-dropdown" id="description-style" onchange="savePreferences()"><option value="short" data-i18n="desc_short">Short</option><option value="detailed" data-i18n="desc_detailed">Detailed</option></select></label>
+      <label class="field" for="ocr-language" data-i18n-lead="ocr_label">Reading language<select class="select-dropdown" id="ocr-language" onchange="savePreferences()"><option value="ben+eng">বাংলা + English</option><option value="eng">English</option></select></label>
+      <label class="field" for="voice-select" data-i18n-lead="voice_label">Astha's voice<select class="select-dropdown" id="voice-select" onchange="onVoiceChosen(this.value)"></select></label>
+      <label class="field" for="stt-lang" data-i18n-lead="stt_label">I speak<select class="select-dropdown" id="stt-lang" onchange="try{localStorage.setItem('astha.stt',this.value)}catch(e){}"><option value="auto" data-i18n="stt_auto">Same as the voice language</option><option value="en-US">English</option><option value="bn-BD" data-i18n="stt_bn">বাংলা (Banglish works too)</option></select></label>
       <p id="voice-support" class="help" role="status"></p>
-      <p class="help">Hands-free mode keeps the microphone open in this tab and waits for “Astha, …”. Browser speech recognition may use an online service.</p>
+      <p class="help" data-i18n="hf_help">Hands-free mode keeps the microphone open in this tab and waits for “Astha, …”. Browser speech recognition may use an online service.</p>
       <button class="btn" id="private-btn" aria-pressed="false" onclick="togglePrivateMode()">Privacy mode: off</button>
       <p id="privacy-status" class="help" role="status">Notes are saved on this browser and synced to your account when permitted and connected. Browser notes are not encrypted.</p>
     </div>
 
     <div class="card" id="owner-card">
-      <div class="card-head"><h2>Owner ID</h2></div>
-      <p class="help">Face and voice matching are experimental convenience controls, not secure authentication. Templates are saved locally for this profile. Camera and microphone access require your browser permission.</p>
-      <div class="utility-row"><button class="btn accent" onclick="enrollOwnerFace()">Remember my face</button><button class="btn" onclick="enrollOwnerVoice()">Remember my voice (experimental)</button><button class="btn" onclick="ownerItsMe()">It's me</button><button class="btn" id="owner-lock-btn" aria-pressed="false" onclick="toggleOwnerLock()">Owner lock: off</button></div>
+      <div class="card-head"><h2 data-i18n="owner_title">Owner ID</h2></div>
+      <p class="help" data-i18n="owner_help">Face and voice matching are experimental convenience controls, not secure authentication. Templates are saved locally for this profile. Camera and microphone access require your browser permission.</p>
+      <div class="utility-row"><button class="btn accent" onclick="enrollOwnerFace()" data-i18n="owner_face">Remember my face</button><button class="btn" onclick="enrollOwnerVoice()" data-i18n="owner_voice">Remember my voice (experimental)</button><button class="btn" onclick="ownerItsMe()" data-i18n="owner_me">It's me</button><button class="btn" id="owner-lock-btn" aria-pressed="false" onclick="toggleOwnerLock()">Owner lock: off</button></div>
       <p class="help" id="owner-status" role="status"></p>
     </div>
 
     <!-- AI Model Diagnostics -->
-    <details class="card"><summary>Advanced: AI model status</summary>
+    <details class="card"><summary data-i18n="diag_summary">Advanced: AI model status</summary>
       <div class="card-head">
         <h2 data-i18n="engine_title">On-device AI engine</h2>
         <span class="pill" id="cloud-pill">Checking cloud…</span>
@@ -891,11 +901,11 @@
       </div>
       <p class="help" data-i18n="memory_help">Personal items are remembered with where and when they were last seen.</p>
 <form onsubmit="event.preventDefault(); saveManualMemory()">
-        <label class="field" for="memory-item">Object<input id="memory-item" maxlength="80" placeholder="Glasses / চশমা" required></label>
-        <label class="field" for="memory-location">Last seen location<input id="memory-location" maxlength="160" placeholder="Bedroom, on the bedside table" required></label>
-        <button class="btn accent" type="submit">Remember this</button>
+        <label class="field" for="memory-item" data-i18n-lead="memory_item_label">Object<input id="memory-item" maxlength="80" placeholder="Glasses / চশমা" required data-i18n-placeholder="memory_item_placeholder"></label>
+        <label class="field" for="memory-location" data-i18n-lead="memory_location_label">Last seen location<input id="memory-location" maxlength="160" placeholder="Bedroom, on the bedside table" required data-i18n-placeholder="memory_location_placeholder"></label>
+        <button class="btn accent" type="submit" data-i18n="memory_submit">Remember this</button>
       </form>
-      <label class="field" for="memory-search">Search memories<input id="memory-search" type="search" maxlength="160" oninput="renderMemory()" placeholder="Find an object or room"></label>
+      <label class="field" for="memory-search" data-i18n-lead="memory_search_label">Search memories<input id="memory-search" type="search" maxlength="160" oninput="renderMemory()" placeholder="Find an object or room" data-i18n-placeholder="memory_search_placeholder"></label>
       <div class="list" id="memory-list"><p class="empty-note" data-i18n="memory_empty">Nothing remembered yet.</p></div>
     </div>
 
@@ -942,7 +952,7 @@
 
       <div class="mini" style="margin-top:12px">
         <div class="t"><span>📡 <span data-i18n="ultra_title">Ultrasonic distance (HC-SR04)</span></span><span class="pill ok" id="distance-pill">120 cm</span></div>
-        <input type="range" id="distance" min="15" max="200" value="120" oninput="onDistance(this.value)" aria-label="Distance">
+        <input type="range" id="distance" min="15" max="200" value="120" oninput="onDistance(this.value)" aria-label="Distance" data-i18n-aria-label="distance_label">
         <div class="range-legend">
           <span style="color:var(--danger)" data-i18n="ultra_danger">&lt; 35 cm danger</span>
           <span style="color:var(--warn)" data-i18n="ultra_caution">&lt; 80 cm caution</span>
@@ -971,12 +981,12 @@
       </div>
       <p class="help" data-i18n="backend_help">This web version works fully on its own. If your backend is running, connect it here for cloud reasoning.</p>
       <div class="row">
-        <input class="input" id="api-url" value="http://localhost:8000" aria-label="Backend URL">
+        <input class="input" id="api-url" value="http://localhost:8000" aria-label="Backend URL" data-i18n-aria-label="api_url_label">
         <button class="btn" onclick="checkBackend()" data-i18n="backend_test">Test</button>
       </div>
     </div>
 
-  <div class="card"><details><summary>Voice Commands & Assistant Guide</summary><p>Always-listening Siri mode: Say “Astha” or ask directly: “What is in front of me?”, “Read this”, “Check clothes”, “Where are my keys?”. Say “Stop talking” to silence instantly.</p></details></div></aside>
+  <div class="card"><details><summary data-i18n="guide_summary">Voice Commands & Assistant Guide</summary><p data-i18n="guide_text">Always-listening Siri mode: Say “Astha” or ask directly: “What is in front of me?”, “Read this”, “Check clothes”, “Where are my keys?”. Say “Stop talking” to silence instantly.</p></details></div></aside>
 </main>
 
 <footer>
@@ -1626,6 +1636,7 @@ function applyLanguage() {
   }
   onDistance($('distance').value, true);
   if (!$('pattern-pill').dataset.p) $('pattern-pill').textContent = t('pattern_none');
+  applyStaticI18n();
   renderSeen(); renderMemory(); renderLog();
 }
 
@@ -2023,7 +2034,7 @@ function loadClip() {
   setEngineState('clip', 'loading');
   clipPromise = (async () => {
     try {
-      const TF = await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3/dist/transformers.min.js');
+      const TF = await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1/dist/transformers.min.js');
       TF.env.allowLocalModels = false;
       engine.clip.lib = TF;
       const id = 'Xenova/clip-vit-base-patch32';
@@ -2999,7 +3010,7 @@ function readNextChunk(generation) {
   const langFor = speechLangFor(text);
   if (!langFor) { reader.index++; return readNextChunk(generation); }
   const u = makeUtterance(sanitizeForSpeech(text), langFor);
-  if (!u) { stopReader(); $('reader-progress').textContent = 'No local voice available'; return; }
+  if (!u) { stopReader(); $('reader-progress').textContent = t('reader_no_voice'); return; }
   $('reader-progress').textContent = 'Part ' + (reader.index + 1) + ' of ' + reader.parts.length;
   u.onend = () => { if (generation === reader.generation && reader.active) { reader.index++; if (!reader.paused) readNextChunk(generation); } };
   u.onerror = () => { if (generation === reader.generation) { stopReader(); $('reader-progress').textContent = 'Speech failed. Try Read all again.'; } };
@@ -3073,6 +3084,11 @@ function handleQuery(query) {
   if (/remember my voice|learn my voice|enrol+ my voice|আমার কণ্ঠ মনে রাখো|গলা শেখো/.test(q)) return enrollOwnerVoice();
   if (/^(it'?s me|this is me|unlock)\b|আমি আস্থা|আনলক করো|এটা আমি/.test(q)) return ownerItsMe();
   if (/owner lock|মালিক লক/.test(q)) return toggleOwnerLock();
+  if (/(delete|close|remove) my account|অ্যাকাউন্ট (মুছ|ডিলিট)|একাউন্ট (মুছ|ডিলিট)/.test(q)) return openDeleteAccount(true);
+  if (/(download|export) my (data|information)|আমার (তথ্য|ডেটা) (ডাউনলোড|রপ্তানি)/.test(q)) return exportMyData();
+  if (/(forget|delete|remove) my (face|voice)|(মুখ|কণ্ঠ|গলা) (ভুলে যাও|মুছ)/.test(q)) return forgetOwnerBiometrics();
+  if (/create (an |my )?account|^(log|sign) ?in[.!]?$|(log|sign) ?in to my account|অ্যাকাউন্ট তৈরি|লগ ?ইন কর/.test(q)) return openAuthGate();
+  if (/^(log|sign) ?out[.!]?$|(log|sign) ?out of my account|সাইন ?আউট কর|লগ ?আউট কর/.test(q)) return signOut();
   // Autonomous Agent Trigger: multi-part tasks, "find ... and check ...", "plan ...", "guide me to find ..."
   if (/\b(plan|task|autonomous|find\s+.+\s+and\s+|where\s+.+\s+and\s+|check\s+.+\s+and\s+|পরিকল্পনা|খুঁজে দেখো এবং|আর দেখো)\b/i.test(q)) {
     if (typeof AsthaAgent !== 'undefined') {
@@ -3431,7 +3447,7 @@ function queryHomeLayout(query) {
 }
 
 function updateSourceStatus() {
-  const text = state.source === 'camera' ? 'Live camera · Recognition is experimental' : state.source === 'scene' ? 'Demo photo · Not your surroundings' : state.source === 'photo' ? 'Uploaded photo · Not a live view' : 'Camera off · No image selected';
+  const text = t(state.source === 'camera' ? 'source_live' : state.source === 'scene' ? 'source_demo' : state.source === 'photo' ? 'source_photo' : 'source_idle');
   $('source-status').textContent = text;
 }
 
@@ -3539,6 +3555,50 @@ function enhancementBoot() {
   document.addEventListener('visibilitychange',()=>{ if(document.hidden){stopListening();stopCamera();} });
 }
 
+const I18N_EXTRA = {"skip_link":["Skip to companion","সরাসরি সহায়কে যান"],"auth_sub":["Your voice-first visual companion. Create an account once; Astha remembers your things and rooms after that.","আপনার কণ্ঠ-নির্ভর দৃষ্টি-সহায়ক। একবার অ্যাকাউন্ট তৈরি করুন; এরপর আস্থা আপনার জিনিসপত্র ও ঘরের কথা মনে রাখবে।"],"auth_action":["Account action","অ্যাকাউন্টের কাজ"],"auth_create":["Create account","অ্যাকাউন্ট তৈরি"],"auth_login":["Log in","প্রবেশ করুন"],"auth_name":["Your name","আপনার নাম"],"auth_phone":["Phone number","ফোন নম্বর"],"auth_passcode":["Passcode (4 to 8 digits)","পাসকোড (৪ থেকে ৮টি সংখ্যা)"],"auth_note":["Your name and phone are used only to sign you back in. Everything Astha remembers stays tied to your account.","আপনার নাম ও ফোন নম্বর শুধু আবার প্রবেশের জন্য ব্যবহৃত হয়। আস্থা যা মনে রাখে তা আপনার অ্যাকাউন্টের সঙ্গেই যুক্ত থাকে।"],"auth_close":["Continue without an account","অ্যাকাউন্ট ছাড়াই চালিয়ে যান"],"theme_title":["Contrast theme Selector","রঙের থিম বাছাই"],"theme_label":["Contrast theme","রঙের থিম"],"theme_navy":["🌊 Navy and cyan","🌊 গাঢ় নীল ও সায়ান"],"theme_mono":["⚪ Monochrome (white on black)","⚪ সাদা-কালো (কালোর ওপর সাদা)"],"theme_yellow":["🟡 Yellow on black (photophobia)","🟡 কালোর ওপর হলুদ (আলোয় অস্বস্তি হলে)"],"font_label":["Font Size","লেখার আকার"],"font_normal":["Text: Standard","লেখা: সাধারণ"],"font_large":["Text: Large","লেখা: বড়"],"font_xlarge":["Text: Extra large","লেখা: খুব বড়"],"voice_delivery":["Voice Delivery","কণ্ঠের ভাষা"],"voice_delivery_title":["Voice Delivery Language","আস্থা যে ভাষায় কথা বলবে"],"voice_en_btn":["Voice: English","কণ্ঠ: English"],"voice_en_title":["Voice output spoken in English","আস্থা ইংরেজিতে কথা বলবে"],"voice_bn_btn":["Voice: বাংলা","কণ্ঠ: বাংলা"],"voice_bn_title":["Voice output spoken in Bangla (বাংলা)","আস্থা বাংলায় কথা বলবে"],"safety_brand":["Astha AI Companion","আস্থা এআই সহায়ক"],"safety_note":["· Experimental visual assistance. Use your usual mobility aid; Astha cannot confirm a safe path. আস্থা নিরাপদ পথ নিশ্চিত করতে পারে না।","· পরীক্ষামূলক দৃষ্টি-সহায়তা। আপনার চলাচলের সহায়ক ব্যবহার করুন; আস্থা নিরাপদ পথ নিশ্চিত করতে পারে না।"],"secure_title":["This page is open on an insecure address.","এই পাতাটি অনিরাপদ ঠিকানায় খোলা হয়েছে।"],"secure_body":["The browser will ask for the microphone and camera every time and may block them. Open the app on localhost or over HTTPS. On Android, use Chrome's port forwarding (chrome://inspect on the computer) so the phone sees localhost, or a Cloudflare tunnel.","ব্রাউজার প্রতিবার মাইক্রোফোন ও ক্যামেরার অনুমতি চাইবে এবং আটকে দিতে পারে। অ্যাপটি localhost অথবা HTTPS ঠিকানায় খুলুন। অ্যান্ড্রয়েডে Chrome-এর পোর্ট ফরওয়ার্ডিং (কম্পিউটারে chrome://inspect) অথবা Cloudflare টানেল ব্যবহার করুন।"],"hf_title":["Keep listening for “Astha, …”","“আস্থা, …” শোনার জন্য মাইক্রোফোন চালু রাখুন"],"engine_mode":["AI Engine Mode","এআই প্রসেসিং মোড"],"engine_mode_title":["Choose online processing or on-device models","অনলাইন প্রসেসিং অথবা ফোনের নিজস্ব মডেল বেছে নিন"],"mode_online":["✨ Online AI","✨ অনলাইন এআই"],"mode_offline":["📱 Offline","📱 অফলাইন"],"speaking_mode":["Speaking mode","কথা বলার ধরন"],"speaking_mode_title":["Auto: speaks up in busy places. Quiet: speaks only when asked.","অটো: ব্যস্ত জায়গায় নিজে থেকে জানায়। শান্ত: শুধু জিজ্ঞাসা করলে বলে।"],"mode_auto":["Auto · busy area","অটো · ব্যস্ত জায়গা"],"mode_quiet":["Quiet · ask me","শান্ত · জিজ্ঞাসা করলে"],"command_label":["Ask Astha in Bangla or English","বাংলা বা ইংরেজিতে আস্থাকে জিজ্ঞাসা করুন"],"command_placeholder":["Type a request, e.g. Where are my glasses?","অনুরোধ লিখুন, যেমন: আমার চশমা কোথায়?"],"command_submit":["Ask Astha","আস্থাকে জিজ্ঞাসা করুন"],"btn_repeat":["Repeat","আবার বলো"],"btn_stop_speaking":["Stop speaking","কথা থামাও"],"btn_voice_commands":["Voice commands","ভয়েস কমান্ড"],"agent_title_label":["Autonomous Agent","স্বয়ংক্রিয় সহায়ক"],"agent_goal":["Goal: ","লক্ষ্য: "],"still_alt":["Visual Source","দৃশ্যের উৎস"],"video_source":["Video source","ভিডিওর উৎস"],"act_agent":["Autonomous task","স্বয়ংক্রিয় কাজ"],"act_agent_desc":["Plan, RAG memory & verify loop","পরিকল্পনা, স্মৃতি খোঁজা ও যাচাই"],"calib_heading":["🏠 Video Home & Room Calibration","🏠 ভিডিও দিয়ে ঘর চেনানো"],"calib_instruction":["Choose a room name, then walk through with your camera. Astha will continuously identify furniture surfaces (dressing table, reading table, bed, chairs) and remember where items are placed.","ঘরের নাম বেছে নিন, তারপর ক্যামেরা নিয়ে ঘরটি ঘুরে দেখান। আস্থা আসবাবপত্র (ড্রেসিং টেবিল, পড়ার টেবিল, বিছানা, চেয়ার) শনাক্ত করবে এবং জিনিসপত্র কোথায় রাখা আছে তা মনে রাখবে।"],"room_name":["Room name","ঘরের নাম"],"room_placeholder":["Reading Room, Bedroom, etc.","পড়ার ঘর, শোবার ঘর ইত্যাদি"],"calib_view_status":["Point camera at room furniture and tap \"Start Video Walkthrough\"","ঘরের আসবাবের দিকে ক্যামেরা ধরে “ভিডিও শুরু করুন” চাপুন"],"calib_landmarks":["Detected Furniture & Landmarks in this Room:","এই ঘরে শনাক্ত হওয়া আসবাব ও চিহ্ন:"],"calib_none":["None detected yet. Walk through room with camera.","এখনও কিছু শনাক্ত হয়নি। ক্যামেরা নিয়ে ঘরটি ঘুরে দেখান।"],"calib_save":["✓ Save Calibrated Room","✓ ঘরটি সংরক্ষণ করুন"],"cancel":["Cancel","বাতিল"],"calib_ready":["Ready to scan","স্ক্যানের জন্য প্রস্তুত"],"calib_start":["🎥 Start Video Walkthrough","🎥 ভিডিও শুরু করুন"],"calib_resume":["🎥 Resume Walkthrough","🎥 আবার শুরু করুন"],"calib_stop":["⏹️ Stop Walkthrough","⏹️ ভিডিও থামান"],"calib_paused":["Walkthrough paused","ভিডিও বিরতিতে"],"calib_scanning":["Walking & scanning room…","ঘর ঘুরে দেখা হচ্ছে…"],"calib_recalibrating":["Recalibrating {room}","{room} আবার চেনানো হচ্ছে"],"ocr_append":["Add this text to reader","এই লেখা পাঠকে যোগ করুন"],"narrate_label":["Auto narrate","নিজে থেকে বর্ণনা"],"reader_title":["Reading transcript","পড়া লেখার প্রতিলিপি"],"reader_help":["Everything Astha reads from the camera is collected here. Say “Astha, read this” or tap “Read to me” to read a book or letter. Pasting text is optional.","ক্যামেরা থেকে আস্থা যা পড়ে তা এখানে জমা হয়। বই বা চিঠি পড়তে বলুন “আস্থা, এটা পড়ো” অথবা “পড়ে শোনাও” চাপুন। লেখা পেস্ট করা ঐচ্ছিক।"],"reader_label":["Transcript","প্রতিলিপি"],"reader_placeholder":["Pages Astha has read will appear here.","আস্থার পড়া পাতাগুলো এখানে দেখা যাবে।"],"reader_again":["Read the transcript again","প্রতিলিপি আবার পড়ো"],"reader_pause":["Pause","বিরতি"],"reader_resume":["Resume","আবার শুরু"],"reader_stop":["Stop","থামাও"],"reader_clear":["Clear text","লেখা মুছুন"],"eye_title":["♥ Astha on your screen","♥ আপনার স্ক্রিনে আস্থা"],"eye_help":["The heart is Astha's eye. Share your screen once and Astha watches it: she tells you which app you are in, where a button is, when a pop-up has gone, and opens apps or sites for you when the browser allows. Say “Astha, watch my screen”.","হৃদয়-চিহ্নটি আস্থার চোখ। একবার স্ক্রিন শেয়ার করলে আস্থা তা দেখে: আপনি কোন অ্যাপে আছেন, কোন বোতাম কোথায়, পপ-আপ বন্ধ হয়েছে কি না তা জানায়, এবং ব্রাউজার অনুমতি দিলে অ্যাপ বা সাইট খুলে দেয়। বলুন “আস্থা, আমার স্ক্রিন দেখো”।"],"eye_empty":["Screen not shared yet.","স্ক্রিন এখনও শেয়ার করা হয়নি।"],"eye_whats":["What is on my screen?","আমার স্ক্রিনে কী আছে?"],"eye_error":["Read the error","ত্রুটিটি পড়ো"],"eye_vscode":["Open VS Code","VS Code খোলো"],"eye_paste_label":["Or paste screen or terminal text","অথবা স্ক্রিন বা টার্মিনালের লেখা পেস্ট করুন"],"eye_paste_placeholder":["Paste a terminal error here, then say “Astha, read the error”.","টার্মিনালের ত্রুটি এখানে পেস্ট করে বলুন “আস্থা, ত্রুটিটি পড়ো”।"],"focus_text":["Keyboard guidance: name each control as I Tab to it","কিবোর্ড নির্দেশনা: Tab চাপলে প্রতিটি নিয়ন্ত্রণের নাম বলো"],"focus_label":["Keyboard guidance","কিবোর্ড নির্দেশনা"],"eye_note":["Astha opens websites and VS Code herself. Clicking inside other apps needs the small desktop agent from the roadmap; until then she guides your keys and confirms what she sees.","আস্থা নিজেই ওয়েবসাইট ও VS Code খুলতে পারে। অন্য অ্যাপের ভেতরে ক্লিক করার জন্য ভবিষ্যতের ডেস্কটপ এজেন্ট লাগবে; ততদিন সে কিবোর্ডে পথ দেখায় এবং যা দেখে তা নিশ্চিত করে।"],"prefs_title":["Your preferences","আপনার পছন্দ"],"account_open":["Create account or log in","অ্যাকাউন্ট তৈরি বা প্রবেশ"],"sign_out":["Sign out","সাইন আউট"],"data_help":["You can download everything Astha has saved about you, remove your face and voice templates, or delete your account.","আস্থা আপনার সম্পর্কে যা সংরক্ষণ করেছে তা ডাউনলোড করতে, মুখ ও কণ্ঠের নমুনা সরাতে অথবা অ্যাকাউন্ট মুছে ফেলতে পারেন।"],"data_export":["Download my data","আমার তথ্য ডাউনলোড"],"data_forget_bio":["Forget my face and voice","আমার মুখ ও কণ্ঠ ভুলে যাও"],"data_delete":["Delete my account","আমার অ্যাকাউন্ট মুছুন"],"data_delete_warn":["This permanently deletes your Astha account, every saved memory, room note, activity record and personal note, and the copies on this phone. It cannot be undone.","এতে আপনার আস্থা অ্যাকাউন্ট, সংরক্ষিত সব স্মৃতি, ঘরের নোট, কার্যক্রমের রেকর্ড ও ব্যক্তিগত নোট এবং এই ফোনে থাকা কপি স্থায়ীভাবে মুছে যাবে। এটি আর ফেরানো যাবে না।"],"data_delete_pin":["Enter your passcode to confirm","নিশ্চিত করতে আপনার পাসকোড দিন"],"data_delete_confirm":["Delete permanently","স্থায়ীভাবে মুছুন"],"gemini_label":["Personal Gemini key (optional backup)","ব্যক্তিগত Gemini কী (ঐচ্ছিক বিকল্প)"],"gemini_placeholder":["Leave blank -- the Astha server already provides this","খালি রাখুন -- আস্থার সার্ভার এটি দিয়ে থাকে"],"cloud_help":["Cloud features require a configured server or your own provider key and your consent. Descriptions can be wrong; verify before acting. A personal key is kept on this browser and should only be used on a device you trust.","ক্লাউড সুবিধার জন্য কনফিগার করা সার্ভার অথবা আপনার নিজের কী এবং আপনার সম্মতি প্রয়োজন। বর্ণনা ভুল হতে পারে; কিছু করার আগে যাচাই করুন। ব্যক্তিগত কী এই ব্রাউজারে রাখা হয়, তাই শুধু বিশ্বস্ত ডিভাইসে ব্যবহার করুন।"],"rate_label":["Speaking speed","কথা বলার গতি"],"rate_slower":["Slower","ধীরে"],"rate_normal":["Normal","স্বাভাবিক"],"rate_faster":["Faster","দ্রুত"],"rate_very_fast":["Very fast","খুব দ্রুত"],"desc_label":["Description length","বর্ণনার দৈর্ঘ্য"],"desc_short":["Short","সংক্ষিপ্ত"],"desc_detailed":["Detailed","বিস্তারিত"],"ocr_label":["Reading language","পড়ার ভাষা"],"voice_label":["Astha's voice","আস্থার কণ্ঠ"],"stt_label":["I speak","আমি যে ভাষায় বলি"],"stt_auto":["Same as the voice language","কণ্ঠের ভাষার মতোই"],"stt_bn":["বাংলা (Banglish works too)","বাংলা (বাংলিশও চলবে)"],"hf_help":["Hands-free mode keeps the microphone open in this tab and waits for “Astha, …”. Browser speech recognition may use an online service.","হ্যান্ডস-ফ্রি মোডে এই ট্যাবে মাইক্রোফোন চালু থাকে এবং “আস্থা, …” শোনার অপেক্ষা করে। ব্রাউজারের কণ্ঠ শনাক্তকরণ অনলাইন পরিষেবা ব্যবহার করতে পারে।"],"owner_title":["Owner ID","মালিক শনাক্তকরণ"],"owner_help":["Face and voice matching are experimental convenience controls, not secure authentication. Templates are saved locally for this profile. Camera and microphone access require your browser permission.","মুখ ও কণ্ঠ মেলানো পরীক্ষামূলক সুবিধা মাত্র, নিরাপদ প্রমাণীকরণ নয়। নমুনাগুলো এই প্রোফাইলের জন্য এই ফোনেই সংরক্ষিত থাকে। ক্যামেরা ও মাইক্রোফোনের জন্য ব্রাউজারের অনুমতি লাগবে।"],"owner_face":["Remember my face","আমার মুখ মনে রাখো"],"owner_voice":["Remember my voice (experimental)","আমার কণ্ঠ মনে রাখো (পরীক্ষামূলক)"],"owner_me":["It's me","এটা আমি"],"diag_summary":["Advanced: AI model status","উন্নত: এআই মডেলের অবস্থা"],"memory_item_label":["Object","জিনিস"],"memory_item_placeholder":["Glasses / চশমা","চশমা"],"memory_location_label":["Last seen location","শেষ যেখানে দেখা গেছে"],"memory_location_placeholder":["Bedroom, on the bedside table","শোবার ঘর, বিছানার পাশের টেবিলে"],"memory_submit":["Remember this","এটা মনে রাখো"],"memory_search_label":["Search memories","স্মৃতি খুঁজুন"],"memory_search_placeholder":["Find an object or room","জিনিস বা ঘর খুঁজুন"],"distance_label":["Distance","দূরত্ব"],"api_url_label":["Backend URL","ব্যাকএন্ড ঠিকানা"],"guide_summary":["Voice Commands & Assistant Guide","ভয়েস কমান্ড ও সহায়িকা"],"guide_text":["Always-listening Siri mode: Say “Astha” or ask directly: “What is in front of me?”, “Read this”, “Check clothes”, “Where are my keys?”. Say “Stop talking” to silence instantly.","সবসময় শোনার মোড: “আস্থা” বলুন অথবা সরাসরি জিজ্ঞাসা করুন: “আমার সামনে কী আছে?”, “এটা পড়ো”, “কাপড় দেখো”, “আমার চাবি কোথায়?”। সঙ্গে সঙ্গে থামাতে বলুন “কথা থামাও”।"],"hf_on":["Hands-free: on","হ্যান্ডস-ফ্রি: চালু"],"hf_off":["Hands-free: off","হ্যান্ডস-ফ্রি: বন্ধ"],"privacy_on":["Privacy mode: on","গোপনীয়তা মোড: চালু"],"privacy_off":["Privacy mode: off","গোপনীয়তা মোড: বন্ধ"],"privacy_status_on":["New memories, room notes and activity are not saved while this is on. Existing account data is untouched.","এটি চালু থাকলে নতুন স্মৃতি, ঘরের নোট ও কার্যক্রম সংরক্ষণ হয় না। অ্যাকাউন্টের আগের তথ্য অপরিবর্তিত থাকে।"],"privacy_status_off":["Notes are saved on this browser; account sync needs permission and a connection. Browser notes are not encrypted.","নোট এই ব্রাউজারে সংরক্ষিত হয়; অ্যাকাউন্টের সঙ্গে সমন্বয়ের জন্য অনুমতি ও সংযোগ লাগে। ব্রাউজারের নোট এনক্রিপ্ট করা নয়।"],"owner_lock_on":["Owner lock: on","মালিক লক: চালু"],"owner_lock_off":["Owner lock: off","মালিক লক: বন্ধ"],"eye_start":["Let Astha see my screen","আস্থাকে আমার স্ক্রিন দেখতে দিন"],"eye_stop":["Stop watching my screen","স্ক্রিন দেখা বন্ধ করো"],"eye_idle":["Not watching","দেখছে না"],"reader_ready":["Ready","প্রস্তুত"],"reader_reading":["Reading","পড়ছে"],"reader_paused":["Paused","বিরতিতে"],"reader_stopped":["Stopped","থেমেছে"],"reader_finished":["Finished","শেষ হয়েছে"],"reader_part":["Part {n} of {total}","অংশ {n} / {total}"],"reader_failed":["Speech failed. Try Read all again.","পড়া যায়নি। আবার পড়তে বলুন।"],"reader_no_voice":["No local voice available","এই ফোনে কোনো কণ্ঠ নেই"],"read_stop":["Stop reading","পড়া থামাও"],"source_idle":["Camera off · No image selected","ক্যামেরা বন্ধ · কোনো ছবি বাছাই করা হয়নি"],"source_live":["Live camera · Recognition is experimental","লাইভ ক্যামেরা · শনাক্তকরণ পরীক্ষামূলক"],"source_demo":["Demo photo · Not your surroundings","নমুনা ছবি · আপনার চারপাশ নয়"],"source_photo":["Uploaded photo · Not a live view","আপলোড করা ছবি · লাইভ দৃশ্য নয়"],"eye_watching":["Watching","দেখছে"],"memory_clear_confirm":["Delete all saved object memories and room notes from this phone and your Astha account?","এই ফোন ও আপনার আস্থা অ্যাকাউন্ট থেকে সংরক্ষিত সব জিনিসের স্মৃতি ও ঘরের নোট মুছে ফেলবেন?"],"gemini_prompt":["Optional personal AI API key (Google Gemini or Gigalogy Maira). The configured ASTHA server is used first:","ঐচ্ছিক ব্যক্তিগত এআই এপিআই কী (Google Gemini বা Gigalogy Maira)। আগে কনফিগার করা আস্থা সার্ভার ব্যবহার হয়:"],"data_delete_guest":["This is a guest account, so no passcode is needed.","এটি অতিথি অ্যাকাউন্ট, তাই পাসকোড লাগবে না।"],"data_delete_local":["No account is connected. This removes the notes and templates saved on this phone.","কোনো অ্যাকাউন্ট সংযুক্ত নেই। এতে এই ফোনে সংরক্ষিত নোট ও নমুনা মুছে যাবে।"],"owner_face_yes":["Face enrolled","মুখ নিবন্ধিত"],"owner_face_no":["No face yet","মুখ এখনও নেই"],"owner_voice_yes":["voiceprint saved","কণ্ঠের নমুনা আছে"],"owner_voice_no":["no voiceprint","কণ্ঠের নমুনা নেই"],"owner_lock_short_on":["lock on","লক চালু"],"owner_lock_short_off":["lock off","লক বন্ধ"],"owner_verified":["verified {time}","যাচাই হয়েছে {time}"],"owner_unverified":["not verified","যাচাই হয়নি"]};
+/* =====================================================================
+   0a. Interface strings beyond the original dictionary
+       tools/i18n.json keeps each English and Bangla string side by side.
+       The build inlines it as I18N_EXTRA and tags the matching elements,
+       failing when a tagged element or its English text has changed.
+   ===================================================================== */
+for (const [key, pair] of Object.entries(I18N_EXTRA)) { I18N.en[key] = pair[0]; I18N.bn[key] = pair[1]; }
+
+// data-i18n replaces an element's whole content. A label that wraps its input, and text
+// carried by an attribute, are translated in place by these hooks instead.
+const I18N_ATTRIBUTES = ['aria-label', 'title', 'placeholder', 'alt'];
+function applyStaticI18n() {
+  document.querySelectorAll('[data-i18n-lead]').forEach(el => {
+    const node = el.firstChild;
+    if (node && node.nodeType === 3) node.nodeValue = t(el.getAttribute('data-i18n-lead'));
+  });
+  for (const attr of I18N_ATTRIBUTES) {
+    document.querySelectorAll('[data-i18n-' + attr + ']').forEach(el => el.setAttribute(attr, t(el.getAttribute('data-i18n-' + attr))));
+  }
+  refreshStateLabels();
+}
+
+// Labels that show a current state are written by the code that changes that state, so a
+// language switch has to redraw them from the state rather than from a fixed key.
+function refreshStateLabels() {
+  const put = (id, key) => { const el = $(id); if (el) el.textContent = t(key); };
+  put('hf-label', typeof SiriVoice !== 'undefined' && SiriVoice.active ? 'hf_on' : 'hf_off');
+  if (typeof privacyMode !== 'undefined') {
+    put('private-btn', privacyMode ? 'privacy_on' : 'privacy_off');
+    put('privacy-status', privacyMode ? 'privacy_status_on' : 'privacy_status_off');
+  }
+  if (typeof eye !== 'undefined') {
+    put('eye-start', eye.active ? 'eye_stop' : 'eye_start');
+    if (!eye.active) put('eye-pill', 'eye_idle');
+  }
+  if (typeof reader !== 'undefined') {
+    if (reader.paused) put('reader-progress', 'reader_paused');
+    else if (!reader.active) put('reader-progress', 'reader_ready');
+  }
+  if (typeof renderOwner === 'function') renderOwner();
+  if (typeof updateSourceStatus === 'function') updateSourceStatus();
+  if (typeof window.ASTHA_RENDER_ACCOUNT === 'function') window.ASTHA_RENDER_ACCOUNT();
+}
 /* =====================================================================
    0. VoiceEngine — Astha's real voice
       Speaks through our backend's neural TTS (a genuine Bangla female voice,
@@ -3783,28 +3843,28 @@ function startReader(inputText) {
 function readNextChunk(generation) {
   if (!reader.active || generation !== reader.generation) return;
   if (reader.index >= reader.parts.length) {
-    reader.active = false; $('reader-progress').textContent = 'Finished';
+    reader.active = false; $('reader-progress').textContent = t('reader_finished');
     const done = reader.onFinish; reader.onFinish = null; if (done) done();
     return;
   }
   const text = reader.parts[reader.index];
   const lang = /[\u0980-\u09ff]/.test(text) ? 'bn' : 'en';
-  $('reader-progress').textContent = 'Part ' + (reader.index + 1) + ' of ' + reader.parts.length;
+  $('reader-progress').textContent = t('reader_part', { n: reader.index + 1, total: reader.parts.length });
   VoiceEngine.speak(text, lang).then(ok => {
     if (generation !== reader.generation || !reader.active) return;
-    if (!ok) { stopReader(); $('reader-progress').textContent = 'Speech failed. Try Read all again.'; return; }
+    if (!ok) { stopReader(); $('reader-progress').textContent = t('reader_failed'); return; }
     reader.index++;
     if (!reader.paused) readNextChunk(generation);
   });
 }
 function pauseReader() {
   if (!reader.active || reader.paused) return;
-  reader.paused = true; VoiceEngine.pause(); $('reader-progress').textContent = 'Paused';
+  reader.paused = true; VoiceEngine.pause(); $('reader-progress').textContent = t('reader_paused');
 }
 function resumeReader() {
   if (!reader.active || !reader.paused) return;
   reader.paused = false; VoiceEngine.resume();
-  if (reader.active) $('reader-progress').textContent = 'Reading';
+  if (reader.active) $('reader-progress').textContent = t('reader_reading');
 }
 function stopReader() {
   reader.active = false; reader.paused = false; reader.generation++; reader.parts = []; reader.index = 0;
@@ -3812,7 +3872,7 @@ function stopReader() {
 }
 function stopAllSpeech() {
   stopReader(); stopListening(); VoiceEngine.stop();
-  $('reader-progress').textContent = 'Stopped';
+  $('reader-progress').textContent = t('reader_stopped');
 }
 
 
@@ -4282,7 +4342,7 @@ function stopReading(silent) {
 function setReadButton(on) {
   const b = $('read-btn'); if (!b) return;
   b.classList.toggle('on', on); b.setAttribute('aria-pressed', on);
-  $('read-title').textContent = on ? 'Stop reading' : t('act_read');
+  $('read-title').textContent = on ? t('read_stop') : t('act_read');
 }
 function grayThumb(frame) {
   const W = 32, H = 24; const c = grayThumb.c || (grayThumb.c = document.createElement('canvas')); c.width = W; c.height = H;
@@ -4441,9 +4501,9 @@ const SiriVoice = {
     const btn = $('hf-btn');
     if (btn) btn.setAttribute('aria-pressed', 'true');
     const lbl = $('hf-label');
-    if (lbl) lbl.textContent = 'Voice: Siri-Active';
+    if (lbl) lbl.textContent = t('hf_on');
     $('mic')?.classList.add('listening');
-    $('mic-label') && ($('mic-label').textContent = 'Listening (Voice active)…');
+    $('mic-label') && ($('mic-label').textContent = t('mic_listening'));
     this._listen();
   },
 
@@ -4459,7 +4519,7 @@ const SiriVoice = {
     const btn = $('hf-btn');
     if (btn) btn.setAttribute('aria-pressed', 'false');
     const lbl = $('hf-label');
-    if (lbl) lbl.textContent = 'Voice: Paused';
+    if (lbl) lbl.textContent = t('hf_off');
     if (!state.listening) {
       $('mic')?.classList.remove('listening');
       $('mic-label') && ($('mic-label').textContent = t('mic_idle') || 'Microphone idle');
@@ -5410,9 +5470,9 @@ function startHomeCalibration(presetName) {
   if (nameInput) nameInput.value = defaultRoom;
 
   renderCalibFurnitureChips();
-  updateCalibStatus('Ready to scan', 'ok');
+  updateCalibStatus(t('calib_ready'), 'ok');
   const startBtn = $('calib-start-btn');
-  if (startBtn) startBtn.textContent = '🎥 Start Video Walkthrough';
+  if (startBtn) startBtn.textContent = t('calib_start');
   const saveBtn = $('calib-save-btn');
   if (saveBtn) saveBtn.disabled = true;
   const modal = $('calib-modal');
@@ -5432,7 +5492,7 @@ function recalibrateRoom(roomId) {
 
   startHomeCalibration(room.name);
   VideoRoomCalib.calibratingId = room.id;
-  updateCalibStatus(`Recalibrating ${room.name}`, 'warn');
+  updateCalibStatus(t('calib_recalibrating', { room: room.name }), 'warn');
 
   // Parse existing furniture from notes if available
   const match = (room.notes || '').match(/(?:furniture|landmarks?|detected|walkthrough)[:\s]+([^.]+)/i);
@@ -5490,8 +5550,8 @@ function toggleVideoCalibrationWalk() {
     clearInterval(VideoRoomCalib.timer);
     VideoRoomCalib.timer = null;
     const startBtn = $('calib-start-btn');
-    if (startBtn) startBtn.textContent = '🎥 Resume Walkthrough';
-    updateCalibStatus('Walkthrough paused', 'ok');
+    if (startBtn) startBtn.textContent = t('calib_resume');
+    updateCalibStatus(t('calib_paused'), 'ok');
     if (VideoRoomCalib.furniture.size > 0) {
       const saveBtn = $('calib-save-btn');
       if (saveBtn) saveBtn.disabled = false;
@@ -5506,8 +5566,8 @@ function toggleVideoCalibrationWalk() {
     VideoRoomCalib.roomName = (roomInput && roomInput.value.trim()) || 'Reading Room';
     VideoRoomCalib.active = true;
     const startBtn = $('calib-start-btn');
-    if (startBtn) startBtn.textContent = '⏹️ Stop Walkthrough';
-    updateCalibStatus('Walking & scanning room…', 'busy');
+    if (startBtn) startBtn.textContent = t('calib_stop');
+    updateCalibStatus(t('calib_scanning'), 'busy');
 
     const msgEn = `Walkthrough active for ${VideoRoomCalib.roomName}. Walk slowly and show your reading table, dressing table, bed, and shelves.`;
     const msgBn = `${VideoRoomCalib.roomName}-এর ওয়াকথ্রু চালু হয়েছে। ধীরে ধীরে হেঁটে টেবিল ও আসবাবপত্র দেখান।`;
@@ -6153,20 +6213,12 @@ async function togglePrivateMode() {
       clearPrivateSession();
     }
     $('private-btn').setAttribute('aria-pressed', privacyMode);
-    $('private-btn').textContent = 'Privacy mode: ' + (privacyMode ? 'on' : 'off');
-    $('privacy-status').textContent = privacyMode
-      ? 'New memories, room notes and activity are not saved while this is on. Existing account data is untouched.'
-      : 'Notes are saved on this browser; account sync needs permission and a connection. Browser notes are not encrypted.';
+    $('private-btn').textContent = t(privacyMode ? 'privacy_on' : 'privacy_off');
+    $('privacy-status').textContent = t(privacyMode ? 'privacy_status_on' : 'privacy_status_off');
     if (!privacyMode) { await refreshMemory(); await refreshRooms(); }
     announce(privacyMode ? 'Privacy mode is on. Nothing new will be saved until you turn it off.' : 'Privacy mode is off.',
       privacyMode ? 'গোপনীয়তা মোড চালু। বন্ধ না করা পর্যন্ত নতুন কিছু সংরক্ষণ হবে না।' : 'গোপনীয়তা মোড বন্ধ।');
   } finally { privacyTransition = false; $('private-btn').disabled = false; }
-}
-async function signOut() {
-  if (typeof window.ASTHA_CLEAR_ACCOUNT === 'function') window.ASTHA_CLEAR_ACCOUNT({ logout: true });
-  if (typeof stopAllSpeech === 'function') stopAllSpeech();
-  try { await apiSend('POST', '/api/auth/logout', {}); } catch (e) {}
-  location.reload();
 }
 
 /* =====================================================================
@@ -6222,9 +6274,9 @@ async function eyeStart() {
     eye.stream = stream; eye.active = true;
     const v = $('eye-video'); v.srcObject = stream; v.hidden = false; await v.play();
     $('eye-empty').hidden = true; $('eye-heart').hidden = false;
-    $('eye-start').textContent = 'Stop watching my screen';
+    $('eye-start').textContent = t('eye_stop');
     stream.getVideoTracks()[0].addEventListener('ended', () => eyeStop(true));
-    eyePill('Watching', 'ok'); playEarcon('confirm');
+    eyePill(t('eye_watching'), 'ok'); playEarcon('confirm');
     eyeSay('I can see your screen now. I will tell you which app you are in and guide you when you ask.', 'এখন আমি আপনার স্ক্রিন দেখতে পাচ্ছি। কোন অ্যাপে আছেন বলব, আর চাইলে পথ দেখাব।');
     logEvent('Screen eye on');
     ensureOcr().catch(() => {});
@@ -6232,6 +6284,8 @@ async function eyeStart() {
     eye.prevGray = null; clearTimeout(eye.motionTimer); eye.motionTimer = setTimeout(eyeMotionLoop, 1000);
   } catch (e) {
     console.warn('screen share', e);
+    // Playback can fail after the browser granted capture; never leave that stream running.
+    if (eye.active) eyeStop(true);
     eyeSay('Screen sharing was not allowed. Choose “Entire screen” in the dialog and press Share.', 'স্ক্রিন শেয়ারের অনুমতি পাওয়া যায়নি। ডায়ালগে “Entire screen” বেছে Share চাপুন।');
   }
 }
@@ -6240,8 +6294,8 @@ function eyeStop(silent) {
   eye.active = false; clearTimeout(eye.timer); eye.timer = null; clearTimeout(eye.motionTimer); eye.motionTimer = null;
   if (eye.stream) { eye.stream.getTracks().forEach(t => t.stop()); eye.stream = null; }
   const v = $('eye-video'); v.srcObject = null; v.hidden = true; $('eye-empty').hidden = false; $('eye-heart').hidden = true;
-  $('eye-start').textContent = 'Let Astha see my screen';
-  eyePill('Not watching', ''); eye.app = null; eye.dialog = null; eye.target = null;
+  $('eye-start').textContent = t('eye_start');
+  eyePill(t('eye_idle'), ''); eye.app = null; eye.dialog = null; eye.target = null;
   if (!silent) eyeSay('I have stopped watching your screen.', 'আপনার স্ক্রিন দেখা বন্ধ করেছি।');
   logEvent('Screen eye off');
 }
@@ -6522,7 +6576,7 @@ function configuredClientModels() {
 
 function promptGeminiKey() {
   const current = cloud.key || '';
-  const input = window.prompt('Optional personal AI API key (Google Gemini or Gigalogy Maira). The configured ASTHA server is used first:', current);
+  const input = window.prompt(t('gemini_prompt'), current);
   if (input !== null) {
     setGeminiKey(input.trim());
     if ($('gemini-key')) $('gemini-key').value = input.trim();
@@ -7232,9 +7286,9 @@ function toggleOwnerLock() {
 }
 function renderOwner() {
   const s = $('owner-status'); if (!s) return;
-  const bits = [owner.face ? 'Face enrolled' : 'No face yet', owner.voice ? 'voiceprint saved' : 'no voiceprint', owner.lock ? 'lock on' : 'lock off', ownerVerified() ? 'verified ' + fmtTime(new Date(owner.verifiedAt), 'en') : 'not verified'];
+  const bits = [t(owner.face ? 'owner_face_yes' : 'owner_face_no'), t(owner.voice ? 'owner_voice_yes' : 'owner_voice_no'), t(owner.lock ? 'owner_lock_short_on' : 'owner_lock_short_off'), ownerVerified() ? t('owner_verified', { time: fmtTime(new Date(owner.verifiedAt), uiLang) }) : t('owner_unverified')];
   s.textContent = bits.join(' · ');
-  const b = $('owner-lock-btn'); if (b) { b.setAttribute('aria-pressed', owner.lock); b.textContent = owner.lock ? 'Owner lock: on' : 'Owner lock: off'; }
+  const b = $('owner-lock-btn'); if (b) { b.setAttribute('aria-pressed', owner.lock); b.textContent = t(owner.lock ? 'owner_lock_on' : 'owner_lock_off'); }
 }
 // Keep the owner verified quietly while a face is in view (auto-refresh every 20 s).
 async function ownerAutoCheck() {
@@ -7918,7 +7972,7 @@ const DepthEngine = {
     setEngineState('depth', 'loading');
     this.loading = (async () => {
       try {
-        const TF = engine.clip.lib || await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3/dist/transformers.min.js');
+        const TF = engine.clip.lib || await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1/dist/transformers.min.js');
         TF.env.allowLocalModels = false;
         engine.clip.lib = engine.clip.lib || TF;
         const files = {};
@@ -8522,7 +8576,7 @@ async function deleteMemory(uid) {
   $('memory-search')?.focus();
 }
 async function clearMemory() {
-  if (!confirm('Delete all saved object memories and room notes from this phone and your Astha account?')) return;
+  if (!confirm(t('memory_clear_confirm'))) return;
   state.memory = []; state.spatialHome = []; state.log = []; LocalStore.clear();
   renderMemory(); renderSpatialLayout(); renderLog();
   ['/api/memories', '/api/rooms', '/api/log'].forEach(path => LocalStore.queueDelete(path));
@@ -8861,7 +8915,7 @@ const OfflineEar = {
     setEngineState('ear', 'loading');
     this.loading = (async () => {
       try {
-        const TF = engine.clip.lib || await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3/dist/transformers.min.js');
+        const TF = engine.clip.lib || await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3.8.1/dist/transformers.min.js');
         TF.env.allowLocalModels = false; engine.clip.lib = engine.clip.lib || TF;
         const files = {};
         const progress = p => { if (p.status === 'progress' && p.file) files[p.file] = (p.loaded || 0) / (p.total || 1); const vals = Object.values(files); if (vals.length) setProgress('ear', vals.reduce((a, b) => a + b, 0) / Math.max(vals.length, 3)); };
@@ -8993,7 +9047,7 @@ function stopAllSpeech() {
   stopReader(); stopListening(); VoiceEngine.stop();
   if (typeof Seeker !== 'undefined' && Seeker.active) Seeker.stop('user');
   if (OfflineEar.active) OfflineEar.cancel();
-  $('reader-progress').textContent = 'Stopped';
+  $('reader-progress').textContent = t('reader_stopped');
 }
 
 // ---- "Works without internet": download everything once, then never need it ------
@@ -9123,6 +9177,179 @@ function offlineBoot() {
 function showCommandHelp() {
   announce('Tap the microphone, then say: describe my surroundings. What is happening around me? How far is the chair? Read this. Find my charger. Guide me to the door. I am keeping my wallet on the table. Where is my wallet? Is anything moving? Prepare for offline use. Stop.',
     'মাইক্রোফোন চাপুন, তারপর বলুন: চারপাশ বলো। কী হচ্ছে? চেয়ার কত দূরে? এটা পড়ো। আমার চার্জার খোঁজো। দরজার কাছে নিয়ে চলো। আমার মানিব্যাগ টেবিলে রাখছি। আমার মানিব্যাগ কোথায়? কিছু নড়ছে? অফলাইন প্রস্তুত করো। থামো।');
+}
+/* =====================================================================
+   20. Your data: download it, forget face and voice, delete the account
+       Everything the server holds comes from /api/account/export; what
+       exists only on this phone is added to the same file. Deletion is
+       never a single spoken command: the panel has to be confirmed.
+   ===================================================================== */
+const ACCOUNT_DELETE_CONFIRMATION = 'delete_my_account';
+let deleteAccountState = null, deleteAccountBusy = false;
+
+function dataStatus(en, bn) {
+  const el = $('data-status'); if (el) el.textContent = uiLang === 'bn' ? bn : en;
+  announce(en, bn, 'system');
+}
+function readStored(key) { try { return JSON.parse(localStorage.getItem(key) || 'null'); } catch (e) { return null; } }
+
+// Records that exist only in this browser for the current profile.
+function localAccountSnapshot() {
+  const ownerKey = ownerNamespace();
+  return {
+    notes: readStored(LocalStore.KEY),
+    face_template: readStored(ownerKey + '.face'),
+    voice_template: readStored(ownerKey + '.voice'),
+    preferences: readStored('astha.preferences'),
+  };
+}
+
+// A browser saves the file. Inside the installed app there is no download manager, so the
+// text goes to the clipboard, or to the reading box where it can be heard and copied.
+async function deliverExport(text) {
+  const native = Boolean(window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform());
+  if (!native) {
+    try {
+      const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+      const link = document.createElement('a');
+      link.href = url; link.download = 'astha-my-data.json';
+      document.body.appendChild(link); link.click(); link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      return 'file';
+    } catch (e) { /* Fall through to the copies that need no file access. */ }
+  }
+  try { await navigator.clipboard.writeText(text); return 'clipboard'; } catch (e) {}
+  const box = $('reader-text');
+  if (box) { box.value = text; if (typeof readerTextChanged === 'function') readerTextChanged(); return 'reader'; }
+  return null;
+}
+async function exportMyData() {
+  let account = null, reached = !window.ASTHA_ACCOUNT_ID;
+  if (window.ASTHA_ACCOUNT_ID) {
+    try { account = await apiGet('/api/account/export'); reached = true; } catch (e) { account = null; }
+  }
+  const text = JSON.stringify({ format: 'astha-device-export-v1', exported_at: new Date().toISOString(), account, this_phone: localAccountSnapshot() }, null, 2);
+  const how = await deliverExport(text);
+  if (!how) return dataStatus('I could not prepare your data on this device.', 'এই ডিভাইসে আপনার তথ্য প্রস্তুত করা যায়নি।');
+  const where = {
+    file: ['saved as the file astha-my-data.json', 'astha-my-data.json ফাইল হিসেবে সংরক্ষিত হয়েছে'],
+    clipboard: ['copied to the clipboard', 'ক্লিপবোর্ডে কপি করা হয়েছে'],
+    reader: ['placed in the reading box', 'পড়ার বাক্সে রাখা হয়েছে'],
+  }[how];
+  if (reached) dataStatus(`Your data is ${where[0]}.`, `আপনার তথ্য ${where[1]}।`);
+  else dataStatus(`I could not reach your account. Only the data on this phone is ${where[0]}.`, `আপনার অ্যাকাউন্টে পৌঁছানো যায়নি। শুধু এই ফোনের তথ্য ${where[1]}।`);
+  logEvent('Data export');
+}
+
+async function forgetOwnerBiometrics() {
+  const key = refreshOwnerContext();
+  let removed = true;
+  for (const part of ['.face', '.voice', '.lock']) { try { localStorage.removeItem(key + part); } catch (e) { removed = false; } }
+  owner.face = null; owner.voice = null; owner.lock = false; owner.verifiedAt = 0;
+  renderOwner();
+  if (!removed) return dataStatus('Browser storage could not be cleared. Try again in browser settings.', 'ব্রাউজারের সংরক্ষণ মোছা যায়নি। ব্রাউজারের সেটিংস থেকে আবার চেষ্টা করুন।');
+  // An earlier version could keep a face template with the account; clear that copy as well.
+  let accountCleared = !window.ASTHA_ACCOUNT_ID;
+  if (!accountCleared) { try { await apiSend('PUT', '/api/settings', { face_descriptor: null }); accountCleared = true; } catch (e) {} }
+  if (accountCleared) dataStatus('Your face and voice templates are removed from this phone.', 'আপনার মুখ ও কণ্ঠের নমুনা এই ফোন থেকে মুছে ফেলা হয়েছে।');
+  else dataStatus('Your face and voice templates are removed from this phone. I could not reach your account to clear any copy there; try again when connected.', 'আপনার মুখ ও কণ্ঠের নমুনা এই ফোন থেকে মুছে ফেলা হয়েছে। অ্যাকাউন্টে থাকা কপি মুছতে পৌঁছানো যায়নি; সংযোগ পেলে আবার চেষ্টা করুন।');
+}
+
+// Everything this profile keeps in the browser. Unscoped records from older versions have
+// no reliable owner, so a full deletion removes them too. Interface preferences stay.
+function purgeLocalAccountData() {
+  const ownerKey = ownerNamespace();
+  clearTimeout(LocalStore.timer);
+  let ok = true;
+  for (const key of [LocalStore.KEY, ownerKey + '.face', ownerKey + '.voice', ownerKey + '.lock',
+    'astha.memory.v1.encrypted', 'astha.spatial_home', 'astha.gemini']) {
+    try { localStorage.removeItem(key); } catch (e) { ok = false; }
+  }
+  LocalStore.deletions = [];
+  state.memory = []; state.spatialHome = []; state.log = [];
+  owner.face = null; owner.voice = null; owner.lock = false; owner.verifiedAt = 0;
+  if (typeof cloud !== 'undefined') cloud.key = '';
+  renderMemory(); renderSpatialLayout(); renderLog(); renderOwner();
+  return ok;
+}
+
+function closeDeleteAccount() {
+  const panel = $('delete-account-panel'); if (!panel || panel.hidden) return;
+  panel.hidden = true; deleteAccountState = null;
+  $('delete-account-pin').value = '';
+  const button = $('delete-account-btn'); button.setAttribute('aria-expanded', 'false'); button.focus();
+}
+async function openDeleteAccount(keepOpen) {
+  const panel = $('delete-account-panel'); if (!panel) return;
+  if (!panel.hidden) { if (!keepOpen) closeDeleteAccount(); return; }
+  const connected = Boolean(window.ASTHA_ACCOUNT_ID);
+  let registered = false;
+  if (connected) {
+    try { const me = await apiGet('/api/auth/me'); registered = typeof me.phone === 'string' && me.phone.length > 0; }
+    catch (e) { return dataStatus('I could not reach your account, so nothing was deleted. Check the connection and try again.', 'আপনার অ্যাকাউন্টে পৌঁছানো যায়নি, তাই কিছুই মোছা হয়নি। সংযোগ দেখে আবার চেষ্টা করুন।'); }
+  }
+  deleteAccountState = { connected, registered };
+  $('delete-account-pin-field').hidden = !registered; $('delete-account-pin').value = '';
+  const note = $('delete-account-note');
+  note.hidden = registered; note.textContent = registered ? '' : t(connected ? 'data_delete_guest' : 'data_delete_local');
+  panel.hidden = false; $('delete-account-btn').setAttribute('aria-expanded', 'true');
+  (registered ? $('delete-account-pin') : $('delete-account-confirm')).focus();
+  announce(I18N.en.data_delete_warn, I18N.bn.data_delete_warn, 'system');
+}
+async function confirmDeleteAccount() {
+  const pending = deleteAccountState;
+  if (!pending || deleteAccountBusy) return;
+  const passcode = $('delete-account-pin').value.trim();
+  if (pending.registered && passcode.length < 4) {
+    $('delete-account-pin').focus();
+    return dataStatus('Enter your passcode to confirm.', 'নিশ্চিত করতে আপনার পাসকোড দিন।');
+  }
+  deleteAccountBusy = true; $('delete-account-confirm').disabled = true;
+  try {
+    if (pending.connected) {
+      let reply;
+      try {
+        reply = await fetch(apiUrl('/api/account/delete'), {
+          method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(pending.registered ? { confirm: ACCOUNT_DELETE_CONFIRMATION, passcode } : { confirm: ACCOUNT_DELETE_CONFIRMATION }),
+          signal: deadlineSignal(10000),
+        });
+      } catch (e) {
+        return dataStatus('I could not reach your account, so nothing was deleted. Check the connection and try again.', 'আপনার অ্যাকাউন্টে পৌঁছানো যায়নি, তাই কিছুই মোছা হয়নি। সংযোগ দেখে আবার চেষ্টা করুন।');
+      }
+      if (reply.status === 403) {
+        $('delete-account-pin').value = ''; $('delete-account-pin').focus();
+        return dataStatus('That passcode is not right. Nothing was deleted.', 'পাসকোড ঠিক নয়। কিছুই মোছা হয়নি।');
+      }
+      if (reply.status === 429) return dataStatus('Too many attempts. Nothing was deleted. Please try again later.', 'অনেকবার চেষ্টা করা হয়েছে। কিছুই মোছা হয়নি। পরে আবার চেষ্টা করুন।');
+      if (!reply.ok) return dataStatus('Your account could not be deleted. Nothing was removed. Please try again.', 'অ্যাকাউন্ট মোছা যায়নি। কিছুই সরানো হয়নি। আবার চেষ্টা করুন।');
+    }
+    const cleared = purgeLocalAccountData();
+    $('delete-account-panel').hidden = true; deleteAccountState = null;
+    if (pending.connected) {
+      dataStatus(cleared ? 'Your account and everything saved with it are deleted.' : 'Your account is deleted. Some copies on this phone could not be cleared; clear this site in browser settings.',
+        cleared ? 'আপনার অ্যাকাউন্ট ও এর সঙ্গে সংরক্ষিত সবকিছু মুছে ফেলা হয়েছে।' : 'আপনার অ্যাকাউন্ট মুছে ফেলা হয়েছে। এই ফোনের কিছু কপি মোছা যায়নি; ব্রাউজারের সেটিংস থেকে এই সাইটের তথ্য মুছুন।');
+      // The session no longer exists. Leave time for the confirmation to be heard, then restart clean.
+      if (typeof window.ASTHA_CLEAR_ACCOUNT === 'function') window.ASTHA_CLEAR_ACCOUNT({ logout: true });
+      setTimeout(() => location.reload(), 3500);
+    } else {
+      dataStatus(cleared ? 'The notes and templates saved on this phone are deleted.' : 'Browser storage could not be cleared. Try again in browser settings.',
+        cleared ? 'এই ফোনে সংরক্ষিত নোট ও নমুনা মুছে ফেলা হয়েছে।' : 'ব্রাউজারের সংরক্ষণ মোছা যায়নি। ব্রাউজারের সেটিংস থেকে আবার চেষ্টা করুন।');
+    }
+  } finally { deleteAccountBusy = false; $('delete-account-confirm').disabled = false; }
+}
+
+// A guest account has no phone number or known passcode, so signing out would strand its
+// records where nobody can reach them. Guests are pointed to the two real choices instead.
+async function signOut() {
+  if (window.ASTHA_ACCOUNT_ID && window.ASTHA_ACCOUNT_REGISTERED === false) {
+    return dataStatus('You are using a guest account. Create an account to keep your notes, or choose Delete my account to remove them.',
+      'আপনি অতিথি অ্যাকাউন্ট ব্যবহার করছেন। নোট রাখতে অ্যাকাউন্ট তৈরি করুন, অথবা মুছে ফেলতে “আমার অ্যাকাউন্ট মুছুন” বেছে নিন।');
+  }
+  if (typeof window.ASTHA_CLEAR_ACCOUNT === 'function') window.ASTHA_CLEAR_ACCOUNT({ logout: true });
+  if (typeof stopAllSpeech === 'function') stopAllSpeech();
+  try { await apiSend('POST', '/api/auth/logout', {}); } catch (e) {}
+  location.reload();
 }
 
 window.__asthaBoot = function boot() {

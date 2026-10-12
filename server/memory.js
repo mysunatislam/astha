@@ -4,12 +4,10 @@ import { Router } from 'express';
 import { nanoid } from 'nanoid';
 import { run, all, saveRoom } from './db.js';
 import { asyncRoute } from './async-route.js';
+import { applyRetention } from './retention.js';
+import { isBody, isText } from './validate.js';
 
 export const memoryRouter = Router();
-
-const isBody = value => value && typeof value === 'object' && !Array.isArray(value);
-const isText = (value, max, required = true) => typeof value === 'string' &&
-  value.length <= max && (!required || value.trim().length > 0);
 
 memoryRouter.get('/memories', asyncRoute(async (req, res) => {
   if (req.query.q !== undefined && !isText(req.query.q, 240, false)) return res.status(400).json({ error: 'invalid_query' });
@@ -29,6 +27,7 @@ memoryRouter.post('/memories', asyncRoute(async (req, res) => {
   const id = nanoid();
   await run('INSERT INTO memories (id, user_id, item, location, source, score, created_at) VALUES (?,?,?,?,?,?,?)',
     [id, req.user.id, String(item).slice(0, 120), String(location).slice(0, 240), source || 'Your note', score ?? null, Date.now()]);
+  await applyRetention('memories', req.user.id);
   res.json({ id });
 }));
 memoryRouter.delete('/memories/:id', asyncRoute(async (req, res) => {
@@ -48,6 +47,7 @@ memoryRouter.post('/rooms', asyncRoute(async (req, res) => {
   if (!name || !notes) return res.status(400).json({ error: 'name_and_notes_required' });
   if (!isBody(req.body) || !isText(name, 80) || !isText(notes, 2000)) return res.status(400).json({ error: 'invalid_room_input' });
   const id = await saveRoom({ userId: req.user.id, name: String(name).slice(0, 80), notes: String(notes).slice(0, 2000) });
+  await applyRetention('rooms', req.user.id);
   res.json({ id });
 }));
 memoryRouter.delete('/rooms/:id', asyncRoute(async (req, res) => {
@@ -63,8 +63,11 @@ memoryRouter.delete('/rooms', asyncRoute(async (req, res) => {
 memoryRouter.get('/log', asyncRoute(async (req, res) => {
   res.json({ events: await all('SELECT * FROM events WHERE user_id = ? ORDER BY created_at DESC LIMIT 30', [req.user.id]) });
 }));
+// Agent task history holds the same spoken goals as the activity log, so clearing the log
+// clears both; a failure leaves the phone's queued deletion in place for a retry.
 memoryRouter.delete('/log', asyncRoute(async (req, res) => {
   await run('DELETE FROM events WHERE user_id = ?', [req.user.id]);
+  await run('DELETE FROM agent_tasks WHERE user_id = ?', [req.user.id]);
   res.json({ ok: true });
 }));
 
@@ -73,6 +76,7 @@ memoryRouter.post('/log', asyncRoute(async (req, res) => {
   if (!text) return res.status(400).json({ error: 'text_required' });
   if (!isBody(req.body) || !isText(text, 300) || (kind !== undefined && !isText(kind, 64, false))) return res.status(400).json({ error: 'invalid_log_input' });
   await run('INSERT INTO events (id, user_id, kind, text, created_at) VALUES (?,?,?,?,?)', [nanoid(), req.user.id, kind || 'note', String(text).slice(0, 300), Date.now()]);
+  await applyRetention('events', req.user.id);
   res.json({ ok: true });
 }));
 

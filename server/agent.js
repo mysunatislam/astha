@@ -5,6 +5,8 @@ import { callCloudAI, hasCloudAI } from './gemini.js';
 import { searchRAG, formatRagContextForPrompt, expandQueryTerms } from './rag.js';
 import { run } from './db.js';
 import { asyncRoute } from './async-route.js';
+import { applyRetention } from './retention.js';
+import { isBody, isText, isFrame, jsonWithin, clipText } from './validate.js';
 
 export const agentRouter = Router();
 
@@ -91,6 +93,58 @@ export const AGENT_TOOLS = [
     }
   }
 ];
+
+// ---- Bounds for client input and provider output ----
+const TOOL_NAMES = new Set(AGENT_TOOLS.map(tool => tool.name));
+const CORRECTION_TYPES = new Set(['guidance', 'crop', 'reorient', 'retry', 'none']);
+const CORRECTION_DIRECTIONS = new Set(['pan_left', 'pan_right', 'tilt_down', 'tilt_up', 'move_closer', 'step_back', 'hold_steady', 'none']);
+
+// A generated plan is untrusted text. Keep only bounded steps that name a declared tool;
+// anything else returns null so the caller uses the heuristic plan instead of storing it.
+export function sanitizePlan(plan, goal) {
+  if (!isBody(plan) || !Array.isArray(plan.steps) || !plan.steps.length || plan.steps.length > 6) return null;
+  const steps = [];
+  for (const step of plan.steps) {
+    if (!isBody(step) || !TOOL_NAMES.has(step.tool)) return null;
+    steps.push({
+      id: isText(step.id, 64) ? step.id : 'step_' + (steps.length + 1),
+      tool: step.tool,
+      args: isBody(step.args) && jsonWithin(step.args, 2048) ? step.args : {},
+      purpose: clipText(step.purpose, 300),
+      acceptance_criteria: clipText(step.acceptance_criteria, 300),
+    });
+  }
+  return { goal, summary: clipText(plan.summary, 500), steps };
+}
+
+export function sanitizeEvaluation(evaluation) {
+  if (!isBody(evaluation) || typeof evaluation.verified !== 'boolean') return null;
+  const action = isBody(evaluation.corrective_action) ? evaluation.corrective_action : null;
+  const result = {
+    verified: evaluation.verified,
+    score: Number.isFinite(evaluation.score) && evaluation.score >= 0 && evaluation.score <= 1 ? evaluation.score : 0,
+    evaluation_reason: clipText(evaluation.evaluation_reason, 500),
+    needs_correction: evaluation.needs_correction === true,
+  };
+  if (action) result.corrective_action = {
+    type: CORRECTION_TYPES.has(action.type) ? action.type : 'none',
+    direction: CORRECTION_DIRECTIONS.has(action.direction) ? action.direction : 'none',
+    instruction_en: clipText(action.instruction_en, 300),
+    instruction_bn: clipText(action.instruction_bn, 300),
+  };
+  return result;
+}
+
+// A spoken answer needs a real English sentence; Bangla may be absent but never mistyped.
+export function sanitizeSpokenResponse(response) {
+  if (!isBody(response) || !isText(response.en, 2000) ||
+      (response.bn !== undefined && !isText(response.bn, 2000, false))) return null;
+  return { en: response.en, bn: response.bn || '' };
+}
+
+function validAgentRequest(body, goal, image) {
+  return isBody(body) && isText(goal, 500) && isFrame(image);
+}
 
 // ---- Prompt Templates for Planner and Evaluator ----
 const PLANNER_PROMPT = (goal, ragContext, visualSummary) => `You are the Autonomous Task Planner for Astha, an AI companion for a blind user in Bangladesh.
@@ -270,7 +324,7 @@ export function evaluateHeuristicStep(step, toolOutput) {
   }
 
   if (step.tool === 'tool_ocr_read') {
-    const textLen = (toolOutput.text || '').trim().length;
+    const textLen = typeof toolOutput.text === 'string' ? toolOutput.text.trim().length : 0;
     if (textLen >= 3) {
       return { verified: true, score: 0.9, evaluation_reason: 'Readable text acquired', needs_correction: false };
     }
@@ -303,6 +357,7 @@ export function evaluateHeuristicStep(step, toolOutput) {
 agentRouter.post('/agent/plan', asyncRoute(async (req, res) => {
   const { goal, image } = req.body || {};
   if (!goal) return res.status(400).json({ error: 'goal_required' });
+  if (!validAgentRequest(req.body, goal, image)) return res.status(400).json({ error: 'invalid_agent_input' });
 
   try {
     const ragData = await searchRAG(req.user.id, goal, { limit: 5 });
@@ -312,13 +367,13 @@ agentRouter.post('/agent/plan', asyncRoute(async (req, res) => {
     if (hasCloudAI()) {
       try {
         const prompt = PLANNER_PROMPT(goal, ragContext, image ? 'Camera frame provided' : 'No frame');
-        plan = await callCloudAI({ customPrompt: prompt, imageBase64: image, userId: req.user?.id });
+        plan = sanitizePlan(await callCloudAI({ customPrompt: prompt, imageBase64: image, userId: req.user?.id }), goal);
       } catch (err) {
         console.warn('Planner fallback to heuristic');
       }
     }
 
-    if (!plan || !plan.steps || !plan.steps.length) {
+    if (!plan) {
       plan = generateHeuristicPlan(goal, ragData);
     }
 
@@ -328,6 +383,7 @@ agentRouter.post('/agent/plan', asyncRoute(async (req, res) => {
       'INSERT INTO agent_tasks (id, user_id, goal, plan_json, status, created_at, updated_at) VALUES (?,?,?,?,?,?,?)',
       [taskId, req.user.id, goal, JSON.stringify(plan), 'planned', now, now]
     );
+    await applyRetention('agent_tasks', req.user.id);
 
     res.json({ ok: true, taskId, plan, ragContext });
   } catch (err) {
@@ -340,19 +396,24 @@ agentRouter.post('/agent/plan', asyncRoute(async (req, res) => {
 agentRouter.post('/agent/evaluate', asyncRoute(async (req, res) => {
   const { step, toolOutput, goal } = req.body || {};
   if (!step || !toolOutput) return res.status(400).json({ error: 'step_and_toolOutput_required' });
+  if (!isBody(req.body) || !isBody(step) || !isText(step.tool, 64) || !jsonWithin(step, 4096) ||
+      !isBody(toolOutput) || !jsonWithin(toolOutput, 16384) ||
+      (goal !== undefined && !isText(goal, 500))) {
+    return res.status(400).json({ error: 'invalid_agent_input' });
+  }
 
   try {
     let evaluation = null;
     if (hasCloudAI()) {
       try {
         const prompt = EVALUATOR_PROMPT(step, toolOutput, goal || 'General task');
-        evaluation = await callCloudAI({ customPrompt: prompt, userId: req.user?.id });
+        evaluation = sanitizeEvaluation(await callCloudAI({ customPrompt: prompt, userId: req.user?.id }));
       } catch (err) {
         console.warn('Evaluator fallback to heuristic');
       }
     }
 
-    if (!evaluation || evaluation.verified === undefined) {
+    if (!evaluation) {
       evaluation = evaluateHeuristicStep(step, toolOutput);
     }
     // Generated text cannot override missing target evidence or an unsupported tool.
@@ -370,6 +431,10 @@ agentRouter.post('/agent/evaluate', asyncRoute(async (req, res) => {
 agentRouter.post('/agent/run', asyncRoute(async (req, res) => {
   const { goal, image, observations = [] } = req.body || {};
   if (!goal) return res.status(400).json({ error: 'goal_required' });
+  if (!validAgentRequest(req.body, goal, image) || !Array.isArray(observations) ||
+      observations.length > 20 || !jsonWithin(observations, 8192)) {
+    return res.status(400).json({ error: 'invalid_agent_input' });
+  }
 
   try {
     // 1. RAG retrieval
@@ -380,16 +445,16 @@ agentRouter.post('/agent/run', asyncRoute(async (req, res) => {
     let plan = null;
     if (hasCloudAI()) {
       try {
-        plan = await callCloudAI({
+        plan = sanitizePlan(await callCloudAI({
           customPrompt: PLANNER_PROMPT(goal, ragContext, image ? 'Camera frame provided' : 'No frame'),
           imageBase64: image,
           userId: req.user?.id
-        });
+        }), goal);
       } catch (e) {
         console.warn('Planner fallback to heuristic');
       }
     }
-    if (!plan || !plan.steps) {
+    if (!plan) {
       plan = generateHeuristicPlan(goal, ragData);
     }
 
@@ -404,17 +469,17 @@ agentRouter.post('/agent/run', asyncRoute(async (req, res) => {
 
     if (hasCloudAI()) {
       try {
-        response = await callCloudAI({
+        response = sanitizeSpokenResponse(await callCloudAI({
           customPrompt: SYNTHESIZER_PROMPT(goal, plan.steps, combinedFindings),
           imageBase64: image,
           userId: req.user?.id
-        });
+        }));
       } catch (e) {
         console.warn('Synthesizer fallback');
       }
     }
 
-    if (!response || !response.en) {
+    if (!response) {
       // Heuristic synthesis
       const topMemory = ragData.memories[0];
       if (topMemory) {
@@ -442,6 +507,7 @@ agentRouter.post('/agent/run', asyncRoute(async (req, res) => {
       'INSERT INTO agent_tasks (id, user_id, goal, plan_json, status, result_json, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)',
       [taskId, req.user.id, goal, JSON.stringify(plan), status, JSON.stringify(response), now, now]
     );
+    await applyRetention('agent_tasks', req.user.id);
 
     res.json({
       ok: true,
