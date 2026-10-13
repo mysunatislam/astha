@@ -870,7 +870,7 @@
         <button class="btn small accent" id="load-models-btn" onclick="loadAllModels()" data-i18n="engine_load">Load models</button>
       </div>
       <div class="engine-row">
-        <div><div class="name" data-i18n="engine_coco">Object detector</div><div class="sub" id="engine-coco-sub" data-i18n="engine_coco_sub">YOLO26n (STAL) · 80 classes · WebGPU</div><div class="progress" hidden><i id="prog-coco"></i></div></div>
+        <div><div class="name" data-i18n="engine_coco">Object detector</div><div class="sub" id="engine-coco-sub" data-i18n="engine_coco_sub">Detector not initialized</div><div class="progress" hidden><i id="prog-coco"></i></div></div>
         <span class="pill" id="state-coco" data-i18n="state_idle">Not loaded</span>
       </div>
       <div class="engine-row">
@@ -1036,7 +1036,8 @@ const I18N = {
     mic_hint: 'Ask in Bangla or English: “What is in front of me?”, “Read this”, “Where is my charger?”',
     auto_narrate: 'Narrate new objects automatically while the camera is on',
     engine_title: 'On-device AI engine', engine_load: 'Load models',
-    engine_coco: 'Object detector', engine_coco_sub: 'YOLO26n (STAL) · 80 classes · WebGPU',
+    engine_coco: 'Object detector', engine_coco_sub: 'Detector not initialized',
+    engine_coco_yolo: 'YOLO26n (STAL) · 80 classes', engine_coco_fallback: 'COCO-SSD fallback · 80 classes',
     engine_clip: 'Open-vocabulary recognizer', engine_clip_sub: 'CLIP ViT-B/32 · {n} everyday objects · zero-shot',
     engine_ocr: 'Text reader', engine_ocr_sub: 'Tesseract OCR · English + Bangla',
     state_idle: 'Not loaded', state_loading: 'Loading…', state_ready: 'Ready', state_error: 'Failed',
@@ -1127,7 +1128,8 @@ const I18N = {
     mic_hint: 'বাংলা বা ইংরেজিতে জিজ্ঞাসা করুন: “সামনে কী আছে?”, “এটা পড়ো”, “আমার চার্জার কোথায়?”',
     auto_narrate: 'ক্যামেরা চালু থাকলে নতুন বস্তু স্বয়ংক্রিয়ভাবে বলুন',
     engine_title: 'অন-ডিভাইস এআই ইঞ্জিন', engine_load: 'মডেল লোড করুন',
-    engine_coco: 'বস্তু শনাক্তকারী', engine_coco_sub: 'YOLO26n (STAL) · ৮০ শ্রেণি · WebGPU',
+    engine_coco: 'বস্তু শনাক্তকারী', engine_coco_sub: 'শনাক্তকারী এখনো প্রস্তুত নয়',
+    engine_coco_yolo: 'YOLO26n (STAL) · ৮০ শ্রেণি', engine_coco_fallback: 'COCO-SSD বিকল্প শনাক্তকারী · ৮০ শ্রেণি',
     engine_clip: 'ওপেন-ভোকাবুলারি শনাক্তকারী', engine_clip_sub: 'CLIP ViT-B/32 · {n}টি দৈনন্দিন বস্তু · জিরো-শট',
     engine_ocr: 'লেখা পাঠক', engine_ocr_sub: 'Tesseract OCR · ইংরেজি + বাংলা',
     state_idle: 'লোড হয়নি', state_loading: 'লোড হচ্ছে…', state_ready: 'প্রস্তুত', state_error: 'ব্যর্থ',
@@ -1623,7 +1625,7 @@ function applyLanguage() {
   if ($('voice-lang-en')) $('voice-lang-en').setAttribute('aria-pressed', voiceLang === 'en');
   $('voice-toggle-label').textContent = t(state.audio ? 'voice_on' : 'voice_off');
   $('cam-btn-label').textContent = t(state.source === 'camera' ? 'src_camera_stop' : 'src_camera');
-  $('shield-desc').textContent = t(state.shield ? 'shield_on' : 'shield_off');
+  renderShieldState();
   $('mic-label').textContent = t(state.listening ? 'mic_listening' : 'mic_idle');
   $('mic').setAttribute('aria-label', t('mic_idle'));
   $('engine-clip-sub').textContent = t('engine_clip_sub', { n: VOCAB.length - 1 });
@@ -1663,6 +1665,15 @@ function setEngineState(key, status) {
   const pill = $('state-' + key);
   pill.textContent = t('state_' + status);
   pill.className = 'pill ' + ({ idle: '', loading: 'warn', ready: 'ok', error: 'danger' }[status] || '');
+  if (key === 'coco') renderDetectorDescription();
+}
+function renderDetectorDescription() {
+  const description = $('engine-coco-sub');
+  if (!description) return;
+  const ready = engine.coco.status === 'ready' && engine.coco.model;
+  const key = ready && engine.coco.type === 'yolo26n' ? 'engine_coco_yolo' :
+    ready && engine.coco.type === 'coco-ssd' ? 'engine_coco_fallback' : 'engine_coco_sub';
+  description.textContent = t(key);
 }
 function setProgress(key, frac) {
   const wrap = $('prog-' + key).parentElement;
@@ -1996,8 +2007,7 @@ function loadCoco() {
         engine.coco.model = yolo;
         engine.coco.type = 'yolo26n';
         setEngineState('coco', 'ready');
-        if ($('engine-coco-sub')) $('engine-coco-sub').textContent = 'YOLO26n (STAL) · 80 classes · ' + yolo.provider.toUpperCase();
-        logEvent('Vision detector: YOLO26n (' + yolo.provider.toUpperCase() + ')');
+        logEvent('Vision detector: YOLO26n');
         return;
       } catch (yoloErr) {
         console.warn('[Astha Vision] YOLO26n init failed, falling back to COCO-SSD:', yoloErr);
@@ -2014,7 +2024,6 @@ function loadCoco() {
       engine.coco.model = model;
       engine.coco.type = 'coco-ssd';
       setEngineState('coco', 'ready');
-      if ($('engine-coco-sub')) $('engine-coco-sub').textContent = 'COCO-SSD · 80 classes · WebGL';
       logEvent('Vision detector: COCO-SSD (Fallback)');
     } catch (e) {
       console.error('All vision detectors failed', e);
@@ -2757,11 +2766,14 @@ function readStillOnce() {
 
 
 
-function toggleShield() {
-  state.shield = !state.shield;
+function renderShieldState() {
   $('shield-btn').setAttribute('aria-pressed', state.shield);
   $('shield-btn').classList.toggle('on', state.shield);
   $('shield-desc').textContent = t(state.shield ? 'shield_on' : 'shield_off');
+}
+function toggleShield() {
+  state.shield = !state.shield;
+  renderShieldState();
   state.hazardCooldown.clear();
   playEarcon(state.shield ? 'confirm' : 'click');
   const msgEn = t(state.shield ? 'shield_on_msg' : 'shield_off_msg');
