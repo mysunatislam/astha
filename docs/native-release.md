@@ -108,6 +108,10 @@ supplies both through a small local Capacitor plugin, `AsthaNative`
 | Device voice | `TextToSpeech` | none | Fallback when the server voice is unreachable, and the immediate voice for hazard alerts. Reports honestly when the phone has no voice for the language; many phones have no Bangla voice until one is installed. |
 | Speech recognition | `SpeechRecognizer`, one request at a time | `RECORD_AUDIO`, asked at first use | The recognizer may send audio to its provider (usually Google). It is therefore blocked in Privacy mode, like the browser recognizer. Hands-free wake-word listening is not implemented. |
 | Reading other apps | `AccessibilityService` | The user enables it in Android settings | Described below. |
+| Opening an app, sharing text | `getLaunchIntentForPackage`, `ACTION_SEND` through the system chooser | none | Each request is confirmed aloud first. The app is found by its launcher name, on the phone; the list of installed apps is not sent anywhere. Messages go to Android's share menu, where the user picks the app and the person and presses send. There is no SMS, call or contacts permission, and a test fails if `ACTION_SENDTO`, `SmsManager` or a fixed target package appears. |
+
+The recognizer is stopped whenever the app leaves the foreground: ASTHA does not listen
+in the background.
 
 ### Reading other apps: what it can and cannot do
 

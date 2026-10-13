@@ -84,6 +84,14 @@ speech, short speech, text only), devices used, which continuous modes appear on
 text size, colours, speaking speed and vibration. Each question is read aloud when focus
 enters it, and a button reads the instructions.
 
+**Answering by voice.** "Start guided setup" (or the **Answer by voice** button) asks the
+five main questions one at a time and listens after each: vision, language, feedback
+style, and whether surroundings and whiteboard modes should be on Home. Answers can be a
+number or a word, in Bangla or English. "Repeat", "back", "skip" and "cancel" work at any
+point, and nothing is saved until the last answer. While the guide is running every
+request is treated as an answer, so saying "one" cannot trigger another feature. Devices
+and display settings stay in the form.
+
 Answers apply immediately through the existing controls, are saved on the phone, and sync
 to the account through `/api/preferences` (see [data handling](data-handling.md)). They are
 removed from the phone on sign-out. This is a statement of preference, not an assessment
@@ -101,10 +109,35 @@ of sight, and it does not change what ASTHA is able to detect.
 | Reading other apps on Android | Simulated | Same. Opt-in twice (ASTHA, then Android). Read-only; cannot tap, type or send. |
 | Six-key Braille controller | Simulated | `test_braille.mjs`. Keyboard practice works in a browser. No controller exists; the Bluetooth transport has only met a stand-in. Android needs a native Bluetooth transport because the WebView has no Web Bluetooth. |
 | Distance sensor | Interface only | `tools/sensors.js`. Nothing reports to it and no spoken distance uses it yet. |
-| Hands-free wake word in the Android app | Not available | The WebView has no continuous recognizer. The microphone button works one request at a time. |
-| Sending messages or operating other apps | Not built | Would need confirmation before every consequential action. Not started. |
+| Hands-free wake word in the Android app | Not available | The WebView has no continuous recognizer. Where that is the case the hands-free button is hidden and asking for it is explained, instead of failing silently. The microphone button works one request at a time. |
+| Opening an app, preparing a message (Android) | Simulated | "Open the WhatsApp app" finds the app by its launcher name and asks before opening. "Write a message saying …" asks, then opens Android's share menu with the text; the user chooses the app and the person and presses send. ASTHA cannot address or send anything. |
+| Operating other apps (tapping, typing, sending) | Not built | Deliberately out of scope for now; the accessibility service has no such powers. |
 | Bangla Braille | Not built | Needs a table reviewed by a Braille reader. |
 | Offline use | Unchanged from before | First-use model downloads, cache eviction and device Bangla voices still need device testing. |
+
+## Checks run in a desktop browser
+
+These were run against the built page, in both languages, on every page with all panels
+open. They are useful, and they are not a substitute for a screen reader on a phone.
+
+- 189 buttons, links, menus and fields: every one has an accessible name; no field is
+  labelled only by its placeholder; no duplicate ids; no broken ARIA references; heading
+  levels do not skip; no positive `tabindex`.
+- About 390 pieces of visible text: the lowest contrast found is 5.95:1.
+- At 375 px wide with extra-large text, no page scrolls sideways.
+- Two defects were found and fixed this way: the voice menu grew wider than the phone
+  once long voice names loaded, and placeholder text fell to about 3.9:1 on tinted fields.
+
+## A Bangla defect worth knowing about
+
+JavaScript's `\b` word boundary only understands ASCII letters, so a pattern such as
+`\b(stop|থামো)\b` never matches the Bangla word. Fifteen patterns were affected, nine of
+them older than this branch. In practice Bangla "হ্যাঁ" and "না" did not answer a yes/no
+question, and several Bangla commands fell through to slower handlers. They now use a
+boundary that understands both scripts, and a test over the built page fails if the
+pattern returns. One consequence to check on a device: the general fallback that hands
+multi-step requests to the planning agent now also triggers on its Bangla words (এবং, আর,
+দেখো), as it always did on "and", "find" and "where".
 
 ## Device acceptance checklist (all pending)
 
@@ -118,6 +151,9 @@ Record the commit, the APK hash, the phone model, Android and WebView versions.
 - [ ] Say "stop" during speech, during a pending answer and during an alert.
 - [ ] Switch camera source during a pending answer: no old answer is spoken.
 - [ ] Complete Personal setup with TalkBack on, with the screen off, and with a Braille display if available.
+- [ ] Say "start guided setup" and answer all five questions by voice in Bangla, then again in English.
+- [ ] Answer a yes/no question with "হ্যাঁ" and with "না".
+- [ ] "Open the WhatsApp app" and "write a message saying …": both ask first; declining does nothing; ASTHA never presses send.
 - [ ] Sign in on a second phone: the setup follows the account. Sign out: it is gone from the first.
 - [ ] Devices → let ASTHA read other apps: both consent steps appear; "what is on my screen" reads; a password field is skipped; turning it off in ASTHA disables it in Android settings.
 - [ ] The Pi camera checklist in [pi-camera.md](pi-camera.md).
