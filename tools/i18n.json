@@ -392,18 +392,6 @@
    "Delete permanently",
    "স্থায়ীভাবে মুছুন"
   ],
-  "gemini_label": [
-   "Personal Gemini key (optional backup)",
-   "ব্যক্তিগত Gemini কী (ঐচ্ছিক বিকল্প)"
-  ],
-  "gemini_placeholder": [
-   "Leave blank -- the Astha server already provides this",
-   "খালি রাখুন -- আস্থার সার্ভার এটি দিয়ে থাকে"
-  ],
-  "cloud_help": [
-   "Cloud features require a configured server or your own provider key and your consent. Descriptions can be wrong; verify before acting. A personal key is kept on this browser and should only be used on a device you trust.",
-   "ক্লাউড সুবিধার জন্য কনফিগার করা সার্ভার অথবা আপনার নিজের কী এবং আপনার সম্মতি প্রয়োজন। বর্ণনা ভুল হতে পারে; কিছু করার আগে যাচাই করুন। ব্যক্তিগত কী এই ব্রাউজারে রাখা হয়, তাই শুধু বিশ্বস্ত ডিভাইসে ব্যবহার করুন।"
-  ],
   "rate_label": [
    "Speaking speed",
    "কথা বলার গতি"
@@ -632,10 +620,6 @@
    "Delete all saved object memories and room notes from this phone and your Astha account?",
    "এই ফোন ও আপনার আস্থা অ্যাকাউন্ট থেকে সংরক্ষিত সব জিনিসের স্মৃতি ও ঘরের নোট মুছে ফেলবেন?"
   ],
-  "gemini_prompt": [
-   "Optional personal AI API key (Google Gemini or Gigalogy Maira). The configured ASTHA server is used first:",
-   "ঐচ্ছিক ব্যক্তিগত এআই এপিআই কী (Google Gemini বা Gigalogy Maira)। আগে কনফিগার করা আস্থা সার্ভার ব্যবহার হয়:"
-  ],
   "data_delete_guest": [
    "This is a guest account, so no passcode is needed.",
    "এটি অতিথি অ্যাকাউন্ট, তাই পাসকোড লাগবে না।"
@@ -675,6 +659,502 @@
   "owner_unverified": [
    "not verified",
    "যাচাই হয়নি"
+  ],
+  "theme_calm": [
+   "Mulberry & Apricot",
+   "মালবেরি ও অ্যাপ্রিকট"
+  ],
+  "ui_display_voice": [
+   "Display & voice",
+   "পর্দা ও কণ্ঠ"
+  ],
+  "ui_more_assistance": [
+   "More assistance",
+   "আরও সহায়তা"
+  ],
+  "ui_try_demo": [
+   "Try a demo",
+   "নমুনা দেখুন"
+  ],
+  "ui_preferences_privacy": [
+   "Preferences & privacy",
+   "পছন্দ ও গোপনীয়তা"
+  ],
+  "ui_activity": [
+   "Activity & diagnostics",
+   "কার্যকলাপ ও পরীক্ষা"
+  ],
+  "ui_hardware_testing": [
+   "Hardware testing",
+   "হার্ডওয়্যার পরীক্ষা"
+  ],
+  "ui_welcome_title": [
+   "Hello, I’m Astha",
+   "হ্যালো, আমি আস্থা"
+  ],
+  "page_home": [
+   "Home",
+   "হোম"
+  ],
+  "page_assessment": [
+   "Personal setup",
+   "নিজের পছন্দ"
+  ],
+  "assessment_intro": [
+   "Tell Astha how you would like to be helped. These are preferences, not a medical test, and you can change them at any time.",
+   "আস্থা কীভাবে সাহায্য করবে তা জানান। এগুলো আপনার পছন্দ, চিকিৎসা পরীক্ষা নয়; যেকোনো সময় বদলাতে পারবেন।"
+  ],
+  "assessment_read": [
+   "Read the instructions aloud",
+   "নির্দেশনা পড়ে শোনাও"
+  ],
+  "assessment_vision": [
+   "How much do you rely on vision?",
+   "আপনি দৃষ্টির ওপর কতটা নির্ভর করেন?"
+  ],
+  "vision_none": [
+   "I am blind and use speech or touch",
+   "আমি দৃষ্টিহীন; কণ্ঠ বা স্পর্শ ব্যবহার করি"
+  ],
+  "vision_low": [
+   "I have low vision and prefer larger text",
+   "আমার স্বল্পদৃষ্টি; বড় লেখা চাই"
+  ],
+  "vision_unspecified": [
+   "Prefer not to say",
+   "জানাতে চাই না"
+  ],
+  "assessment_permissions": [
+   "Camera, microphone and online processing each ask for permission when first used. Stop and Privacy mode are always available.",
+   "ক্যামেরা, মাইক্রোফোন ও অনলাইন প্রসেসিং প্রথমবার ব্যবহারের সময় আলাদা অনুমতি চাইবে। থামানো ও গোপনীয়তা মোড সবসময় থাকবে।"
+  ],
+  "assessment_save": [
+   "Save and return home",
+   "রেখে হোমে ফিরুন"
+  ],
+  "devices_camera": [
+   "A clip-on camera or smart glasses connect over your own Wi-Fi with a private pairing code. Images go from the camera to this phone only.",
+   "ক্লিপ ক্যামেরা বা স্মার্ট চশমা আপনার নিজের ওয়াই-ফাইয়ে ব্যক্তিগত পেয়ারিং কোড দিয়ে যুক্ত হয়। ছবি ক্যামেরা থেকে শুধু এই ফোনে আসে।"
+  ],
+  "braille_title": [
+   "Six-key Braille controller",
+   "ছয় চাবির ব্রেইল কন্ট্রোলার"
+  ],
+  "braille_info": [
+   "The wireless controller is not built yet, so nothing can be paired. You can practise its key combinations now on a computer keyboard: F, D and S are dots 1, 2 and 3; J, K and L are dots 4, 5 and 6. Press the keys together and release.",
+   "তারবিহীন কন্ট্রোলারটি এখনও তৈরি হয়নি, তাই কিছু জোড়া যাবে না। কম্পিউটারের কীবোর্ডে এর চাবির সমন্বয় অনুশীলন করতে পারেন: F, D ও S হলো ডট ১, ২ ও ৩; J, K ও L হলো ডট ৪, ৫ ও ৬। চাবিগুলো একসঙ্গে চেপে ছেড়ে দিন।"
+  ],
+  "screen_control_title": [
+   "Other apps and screen control",
+   "অন্য অ্যাপ ও স্ক্রিন নিয়ন্ত্রণ"
+  ],
+  "screen_control_info": [
+   "This version can read a screen you explicitly share. Controlling other apps is not connected yet. Camera permission does not enable it.",
+   "আপনি স্পষ্টভাবে শেয়ার করলে এই সংস্করণ স্ক্রিন পড়তে পারে। অন্য অ্যাপ নিয়ন্ত্রণ এখনও যুক্ত হয়নি। ক্যামেরার অনুমতি দিয়ে এটি চালু হয় না।"
+  ],
+  "context_label": [
+   "What should Astha focus on?",
+   "আস্থা কীসে মনোযোগ দেবে?"
+  ],
+  "context_ask": [
+   "Answer when asked",
+   "জিজ্ঞাসা করলে উত্তর"
+  ],
+  "context_road": [
+   "Surroundings updates",
+   "চারপাশের খবর"
+  ],
+  "context_board": [
+   "Whiteboard focus",
+   "হোয়াইটবোর্ডে মনোযোগ"
+  ],
+  "nav_label": [
+   "Astha pages",
+   "আস্থার পৃষ্ঠাসমূহ"
+  ],
+  "page_tools": [
+   "Camera and tools",
+   "ক্যামেরা ও সরঞ্জাম"
+  ],
+  "page_memory": [
+   "Memory",
+   "স্মৃতি"
+  ],
+  "page_devices": [
+   "Devices",
+   "ডিভাইস"
+  ],
+  "page_settings": [
+   "Settings",
+   "সেটিংস"
+  ],
+  "state_idle": [
+   "Ready. Tap the microphone and ask.",
+   "প্রস্তুত। মাইক্রোফোনে চাপ দিয়ে জিজ্ঞাসা করুন।"
+  ],
+  "state_listening": [
+   "Listening…",
+   "শুনছি…"
+  ],
+  "state_processing": [
+   "Working on it…",
+   "কাজ করছি…"
+  ],
+  "state_speaking": [
+   "Speaking…",
+   "বলছি…"
+  ],
+  "mode_desc_ask": [
+   "Quiet until you ask. Not watching for obstacles.",
+   "জিজ্ঞাসা না করলে চুপ থাকব। বাধার দিকে নজর রাখছি না।"
+  ],
+  "mode_desc_road": [
+   "Telling you about important changes around you. This is not a navigation aid.",
+   "চারপাশের গুরুত্বপূর্ণ পরিবর্তন জানাচ্ছি। এটি পথ চলার নির্ভরযোগ্য সহায়ক নয়।"
+  ],
+  "mode_desc_classroom": [
+   "Reading the whiteboard when its text changes.",
+   "হোয়াইটবোর্ডের লেখা বদলালে পড়ে শোনাচ্ছি।"
+  ],
+  "device_camera_off": [
+   "Camera off.",
+   "ক্যামেরা বন্ধ।"
+  ],
+  "device_phone_on": [
+   "Phone camera on.",
+   "ফোনের ক্যামেরা চালু।"
+  ],
+  "device_wifi_on": [
+   "Wi-Fi camera connected.",
+   "ওয়াই-ফাই ক্যামেরা যুক্ত।"
+  ],
+  "device_image": [
+   "Looking at a selected picture, not a live camera.",
+   "বাছাই করা ছবি দেখছি, সরাসরি ক্যামেরা নয়।"
+  ],
+  "vision_light": [
+   "I can tell light or large shapes, but not detail",
+   "আলো বা বড় আকার বুঝতে পারি, খুঁটিনাটি নয়"
+  ],
+  "assessment_language": [
+   "Which language should Astha use?",
+   "আস্থা কোন ভাষা ব্যবহার করবে?"
+  ],
+  "assessment_feedback": [
+   "How should Astha answer you?",
+   "আস্থা কীভাবে উত্তর দেবে?"
+  ],
+  "feedback_detailed": [
+   "Speak full descriptions",
+   "বিস্তারিত বর্ণনা বলবে"
+  ],
+  "feedback_brief": [
+   "Speak short answers",
+   "সংক্ষেপে উত্তর বলবে"
+  ],
+  "feedback_text": [
+   "Show text only, without speech",
+   "শুধু লেখা দেখাবে, কথা বলবে না"
+  ],
+  "assessment_devices": [
+   "Which devices do you use with Astha?",
+   "আস্থার সঙ্গে কোন ডিভাইস ব্যবহার করেন?"
+  ],
+  "assessment_devices_hint": [
+   "Choose every one that applies. Leave all empty if you are not sure.",
+   "যেগুলো প্রযোজ্য সব বেছে নিন। নিশ্চিত না হলে খালি রাখুন।"
+  ],
+  "device_phone": [
+   "Smartphone camera",
+   "স্মার্টফোনের ক্যামেরা"
+  ],
+  "device_glasses": [
+   "Smart glasses",
+   "স্মার্ট চশমা"
+  ],
+  "device_clip": [
+   "Clip-on camera",
+   "ক্লিপ ক্যামেরা"
+  ],
+  "device_braille": [
+   "Six-key Braille controller",
+   "ছয় চাবির ব্রেইল কন্ট্রোলার"
+  ],
+  "assessment_modes": [
+   "Which continuous help do you want on the home screen?",
+   "হোম পর্দায় কোন ধারাবাহিক সহায়তা চান?"
+  ],
+  "assessment_modes_hint": [
+   "Answering when you ask is always available.",
+   "জিজ্ঞাসা করলে উত্তর দেওয়া সবসময় চালু থাকে।"
+  ],
+  "assessment_access": [
+   "Display and feedback",
+   "পর্দা ও সাড়া"
+  ],
+  "pref_text_size": [
+   "Text size",
+   "লেখার আকার"
+  ],
+  "size_standard": [
+   "Standard",
+   "সাধারণ"
+  ],
+  "size_large": [
+   "Large",
+   "বড়"
+  ],
+  "size_xlarge": [
+   "Extra large",
+   "আরও বড়"
+  ],
+  "pref_theme": [
+   "Colours and contrast",
+   "রং ও বৈসাদৃশ্য"
+  ],
+  "pref_speech_rate": [
+   "Speaking speed",
+   "কথা বলার গতি"
+  ],
+  "speed_slower": [
+   "Slower",
+   "ধীরে"
+  ],
+  "speed_normal": [
+   "Normal",
+   "স্বাভাবিক"
+  ],
+  "speed_faster": [
+   "Faster",
+   "দ্রুত"
+  ],
+  "speed_fastest": [
+   "Very fast",
+   "খুব দ্রুত"
+  ],
+  "pref_haptics": [
+   "Vibrate for alerts and confirmations",
+   "সতর্কতা ও নিশ্চিতকরণে কম্পন"
+  ],
+  "assessment_storage": [
+   "Your answers are saved to your Astha account so they follow you to another phone. You can export or delete them in Settings.",
+   "আপনার উত্তর আস্থা অ্যাকাউন্টে রাখা হয়, তাই অন্য ফোনেও পাবেন। সেটিংস থেকে রপ্তানি বা মুছে ফেলা যায়।"
+  ],
+  "setup_saving": [
+   "Saving…",
+   "সংরক্ষণ হচ্ছে…"
+  ],
+  "setup_saved_account": [
+   "Saved to your account.",
+   "অ্যাকাউন্টে রাখা হয়েছে।"
+  ],
+  "setup_saved_device": [
+   "Saved on this device. It will be copied to your account when Astha can reach the server.",
+   "এই ডিভাইসে রাখা হয়েছে। সার্ভারে সংযোগ পেলে অ্যাকাউন্টে তোলা হবে।"
+  ],
+  "devices_intro": [
+   "Astha works with the phone camera alone. A paired Wi-Fi camera and a Braille controller are optional.",
+   "শুধু ফোনের ক্যামেরা দিয়েই আস্থা চলে। ওয়াই-ফাই ক্যামেরা ও ব্রেইল কন্ট্রোলার ঐচ্ছিক।"
+  ],
+  "devices_camera_title": [
+   "Clip-on or glasses camera",
+   "ক্লিপ বা চশমার ক্যামেরা"
+  ],
+  "pi_title": [
+   "Pair a Wi-Fi camera",
+   "ওয়াই-ফাই ক্যামেরা জুড়ুন"
+  ],
+  "pi_help": [
+   "Keep the camera and this phone on the same Wi-Fi. Enter the camera's secure address and its private pairing code. The code is kept only until you disconnect or close Astha.",
+   "ক্যামেরা ও এই ফোন একই ওয়াই-ফাইয়ে রাখুন। ক্যামেরার সুরক্ষিত ঠিকানা ও ব্যক্তিগত পেয়ারিং কোড দিন। সংযোগ বন্ধ বা আস্থা বন্ধ না করা পর্যন্তই কোডটি রাখা হয়।"
+  ],
+  "pi_address": [
+   "Camera HTTPS address",
+   "ক্যামেরার HTTPS ঠিকানা"
+  ],
+  "pi_address_example": [
+   "Example: https://astha-pi.local:8443",
+   "উদাহরণ: https://astha-pi.local:8443"
+  ],
+  "pi_pairing": [
+   "Private pairing code",
+   "ব্যক্তিগত পেয়ারিং কোড"
+  ],
+  "pi_saver": [
+   "Low-data mode: one image per second",
+   "কম ডেটা মোড: সেকেন্ডে একটি ছবি"
+  ],
+  "pi_connect": [
+   "Connect camera",
+   "ক্যামেরা যুক্ত করুন"
+  ],
+  "pi_stop": [
+   "Disconnect camera",
+   "ক্যামেরার সংযোগ বন্ধ করুন"
+  ],
+  "pi_stopped": [
+   "Wi-Fi camera disconnected.",
+   "ওয়াই-ফাই ক্যামেরার সংযোগ বন্ধ।"
+  ],
+  "pi_connecting": [
+   "Connecting to your Wi-Fi camera…",
+   "আপনার ওয়াই-ফাই ক্যামেরায় যুক্ত হচ্ছে…"
+  ],
+  "pi_connected": [
+   "Wi-Fi camera connected.",
+   "ওয়াই-ফাই ক্যামেরা যুক্ত হয়েছে।"
+  ],
+  "pi_reconnecting": [
+   "The Wi-Fi camera link dropped. Trying to reconnect.",
+   "ওয়াই-ফাই ক্যামেরার সংযোগ বিচ্ছিন্ন। আবার যুক্ত করার চেষ্টা করছি।"
+  ],
+  "pi_reconnected": [
+   "Wi-Fi camera reconnected.",
+   "ওয়াই-ফাই ক্যামেরা আবার যুক্ত হয়েছে।"
+  ],
+  "pi_paused": [
+   "Wi-Fi camera paused while Astha is in the background.",
+   "আস্থা পেছনে থাকায় ওয়াই-ফাই ক্যামেরা বিরত আছে।"
+  ],
+  "pi_connection_lost": [
+   "The Wi-Fi camera could not be reached again. Check its power and Wi-Fi, then connect once more. You can use the phone camera.",
+   "ওয়াই-ফাই ক্যামেরা আর পাওয়া যাচ্ছে না। এর বিদ্যুৎ ও ওয়াই-ফাই দেখে আবার যুক্ত করুন। ফোনের ক্যামেরা ব্যবহার করতে পারেন।"
+  ],
+  "pi_pairing_rejected": [
+   "Pairing was rejected. Check the camera address and private pairing code.",
+   "পেয়ারিং গ্রহণ হয়নি। ক্যামেরার ঠিকানা ও ব্যক্তিগত কোড পরীক্ষা করুন।"
+  ],
+  "pi_stale_frame": [
+   "The camera image stopped updating. Reconnect when the camera is ready.",
+   "ক্যামেরার ছবি হালনাগাদ হচ্ছে না। ক্যামেরা প্রস্তুত হলে আবার যুক্ত করুন।"
+  ],
+  "pi_frame_timeout": [
+   "The camera took too long to respond. Check the Wi-Fi and reconnect.",
+   "ক্যামেরা উত্তর দিতে বেশি সময় নিচ্ছে। ওয়াই-ফাই পরীক্ষা করে আবার যুক্ত করুন।"
+  ],
+  "pi_invalid_origin": [
+   "Enter the camera’s HTTPS address without a page path.",
+   "কোনো পৃষ্ঠার পথ ছাড়া ক্যামেরার HTTPS ঠিকানা দিন।"
+  ],
+  "pi_invalid_pairing_token": [
+   "Enter the private pairing code supplied for your camera.",
+   "আপনার ক্যামেরার জন্য দেওয়া ব্যক্তিগত পেয়ারিং কোড দিন।"
+  ],
+  "pi_error": [
+   "Could not use this camera. Check that it is on the same Wi-Fi and that this phone trusts its secure connection. You can use the phone camera.",
+   "এই ক্যামেরা ব্যবহার করা যায়নি। একই ওয়াই-ফাইয়ে আছে কি না এবং ফোন এর সুরক্ষিত সংযোগ বিশ্বাস করে কি না দেখুন। ফোনের ক্যামেরা ব্যবহার করতে পারেন।"
+  ],
+  "pi_models": [
+   "Wi-Fi camera connected, but the recognition models did not load. Try again.",
+   "ওয়াই-ফাই ক্যামেরা যুক্ত, কিন্তু শনাক্ত করার মডেল লোড হয়নি। আবার চেষ্টা করুন।"
+  ],
+  "pi_preview": [
+   "Paired Wi-Fi camera view",
+   "যুক্ত ওয়াই-ফাই ক্যামেরার দৃশ্য"
+  ],
+  "pi_source": [
+   "Paired Wi-Fi camera · Current view",
+   "যুক্ত ওয়াই-ফাই ক্যামেরা · বর্তমান দৃশ্য"
+  ],
+  "braille_practice_off": [
+   "Start keyboard practice",
+   "কীবোর্ডে অনুশীলন শুরু করুন"
+  ],
+  "braille_practice_on": [
+   "Stop keyboard practice",
+   "কীবোর্ডে অনুশীলন বন্ধ করুন"
+  ],
+  "braille_status_off": [
+   "Braille controller: not connected.",
+   "ব্রেইল কন্ট্রোলার: যুক্ত নয়।"
+  ],
+  "braille_status_practice": [
+   "Keyboard practice is on. No controller is connected.",
+   "কীবোর্ডে অনুশীলন চলছে। কোনো কন্ট্রোলার যুক্ত নয়।"
+  ],
+  "braille_status_connecting": [
+   "Connecting to the Braille controller…",
+   "ব্রেইল কন্ট্রোলারে যুক্ত হচ্ছে…"
+  ],
+  "braille_status_connected": [
+   "Braille controller connected.",
+   "ব্রেইল কন্ট্রোলার যুক্ত হয়েছে।"
+  ],
+  "braille_status_reconnecting": [
+   "Braille controller link dropped. Trying to reconnect.",
+   "ব্রেইল কন্ট্রোলারের সংযোগ বিচ্ছিন্ন। আবার যুক্ত করার চেষ্টা করছি।"
+  ],
+  "braille_status_error": [
+   "The Braille controller could not be connected.",
+   "ব্রেইল কন্ট্রোলার যুক্ত করা যায়নি।"
+  ],
+  "braille_commands": [
+   "Controller commands",
+   "কন্ট্রোলারের নির্দেশ"
+  ],
+  "braille_dots": [
+   "Dots",
+   "ডট"
+  ],
+  "brl_cmd_stop": [
+   "Stop speaking and cancel",
+   "কথা থামাও ও বাতিল করো"
+  ],
+  "brl_cmd_listen": [
+   "Listen for my question",
+   "আমার প্রশ্ন শোনো"
+  ],
+  "brl_cmd_describe": [
+   "Describe surroundings",
+   "চারপাশ বর্ণনা করো"
+  ],
+  "brl_cmd_read": [
+   "Read text",
+   "লেখা পড়ো"
+  ],
+  "brl_cmd_find": [
+   "Find my things",
+   "আমার জিনিস খোঁজো"
+  ],
+  "brl_cmd_repeat": [
+   "Repeat the last answer",
+   "শেষ উত্তর আবার বলো"
+  ],
+  "brl_cmd_camera": [
+   "Turn the camera on or off",
+   "ক্যামেরা চালু বা বন্ধ করো"
+  ],
+  "brl_cmd_home": [
+   "Go to the home page",
+   "হোম পৃষ্ঠায় যাও"
+  ],
+  "brl_cmd_mode": [
+   "Change what Astha focuses on",
+   "আস্থার মনোযোগের বিষয় বদলাও"
+  ],
+  "brl_cmd_text": [
+   "Turn Braille typing on or off",
+   "ব্রেইলে লেখা চালু বা বন্ধ করো"
+  ],
+  "sensor_title": [
+   "Distance sensor",
+   "দূরত্ব মাপার সেন্সর"
+  ],
+  "sensor_info": [
+   "An ultrasonic distance sensor is planned. None is connected, so Astha does not report measured distances. Distances it mentions are rough estimates from the image.",
+   "আল্ট্রাসনিক দূরত্ব সেন্সর যোগ করার পরিকল্পনা আছে। এখন কোনোটি যুক্ত নয়, তাই আস্থা মাপা দূরত্ব জানায় না। যে দূরত্ব বলে তা ছবি দেখে আনুমানিক।"
+  ],
+  "setup_theme_navy": [
+   "Navy and cyan",
+   "গাঢ় নীল ও সায়ান"
+  ],
+  "setup_theme_mono": [
+   "White on black",
+   "কালোর ওপর সাদা"
+  ],
+  "setup_theme_yellow": [
+   "Yellow on black",
+   "কালোর ওপর হলুদ"
   ]
  },
  "hooks": [
@@ -1233,24 +1713,6 @@
    "<button class=\"btn\" onclick=\"closeDeleteAccount()\">",
    {
     "text": "cancel"
-   }
-  ],
-  [
-   "<label class=\"field\" for=\"gemini-key\">",
-   {
-    "lead": "gemini_label"
-   }
-  ],
-  [
-   "<input id=\"gemini-key\" type=\"password\" autocomplete=\"off\" placeholder=\"Leave blank -- the Astha server already provides this\" onchange=\"setGeminiKey(this.value)\">",
-   {
-    "placeholder": "gemini_placeholder"
-   }
-  ],
-  [
-   "<p class=\"help\">Cloud features require a configured server",
-   {
-    "text": "cloud_help"
    }
   ],
   [

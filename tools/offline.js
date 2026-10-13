@@ -253,6 +253,7 @@ function parseSpokenPlace(query) {
 }
 async function handleOnDevicePlacement(query, statedItem) {
   return withBusy('Remembering…', async () => {
+    const accountKey = LocalStore.KEY;
     const frame = captureFrame(640); if (!frame) return;
     heartSet({ x: 0.5, y: 0.5, mode: 'seek', label: 'Looking…' });
     await ensureVisionModels();
@@ -275,17 +276,15 @@ async function handleOnDevicePlacement(query, statedItem) {
       if (central) { item = objLabel(central); itemBn = objLabelBn(central); targetId = central.id; seen = true; }
     }
     if (!item) { heartHide(); return announce('Tell me what you are keeping, for example: I am keeping my wallet here.', 'কী রাখছেন বলুন, যেমন: আমার মানিব্যাগ এখানে রাখছি।', 'memory'); }
-    // Where: what you said > a surface I can see > the nearest landmark > plain honesty.
+    // Only the user's named place confirms a physical location. An image alone cannot
+    // establish that an item rests on a detected surface or belongs to the current room.
     const spoken = parseSpokenPlace(query);
-    const surfaces = cocoObjs.filter(o => SURFACE_IDS.has(o.id) && o.id !== targetId).sort((a, b) => (b.bbox[2] * b.bbox[3]) - (a.bbox[2] * a.bbox[3]));
-    const landmarks = cocoObjs.filter(o => o.id !== targetId && !SURFACE_IDS.has(o.id) && o.id !== 'person' && o.score >= 0.6).sort((a, b) => (b.bbox[2] * b.bbox[3]) - (a.bbox[2] * a.bbox[3]));
-    const room = state.currentRoom || null;
-    let locEn, locBn;
-    if (spoken) { locEn = spoken.en; locBn = spoken.bn; }
-    else if (surfaces.length) { locEn = 'on the ' + label(surfaces[0].id); locBn = labelBn(surfaces[0].id) + '-এর ওপর'; }
-    else if (landmarks.length) { locEn = 'near the ' + objLabel(landmarks[0]); locBn = objLabelBn(landmarks[0]) + '-এর কাছে'; }
-    else { locEn = 'where the camera was pointing'; locBn = 'যেখানে ক্যামেরা তাক করা ছিল'; }
-    if (room) { locEn += ' in the ' + room; locBn = room + '-এ, ' + locBn; }
+    if (privacyMode || privacyTransition || LocalStore.KEY !== accountKey) return;
+    if (!spoken) {
+      heartHide();
+      return announce('Tell me the place to save, for example: my wallet is on the table. The image does not confirm its physical location.', 'কোথায় রাখছেন বলুন, যেমন: আমার মানিব্যাগ টেবিলের ওপর। শুধু ছবি থেকে প্রকৃত স্থান নিশ্চিত করা যায় না।', 'memory');
+    }
+    const locEn = spoken.en, locBn = spoken.bn;
     addLocalMemory({ item, location: locEn, locationBn: locBn, source: 'Voice placement', score: null, id: targetId || undefined });
     const seenEn = seen ? `I see your ${item}.` : `I did not clearly see the ${item}, but I noted the place.`;
     const seenBn = seen ? `আপনার ${itemBn || item} দেখতে পাচ্ছি।` : `${itemBn || item} স্পষ্ট দেখিনি, তবে জায়গাটা লিখে রাখলাম।`;
@@ -298,7 +297,7 @@ async function handleOnDevicePlacement(query, statedItem) {
 
 // ---- Search & guidance: "find my charger", "guide me to the switch" ----------------
 const SEEK_TEXT = {
-  start_mem: ['You kept your {item} {loc}, {when}. Point the camera there and I will look.', 'আপনার {item} {loc} ছিল, {when}। ক্যামেরা সেদিকে ধরুন, আমি খুঁজছি।'],
+  start_mem: ['A past note for {item} reports {loc}, saved {when}. Its current location is not confirmed. Point the camera there to check.', '{item}-এর আগের নোটে {loc} লেখা আছে, সংরক্ষিত {when}। বর্তমান অবস্থান নিশ্চিত নয়। যাচাই করতে ক্যামেরা সেদিকে ধরুন।'],
   start: ['Looking for your {item}. Move the phone slowly from left to right.', 'আপনার {item} খুঁজছি। ফোনটা ধীরে ধীরে বাম থেকে ডানে ঘোরান।'],
   start_guide: ['I will guide you to the {item}. Move the phone slowly from left to right so I can find it.', 'আমি আপনাকে {item}-এর কাছে নিয়ে যাব। প্রথমে ফোনটা ধীরে ধীরে বাম থেকে ডানে ঘোরান।'],
   no_clip: ['The recogniser is still loading. I will start looking as soon as it is ready.', 'শনাক্তকারী এখনো লোড হচ্ছে। প্রস্তুত হলেই খুঁজতে শুরু করব।'],
@@ -510,26 +509,41 @@ function scoreMemoriesFor(q) {
     if (itemLower === cleanQ) score += 100; else if (itemLower.includes(cleanQ)) score += 70; else if (target.includes(cleanQ)) score += 40;
     for (const t of terms) { if (itemLower === t) score += 50; else if (itemLower.includes(t)) score += 25; else if (target.includes(t)) score += 10; }
     return { m, score };
-  }).filter(x => x.score > 0).sort((a, b) => b.score - a.score).map(x => x.m);
+  }).filter(x => x.score > 0).sort((a, b) => b.score - a.score ||
+    (new Date(b.m.time).getTime() || 0) - (new Date(a.m.time).getTime() || 0)).map(x => x.m);
 }
 function banglaLocation(m) {
   if (m.locationBn) return m.locationBn;
   return m.location.replace(/\bon the\b/gi, '').replace(/\bin the\b/gi, '').replace(/\bat\b/gi, '').replace(/\bnear the\b/gi, '')
     .replace(/dressing table/gi, 'ড্রেসিং টেবিলে').replace(/reading table/gi, 'পড়ার টেবিলে').replace(/table/gi, 'টেবিলে').replace(/bed/gi, 'বিছানায়').replace(/reading room/gi, 'রিডিং রুমে').replace(/bedroom/gi, 'শোবার ঘরে').replace(/living room/gi, 'বসার ঘরে').replace(/in front of the camera/gi, 'ক্যামেরার সামনে').replace(/in front of you/gi, 'আপনার সামনে').replace(/\(seen by the camera\)/gi, '').replace(/\s+/g, ' ').trim();
 }
+function memoryRecallText(memory) {
+  const source = String(memory.source || '').trim();
+  const photo = /photo|uploaded/i.test(source);
+  const note = /^(your note|manual|voice placement|approved agent note|voice note|user-confirmed)/i.test(source);
+  const camera = !photo && !note && /camera|observation|identified|ocr|visual/i.test(source);
+  const provenance = photo ? ['Photo observation', 'ছবির পর্যবেক্ষণ'] : note ? ['Your note', 'আপনার নোট'] :
+    camera ? ['Camera observation', 'ক্যামেরার পর্যবেক্ষণ'] : ['Saved record', 'সংরক্ষিত তথ্য'];
+  const timestamp = memory.time === null || memory.time === undefined || memory.time === '' ? NaN : new Date(memory.time).getTime();
+  const when = Number.isFinite(timestamp) && timestamp <= Date.now() + 60000 ? relativeTime(memory.time) : { en: '', bn: '' };
+  const enTime = when.en || 'at an unknown time', bnTime = when.bn || 'সময় জানা নেই';
+  return {
+    en: `${provenance[0]} for ${memory.item}, saved ${enTime}, reports: ${memory.location}. Its current location is not confirmed.`,
+    bn: `${memory.item}-এর ${provenance[1]}, সংরক্ষিত ${bnTime}, বলছে: ${banglaLocation(memory)}। বর্তমান অবস্থান নিশ্চিত নয়।`
+  };
+}
 function findItems(query) {
   const raw = (query || '').toLowerCase().replace(/^(?:hey\s+)?(?:astha|asta|ashtha)[,.!\s]*/i, '').trim();
-  let q = typeof extractTargetItemFromQuery === 'function' ? extractTargetItemFromQuery(raw.replace(/^(search for|look for|locate|khojo|khuje dao)\s+/, 'find ')) : null;
+  const targetQuery = raw.replace(/[?!.,।]/g, '').replace(/^where did i (put|leave|keep)( my| the)?\s+/, 'find ')
+    .replace(/^(search for|look for|locate|khojo|khuje dao)\s+/, 'find ');
+  let q = typeof extractTargetItemFromQuery === 'function' ? extractTargetItemFromQuery(targetQuery) : null;
   if (!q) q = raw.replace(/^(where('s| is| are)?( my| the)?|where did i (put|leave|keep)( my| the)?|find( my| the)?|locate( my| the)?|search for( my| the)?|look for( my| the)?|আমার|কোথায়|কোথাই|কই)\s*/i, '').replace(/(কোথায়|কই|খোঁজো|খুঁজো|খুঁজে দাও|আছে)/g, '').replace(/[?!.,।]/g, '').trim();
   if (!q || /^(it|this|that|something|things)$/.test(q)) return announce(SEEK_TEXT.what[0], SEEK_TEXT.what[1], 'guidance');
   const vm = typeof findVocabMatch === 'function' ? findVocabMatch(q) : null;
   const itemEn = vm ? vm.en : q, itemBn = vm ? vm.bn : q;
   const records = scoreMemoriesFor(q);
   if (records.length) {
-    const top = records[0], when = relativeTime(top.time);
-    const locEn = /^(on|in|at|near|under|behind|beside|inside|where|by)\b/i.test(top.location) ? top.location : 'at ' + top.location;
-    const en = `You kept your ${top.item} ${locEn}, ${when.en}.`;
-    const bn = `আপনার ${top.item} ${banglaLocation(top)} ছিল, ${when.bn}।`;
+    const { en, bn } = memoryRecallText(records[0]);
     playEarcon('confirm');
     if (privacyMode) return announce(en, bn, 'memory');
     return askYesNo(en + ' Do you want me to look for it with the camera now?', bn + ' এখন ক্যামেরা দিয়ে খুঁজে দেখব?', () => Seeker.start(q, 'find'), () => announce('Okay.', 'ঠিক আছে।', 'voice'));
@@ -680,7 +694,9 @@ function toggleListening() {
   } catch (e) { console.warn(e); stopListening(); }
 }
 function stopAllSpeech() {
-  stopReader(); stopListening(); VoiceEngine.stop();
+  // Drop answers that have not been spoken yet, and end a hazard alert as well.
+  if (typeof AsthaExperience !== 'undefined') AsthaExperience.cancelPending();
+  stopReader(); stopListening(); VoiceEngine.stop(true);
   if (typeof Seeker !== 'undefined' && Seeker.active) Seeker.stop('user');
   if (OfflineEar.active) OfflineEar.cancel();
   $('reader-progress').textContent = t('reader_stopped');

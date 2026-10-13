@@ -1,6 +1,6 @@
 // Cache only approved static resources. API responses and private audio are never cached.
-const CACHE = 'astha-shell-2c17ae7771';
-const SHELL = ['./', './index.html', './config.js', './backend.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
+const CACHE = 'astha-shell-a7c30adc9b';
+const SHELL = ['./', './index.html', './config.js', './native-api.js', './pi-camera.js', './backend.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
 const RUNTIMES = [
   'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.21.0/dist/ort.webgpu.min.js',
   'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js',

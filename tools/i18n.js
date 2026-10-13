@@ -39,5 +39,8 @@ function refreshStateLabels() {
   }
   if (typeof renderOwner === 'function') renderOwner();
   if (typeof updateSourceStatus === 'function') updateSourceStatus();
+  if (typeof AsthaExperience !== 'undefined') AsthaExperience.refreshLabels();
+  if (typeof AsthaPiCamera !== 'undefined') AsthaPiCamera.refreshLabels();
+  if (typeof AsthaBraille !== 'undefined') AsthaBraille.refreshLabels();
   if (typeof window.ASTHA_RENDER_ACCOUNT === 'function') window.ASTHA_RENDER_ACCOUNT();
 }

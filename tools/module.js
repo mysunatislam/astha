@@ -97,14 +97,24 @@ const VoiceEngine = {
   lastSpokeAt: 0,
   _currentResolve: null,
   requestController: null, generation: 0,
+  criticalUntil: 0, _criticalDone: null, _endCritical: null, _criticalToken: 0,
   get speaking() {
     if (this.mode === 'audio') return !!this.audioEl && !this.audioEl.paused && !this.audioEl.ended;
     if (this.mode === 'synth') return !!(window.speechSynthesis && window.speechSynthesis.speaking);
     return false;
   },
-  stop() {
+  _finishCritical() {
+    this.criticalUntil = 0;
+    const end = this._endCritical; this._endCritical = null; this._criticalDone = null;
+    if (end) end();
+  },
+  // Ordinary speech replaces ordinary speech. Only the user (Stop, voice off) or a newer
+  // alert ends a hazard alert early; anything else waits for it in speak().
+  stop(user = false) {
     this.generation++;
     if (this.requestController) { this.requestController.abort(); this.requestController = null; }
+    if (!user && this.criticalUntil > Date.now()) return;
+    this._criticalToken++; this._finishCritical();
     this.lastSpokeAt = Date.now();
     if (this._currentResolve) {
       const res = this._currentResolve;
@@ -139,6 +149,8 @@ const VoiceEngine = {
     this.stop();
     const generation = this.generation;
     if (!state.audio || !text) return false;
+    // Let a hazard alert finish. A newer sentence that arrives meanwhile replaces this one.
+    if (this._criticalDone) { await this._criticalDone; if (generation !== this.generation) return false; }
     VoiceEchoFilter.recordMachineSpeech(text);
     this.lastSpokeAt = Date.now();
     const voiceKey = lang === 'bn' ? 'bn-female' : 'en-female';
@@ -195,30 +207,47 @@ const VoiceEngine = {
     this.lastSpokeAt = Date.now();
     return ok;
   },
-  emergencyAlert(textEn, textBn, hazardType) {
-    this.stop();
-    if (!state.audio) return;
-    if (typeof playEarcon === 'function') playEarcon('emergency');
-    if (typeof haptic === 'function') haptic('RAPID');
+  // `admitted` is 'critical' when the caller already passed the priority gate.
+  emergencyAlert(textEn, textBn, hazardType, admitted = null) {
+    const priority = admitted || (typeof AsthaExperience !== 'undefined' ? AsthaExperience.acceptHazard(hazardType) : 'critical');
+    if (!priority) return;   // an answer is in progress, a repeat, or ASTHA was not asked to watch
     const useBn = voiceLang === 'bn' && !!textBn;
     const text = useBn ? textBn : textEn;
     if (!text) return;
-    VoiceEchoFilter.recordMachineSpeech(text);
-    if (typeof setCaption === 'function') setCaption('EMERGENCY HAZARD', textEn, 'safety', 'danger', textBn);
     if (typeof showHazard === 'function') showHazard(true);
-
-    if (window.speechSynthesis) {
-      try { window.speechSynthesis.cancel(); } catch (e) {}
-      const u = typeof makeUtterance === 'function' ? makeUtterance(sanitizeForSpeech(text), useBn ? 'bn' : 'en') : new SpeechSynthesisUtterance(text);
-      if (u) {
-        u.rate = 1.18; // Urgent fast speech
-        u.pitch = 1.1;
-        this.mode = 'synth';
-        u.onend = () => { if (this.mode === 'synth') this.mode = null; };
-        u.onerror = () => { if (this.mode === 'synth') this.mode = null; };
-        window.speechSynthesis.speak(u);
-      }
+    if (priority !== 'critical') {
+      // A requested update rather than an emergency: it never interrupts an answer.
+      if (typeof setCaption === 'function') setCaption(t('agent_safety'), textEn, 'safety', 'danger', textBn);
+      if (typeof playEarcon === 'function') playEarcon('hazard');
+      speak(textEn, textBn);
+      return;
     }
+    this.stop(true);
+    // The caption and vibration reach users who keep ASTHA's voice off.
+    if (typeof setCaption === 'function') setCaption('EMERGENCY HAZARD', textEn, 'safety', 'danger', textBn);
+    if (typeof haptic === 'function') haptic('RAPID');
+    if (!state.audio) return;
+    if (typeof playEarcon === 'function') playEarcon('emergency');
+    VoiceEchoFilter.recordMachineSpeech(text);
+    const lang = useBn ? 'bn' : 'en';
+    const u = window.speechSynthesis && typeof makeUtterance === 'function' ? makeUtterance(sanitizeForSpeech(text), lang) : null;
+    // Without a device voice (some Android WebViews) use the normal voice path.
+    if (!u) { this.speak(text, lang); return; }
+    try { window.speechSynthesis.cancel(); } catch (e) {}
+    u.rate = 1.18; // Urgent fast speech
+    u.pitch = 1.1;
+    this.mode = 'synth';
+    const token = ++this._criticalToken;
+    this.criticalUntil = Date.now() + 6000;
+    this._criticalDone = new Promise(resolve => { this._endCritical = resolve; });
+    const done = () => {
+      if (token !== this._criticalToken) return;
+      if (this.mode === 'synth') this.mode = null;
+      this.lastSpokeAt = Date.now(); this._finishCritical();
+    };
+    u.onend = done; u.onerror = done;
+    setTimeout(done, 6000);   // a voice that never reports its end must not block answers
+    window.speechSynthesis.speak(u);
   },
 };
 function asthaSpeaking() { return VoiceEngine.speaking; }
@@ -270,7 +299,7 @@ function stopReader() {
   VoiceEngine.stop();
 }
 function stopAllSpeech() {
-  stopReader(); stopListening(); VoiceEngine.stop();
+  stopReader(); stopListening(); VoiceEngine.stop(true);
   $('reader-progress').textContent = t('reader_stopped');
 }
 
@@ -715,7 +744,7 @@ function readText() {
   if (typeof cloudReady === 'function' && cloudReady() && typeof cloudReadLive === 'function') {
     return cloudReadLive();
   }
-  if (state.source !== 'camera') return readStillOnce();
+  if (!['camera', 'pi'].includes(state.source)) return readStillOnce();
   if (reading.active) return stopReading();
   startReading();
 }
@@ -736,7 +765,7 @@ function stopReading(silent) {
   reading.active = false; reading.phase = 'idle'; clearTimeout(reading.timer); reading.timer = null;
   heartHide(); setReadButton(false); reader.onFinish = null; stopAllSpeech();
   if (!silent) announce(GUIDE.stopped[0], GUIDE.stopped[1], 'ocr');
-  if (state.source === 'camera') startLiveLoop();
+  if (['camera', 'pi'].includes(state.source)) startLiveLoop();
 }
 function setReadButton(on) {
   const b = $('read-btn'); if (!b) return;
@@ -1245,7 +1274,7 @@ const INTENTS = [
   { id: 'mirror', run: () => howDoILook(), kw: ['how do i look', 'how am i looking', 'mirror', 'looking good', 'কেমন লাগছে', 'আয়না', 'kemon lagche', 'kemon lagse', 'ayna'] },
   { id: 'safety', run: () => safetyCheck(), kw: ['obstacle', 'is it safe', 'danger', 'path clear', 'stairs', 'বাধা', 'বিপদ', 'নিরাপদ', 'সিঁড়ি', 'badha', 'bipod', 'nirapod', 'siri'] },
   { id: 'camera_start', run: () => { if (!state.source) toggleCamera(); announce('Camera started.', 'ক্যামেরা চালু হয়েছে।', 'system'); }, kw: ['start camera', 'open camera', 'turn on camera', 'camera on', 'start video', 'start seeing', 'ক্যামেরা চালু করো', 'ক্যামেরা খোলো', 'ক্যামেরা অন', 'camera start', 'camera open'] },
-  { id: 'camera_stop', run: () => { if (state.source === 'camera') stopCamera(); announce('Camera stopped.', 'ক্যামেরা বন্ধ করা হয়েছে।', 'system'); }, kw: ['stop camera', 'close camera', 'turn off camera', 'camera off', 'ক্যামেরা বন্ধ করো', 'ক্যামেরা অফ', 'camera stop', 'stop video'] },
+  { id: 'camera_stop', run: () => { if (['camera', 'pi'].includes(state.source)) stopCamera(); announce('Camera stopped.', 'ক্যামেরা বন্ধ করা হয়েছে।', 'system'); }, kw: ['stop camera', 'close camera', 'turn off camera', 'camera off', 'ক্যামেরা বন্ধ করো', 'ক্যামেরা অফ', 'camera stop', 'stop video'] },
   { id: 'screen', run: () => eyeWhatsOnScreen(), kw: ['on my screen', 'my screen', 'which app', 'which tab', 'which window', 'where am i', 'স্ক্রিন', 'কোন অ্যাপ', 'কোন ট্যাব', 'কোথায় আছি'] },
   { id: 'error', run: () => eyeReadError(), kw: ['error', 'terminal output', 'went wrong', 'এরর', 'ভুলটা', 'ভুল কী'] },
   { id: 'stop', run: () => { VoiceEngine.stop(); if (typeof stopReader === 'function') stopReader(); if (typeof reading !== 'undefined' && reading.active) stopReading(true); }, kw: ['stop', 'stop talking', 'be quiet', 'quiet', 'silence', 'enough', 'shut up', 'halt', 'থামো', 'চুপ', 'চুপ কর', 'চুপ করো', 'বন্ধ করো', 'স্টপ', 'thamo', 'chup', 'bondho koro'] },
@@ -1286,36 +1315,23 @@ function getConversationContext() {
 
 async function handleVisualQA(query) {
   if (privacyTransition) return;
-  const qClean = (query || '').trim();
-  if (!qClean) return;
-
-  // If query is an identification question, immediately delegate to identifyObject()
-  if (/\b(what('s| is) (it|this|that|in my hand|this called)|what am i (looking at|seeing|holding)|what do i (have|hold)|what object is (this|it|that)|tell me what (it|this|that) is|কী এটা|এটা কী|এটি কী|এটা কি|কী জিনিস|এটা কী জিনিস|কী দেখছি|আমি কী দেখছি|আমার হাতে কী|আমার হাতে কি|eta ki|eita ki|ki eta|ki dekhchi|ki dekhsi|hate ki|amar hate ki)\b/i.test(qClean)) {
-    return identifyObject();
-  }
-
-  if (withCamera(() => handleVisualQA(query))) return;
-  recordConversationTurn('user', qClean);
-
-  // 1. If Cloud (Gemini) is available, use cloudVisualQA
-  if (typeof cloudReady === 'function' && cloudReady()) {
-    try {
-      const frame = captureFrame(896);
-      if (frame && typeof cloudVisualQA === 'function') {
-        const hist = getConversationContext();
-        const r = await cloudVisualQA(qClean, frame, hist);
-        if (r && (r.en || r.bn)) {
-          recordConversationTurn('assistant', r.en || r.bn);
-          return r;
+  const question = String(query || '').trim(); if (!question) return;
+  if (withCamera(() => handleVisualQA(question))) return;
+  const run = async current => {
+    recordConversationTurn('user', question);
+    if (cloudReady()) {
+      try {
+        const frame = captureFrame(896);
+        if (!frame || !current()) return;
+        const result = await cloudVisualQA(question, frame, getConversationContext(), current);
+        if (current() && result && (result.en || result.bn)) {
+          recordConversationTurn('assistant', result.en || result.bn); return result;
         }
-      }
-    } catch (e) {
-      console.warn('Cloud VQA failed, falling back to on-device visual analysis:', e);
+      } catch { /* Try the conservative local detector without inventing attributes. */ }
     }
-  }
-
-  // 2. On-Device Fallback (Without Gemini / Offline)
-  return handleOnDeviceVisualQA(qClean);
+    if (current()) return handleOnDeviceVisualQA(question, current);
+  };
+  return typeof AsthaExperience !== 'undefined' ? AsthaExperience.visualTask(question, run) : run(() => true);
 }
 
 function extractTargetItemFromQuery(query) {
@@ -1356,163 +1372,27 @@ function findVocabMatch(targetNoun) {
   return null;
 }
 
-async function handleOnDeviceVisualQA(query) {
-  return withBusy('Looking…', async () => {
-    const frame = captureFrame(640);
-    if (!frame) return;
-    heartSet({ x: 0.5, y: 0.5, mode: 'seek', label: 'Looking…' });
-
-    const targetNoun = extractTargetItemFromQuery(query);
-    const vocabMatch = findVocabMatch(targetNoun);
-
-    // 1. Fast Vision Models (COCO SSD + Surface)
+async function handleOnDeviceVisualQA(query, current = () => true) {
+  return withBusy('Checking…', async () => {
     await ensureVisionModels();
-    const cocoObjs = await runCoco(frame);
-    state.lastCocoPreds = cocoObjs;
-
-    // Detect surface
-    const tableObj = cocoObjs.find(o => ['dining table', 'desk'].includes(o.id));
-    const bedObj = cocoObjs.find(o => o.id === 'bed');
-    const curRoom = state.currentRoom || (state.spatialHome.length ? state.spatialHome[0].name : 'Reading Room');
-    const roomRecord = state.spatialHome.find(r => r.name.toLowerCase() === curRoom.toLowerCase());
-    let surfaceName = tableObj ? 'table' : (bedObj ? 'bed' : 'surface');
-    let surfaceNameBn = tableObj ? 'টেবিল' : (bedObj ? 'বিছানা' : 'স্থান');
-    if (roomRecord && roomRecord.notes && /dressing table/i.test(roomRecord.notes)) {
-      surfaceName = 'dressing table';
-      surfaceNameBn = 'ড্রেসিং টেবিল';
-    } else if (roomRecord && roomRecord.notes && /reading table/i.test(roomRecord.notes)) {
-      surfaceName = 'reading table';
-      surfaceNameBn = 'পড়ার টেবিল';
+    if (!current()) return;
+    const frame = captureFrame(640); if (!frame) return;
+    const objects = await runCoco(frame);
+    if (!current()) return;
+    state.lastCocoPreds = objects;
+    const noun = extractTargetItemFromQuery(query);
+    const vocabulary = findVocabMatch(noun);
+    // A mouse is not evidence of keys or a charger; a frame-wide colour is not an object colour.
+    const hit = vocabulary ? objects.find(object => object.id === vocabulary.id && object.score >= 0.65) : null;
+    if (hit) {
+      const position = posFromX(hit.bbox[0] + hit.bbox[2] / 2, frame.width);
+      const en = `The local detector suggests a ${label(hit.id)} ${I18N.en['pos_' + position]} in this image. I cannot confirm its colour or what surface it is on.`;
+      const bn = `এই ছবিতে ${I18N.bn['pos_' + position]} ${labelBn(hit.id)} থাকতে পারে। এর রং বা কোন পৃষ্ঠে আছে নিশ্চিত করতে পারছি না।`;
+      announce(en, bn, 'vision'); recordConversationTurn('assistant', en); return;
     }
-
-    // 2. OCR check ONLY if query specifically asks for ID card or text
-    const askingForIdOrText = /\b(id\s*card|identity|idcard|written|label|read\s+text|আইডি\s*কার্ড|কার্ডের লেখা)\b/i.test(query);
-    if (askingForIdOrText) {
-      try {
-        const worker = await ensureOcr();
-        const ocrRes = await worker.recognize(cropToCanvas(frame, centerRect(frame, 0.75)));
-        const ocrText = (ocrRes.data.lines || [])
-          .filter(l => l.confidence >= 50)
-          .map(l => l.text.replace(/\s+/g, ' ').trim())
-          .filter(l => l.replace(/[^\p{L}\p{N}]/gu, '').length >= 3)
-          .join(' ').trim();
-        if (ocrText.length >= 4) {
-          const snippet = ocrText.slice(0, 90);
-          const enMsg = `Yes, I see your ID card in front of the camera. The text on it reads: “${snippet}”.`;
-          const bnMsg = `হ্যাঁ, ক্যামেরার সামনে আপনার আইডি কার্ড দেখতে পাচ্ছি। এতে লেখা: “${snippet}”।`;
-          announce(enMsg, bnMsg, 'vision');
-          playEarcon('confirm');
-          haptic('CONFIRM');
-          heartFlash({ x: 0.5, y: 0.5, mode: 'lock', label: 'ID Card' });
-          recordConversationTurn('assistant', enMsg);
-          if (typeof autoRecordMemory === 'function') {
-            autoRecordMemory({ item: 'ID card', location: `on the ${surfaceName} in the ${curRoom}`, room: curRoom, furniture: surfaceName, source: 'On-device OCR check', score: null });
-          }
-          return;
-        }
-      } catch (e) {
-        console.warn('VQA OCR check:', e);
-      }
-    }
-
-    // 3. Fast open-vocabulary CLIP check (runs in ~80ms)
-    let ranked = [];
-    if (typeof engine !== 'undefined' && engine.clip && engine.clip.status === 'ready' && typeof clipEmbedCrops === 'function') {
-      try {
-        const [emb] = await clipEmbedCrops(frame, [centerRect(frame, 0.65)]);
-        if (emb) {
-          ranked = scoreEmbedding(emb).filter(r => r.id !== '_bg' && !VOCAB_BY_ID[r.id]?.quiet);
-        }
-      } catch (e) {
-        console.warn('VQA CLIP embed:', e);
-      }
-    }
-
-    // 4. If user asked for a specific item, check if it was found
-    if (vocabMatch) {
-      const matchId = vocabMatch.id;
-      const clipHit = ranked.slice(0, 4).find(r => r.id === matchId && r.p >= 0.12);
-      const cocoHit = cocoObjs.find(o => {
-        if (o.id === matchId) return true;
-        if (matchId === 'cell phone' && o.id === 'cell phone') return true;
-        if (matchId === 'wallet' && (o.id === 'handbag' || (o.id === 'book' && o.bbox[2] * o.bbox[3] < 22000))) return true;
-        if (matchId === 'keys' && (o.id === 'scissors' || o.id === 'mouse')) return true;
-        if (matchId === 'power bank' && (o.id === 'cell phone' || o.id === 'mouse')) return true;
-        if (matchId === 'phone charger' && o.id === 'mouse') return true;
-        if (matchId === 'laptop charger' && o.id === 'mouse') return true;
-        if (matchId === 'lipstick' && o.id === 'bottle' && o.bbox[2] * o.bbox[3] < 12000) return true;
-        if (matchId === 'id card' && (o.id === 'book' || o.id === 'cell phone')) return true;
-        return false;
-      });
-
-      if (clipHit || cocoHit) {
-        const cx = cocoHit ? (cocoHit.bbox[0] + cocoHit.bbox[2] / 2) / frame.width : 0.5;
-        const cy = cocoHit ? (cocoHit.bbox[1] + cocoHit.bbox[3] / 2) / frame.height : 0.5;
-        const pos = cx < 0.38 ? 'on your left' : cx > 0.62 ? 'on your right' : 'directly ahead of you';
-        const posBn = cx < 0.38 ? 'বামে' : cx > 0.62 ? 'ডানে' : 'সামনে';
-        const labelEn = label(matchId);
-        const labelBnStr = labelBn(matchId);
-
-        const enMsg = `Yes, I can see your ${labelEn} ${pos} on the ${surfaceName}.`;
-        const bnMsg = `হ্যাঁ, আপনার ${posBn} ${surfaceNameBn}-এর ওপর আপনার ${labelBnStr} দেখতে পাচ্ছি।`;
-        announce(enMsg, bnMsg, 'vision');
-        playEarcon('confirm');
-        haptic('CONFIRM');
-        heartFlash({ x: cx, y: cy, mode: 'lock', label: labelEn });
-        recordConversationTurn('assistant', enMsg);
-        if (typeof autoRecordMemory === 'function') {
-          autoRecordMemory({
-            item: labelEn,
-            location: `on the ${surfaceName} in the ${curRoom}`,
-            room: curRoom,
-            furniture: surfaceName,
-            source: 'Visual Q&A',
-            score: clipHit ? clipHit.p : (cocoHit ? cocoHit.score : null)
-          });
-        }
-        return;
-      }
-
-      // Not found: Give clear, specific, courteous response
-      const labelEn = label(matchId);
-      const labelBnStr = labelBn(matchId);
-      const enMsg = `I am looking at what is in front of the camera, but I cannot see your ${labelEn} right now. Try tilting the camera down or holding it closer.`;
-      const bnMsg = `ক্যামেরার সামনে দেখছি, কিন্তু এই মুহূর্তে আপনার ${labelBnStr} দেখতে পাচ্ছি না। ক্যামেরা আরেকটু কাছে ধরুন।`;
-      announce(enMsg, bnMsg, 'vision');
-      recordConversationTurn('assistant', enMsg);
-      return;
-    }
-
-    // 5. If general visual query ("what do you see", "what is on the table"):
-    if (ranked.length > 0 && ranked[0].p >= 0.18) {
-      const top = ranked[0];
-      const name = label(top.id);
-      const nameBn = labelBn(top.id);
-      const enMsg = `I see a ${name} in front of the camera on the ${surfaceName}.`;
-      const bnMsg = `ক্যামেরার সামনে ${surfaceNameBn}-এ একটি ${nameBn} দেখতে পাচ্ছি।`;
-      announce(enMsg, bnMsg, 'vision');
-      heartFlash({ x: 0.5, y: 0.5, mode: 'lock', label: name });
-      recordConversationTurn('assistant', enMsg);
-      return;
-    }
-
-    if (cocoObjs.length > 0) {
-      const topObj = cocoObjs[0];
-      const objName = label(topObj.id);
-      const objNameBn = labelBn(topObj.id);
-      const cx = (topObj.bbox[0] + topObj.bbox[2] / 2) / frame.width;
-      const pos = cx < 0.38 ? 'on your left' : cx > 0.62 ? 'on your right' : 'ahead of you';
-      const enMsg = `I see ${article(objName)} ${objName} ${pos} on the ${surfaceName}.`;
-      const bnMsg = `${pos === 'ahead of you' ? 'সামনে' : pos} ${surfaceNameBn}-এ একটি ${objNameBn} দেখতে পাচ্ছি।`;
-      announce(enMsg, bnMsg, 'vision');
-      recordConversationTurn('assistant', enMsg);
-      return;
-    }
-
-    const enMsg = `I am looking in front of the camera, but cannot clearly distinguish an object right now. Try holding it closer or tilting the camera down.`;
-    const bnMsg = `ক্যামেরার সামনে দেখছি, কিন্তু এই মুহূর্তে কোনো জিনিস স্পষ্ট দেখতে পাচ্ছি না। ক্যামেরা আরেকটু কাছে ধরুন।`;
-    announce(enMsg, bnMsg, 'vision');
-    recordConversationTurn('assistant', enMsg);
+    const en = 'I checked the current image, but I cannot confirm that specific item with the local detector. Try another angle or use Online AI with your permission.';
+    const bn = 'বর্তমান ছবিটি দেখেছি, কিন্তু স্থানীয় শনাক্তকারী দিয়ে নির্দিষ্ট জিনিসটি নিশ্চিত করতে পারছি না। অন্য দিক থেকে দেখান, অথবা অনুমতি দিয়ে অনলাইন এআই ব্যবহার করুন।';
+    announce(en, bn, 'vision'); recordConversationTurn('assistant', en);
   });
 }
 
@@ -1821,7 +1701,7 @@ async function remember(id, pos) {
   if (!observation) return;
   const position = 'In the ' + (pos === 'ahead' ? 'centre' : pos) + ' of the image; physical location unconfirmed';
   const itemLabel = objLabel(observation);
-  try { await apiSend('POST', '/api/memories', { item: itemLabel, location: position, source: state.source === 'camera' ? 'Camera observation' : 'Uploaded photo', score: observation.score }); }
+  try { await apiSend('POST', '/api/memories', { item: itemLabel, location: position, source: ['camera', 'pi'].includes(state.source) ? 'Camera observation' : 'Uploaded photo', score: observation.score }); }
   catch (e) { return announce('I could not save that. Check your connection.', 'সংরক্ষণ করা যায়নি। সংযোগ দেখুন।'); }
   await refreshMemory();
   announce('Saved a possible ' + itemLabel + ' from this image. Add a room or surface in a new note for useful location recall.', 'ছবি থেকে সম্ভাব্য ' + objLabelBn(observation) + ' সংরক্ষিত। নির্দিষ্ট স্থানের জন্য আলাদা নোট যোগ করুন।', 'memory');

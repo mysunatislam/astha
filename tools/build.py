@@ -33,12 +33,13 @@ def rep_between(start, end, new):
     html = html[:i] + new + html[j:]
 
 # ---- theme: calm navy by default (no yellow), selector kept ----
-rep('<html lang="en" data-theme="clinical-yellow"', '<html lang="en" data-theme="navy-cyan"')
-rep("localStorage.getItem('astha.clinical_theme') || 'clinical-yellow'", "localStorage.getItem('astha.clinical_theme') || 'navy-cyan'")
+rep('<html lang="en" data-theme="clinical-yellow"', '<html lang="en" data-theme="mulberry-apricot"')
+rep("localStorage.getItem('astha.clinical_theme') || 'clinical-yellow'", "localStorage.getItem('astha.clinical_theme') || 'mulberry-apricot'")
 rep("""        <option value="clinical-yellow">🟡 Yellow on black</option>
         <option value="monochrome">⚪ Monochrome (Inverted White/Black)</option>
         <option value="navy-cyan">🌊 Navy and cyan</option>""",
-    """        <option value="navy-cyan">🌊 Navy and cyan</option>
+    """        <option value="mulberry-apricot" data-i18n="theme_calm">Mulberry &amp; Apricot</option>
+        <option value="navy-cyan">🌊 Navy and cyan</option>
         <option value="monochrome">⚪ Monochrome (white on black)</option>
         <option value="clinical-yellow">🟡 Yellow on black (photophobia)</option>""")
 
@@ -438,10 +439,6 @@ rep('        <button class="chip-btn" id="hf-btn" onclick="toggleHandsFree()" ar
     '          <button id="mode-auto" onclick="setMode(\'auto\')" aria-pressed="true">Auto · busy area</button>\n'
     '          <button id="mode-quiet" onclick="setMode(\'quiet\')" aria-pressed="false">Quiet · ask me</button>\n'
     '        </div>\n      </div>')
-rep('      <label class="field" for="speech-rate">Speaking speed',
-    '      <label class="field" for="gemini-key">Personal Gemini key (optional backup)<input id="gemini-key" type="password" autocomplete="off" placeholder="Leave blank -- the Astha server already provides this" onchange="setGeminiKey(this.value)"></label>\n'
-    '      <p class="help">Cloud features require a configured server or your own provider key and your consent. Descriptions can be wrong; verify before acting. A personal key is kept on this browser and should only be used on a device you trust.</p>\n'
-    '      <label class="field" for="speech-rate">Speaking speed')
 rep('        <h2 data-i18n="engine_title">On-device AI engine</h2>\n        <button class="btn small accent" id="load-models-btn" onclick="loadAllModels()" data-i18n="engine_load">Load models</button>',
     '        <h2 data-i18n="engine_title">On-device AI engine</h2>\n        <span class="pill" id="cloud-pill">Checking cloud…</span>\n        <button class="btn small accent" id="load-models-btn" onclick="loadAllModels()" data-i18n="engine_load">Load models</button>')
 rep('    <!-- AI Model Diagnostics -->',
@@ -549,7 +546,7 @@ rep('<a class="skip-link" href="#companion-main">Skip to companion</a>\n',
 
 # ---- client scripts: config (deployment overrides) + backend (auth gate wiring) ----
 rep('</script>\n</body>\n</html>',
-    '</script>\n<script src="config.js"></script>\n<script src="backend.js"></script>\n</body>\n</html>')
+    '</script>\n<script src="config.js"></script>\n<script src="native-api.js"></script>\n<script src="pi-camera.js"></script>\n<script src="backend.js"></script>\n</body>\n</html>')
 
 
 # ---- Offline companion: no narration while a search is guiding; route the new voice abilities ----
@@ -565,17 +562,26 @@ rep("  if (/computer|code|programming|teach|summar|explain|navigate|guide me|ক
 assert "</script" not in json.dumps(i18n["strings"], ensure_ascii=False).lower()
 i18n_data = "const I18N_EXTRA = " + json.dumps(i18n["strings"], ensure_ascii=False, separators=(",", ":")) + ";\n"
 rep("  renderSeen(); renderMemory(); renderLog();\n}\n", "  applyStaticI18n();\n  renderSeen(); renderMemory(); renderLog();\n}\n")
-rep("\n(function boot() {", i18n_data + i18n_js.rstrip("\n") + "\n" + module.rstrip("\n") + "\n" + eye_js.rstrip("\n") + "\n" + cloud_js.rstrip("\n") + "\n" + agent_js.rstrip("\n") + "\n" + perceive_js.rstrip("\n") + "\n" + offline_js.rstrip("\n") + "\n" + account_js.rstrip("\n") + "\n\n(function boot() {")
+experience_js = (HERE / "experience.js").read_text(encoding="utf-8")
+pi_ui_js = (HERE / "pi-camera-ui.js").read_text(encoding="utf-8")
+braille_js = (HERE / "braille.js").read_text(encoding="utf-8")
+sensors_js = (HERE / "sensors.js").read_text(encoding="utf-8")
+rep("\n(function boot() {", i18n_data + i18n_js.rstrip("\n") + "\n" + module.rstrip("\n") + "\n" + eye_js.rstrip("\n") + "\n" + cloud_js.rstrip("\n") + "\n" + agent_js.rstrip("\n") + "\n" + perceive_js.rstrip("\n") + "\n" + offline_js.rstrip("\n") + "\n" + account_js.rstrip("\n") + "\n" + experience_js.rstrip("\n") + "\n" + pi_ui_js.rstrip("\n") + "\n" + braille_js.rstrip("\n") + "\n" + sensors_js.rstrip("\n") + "\n\n(function boot() {")
 rep("  renderSpatialLayout();\n  enhancementBoot();\n})();", "  renderSpatialLayout();\n  enhancementBoot();\n  companionBoot();\n  eyeBoot();\n  cloudBoot();\n})();")
 
 # ---- boot(): expose it instead of self-invoking, so backend.js can run it after sign-in ----
 rep('(function boot() {', 'window.__asthaBoot = function boot() {')
 rep('  companionBoot();\n  eyeBoot();\n  cloudBoot();\n})();',
-    '  companionBoot();\n  eyeBoot();\n  cloudBoot();\n  offlineBoot();\n  refreshMemory();\n  refreshRooms();\n'
+    '  companionBoot();\n  eyeBoot();\n  cloudBoot();\n  offlineBoot();\n  AsthaExperience.boot();\n  AsthaPiCamera.boot();\n  AsthaBraille.boot();\n  refreshMemory();\n  refreshRooms();\n'
     '  // Warm the on-device detector while the page settles (cached weights + WebGL shader compile),\n'
     '  // so the first "describe" or camera start does not begin with a silent wait. Skipped on data-saver.\n'
     "  setTimeout(() => { if (typeof loadCoco === 'function' && engine.coco.status === 'idle' && !(navigator.connection && navigator.connection.saveData)) loadCoco().catch(() => {}); }, 1200);\n"
     '};')
+# Page navigation, the personal setup assessment and the connected-devices page.
+assessment_html = (HERE / "assessment.html").read_text(encoding="utf-8").replace('<div id="pi-connection-slot"></div>', '<div id="pi-connection-slot">' + (HERE / "pi-camera-controls.html").read_text(encoding="utf-8") + '</div>')
+rep('<main', assessment_html + '\n<main')
+rep('function handleQuery(query) {\n  if (privacyTransition) return;',
+    'function handleQuery(query) {\n  if (privacyTransition) return;\n  if (AsthaExperience.route(query)) return;')
 # ---- translation hooks: tag each listed element, verifying it still shows its English string ----
 def add_i18n_hooks():
     global html
@@ -614,7 +620,7 @@ shell_hash = hashlib.sha256(html.encode("utf-8"))
 # Bootstrap/config-only changes must invalidate cache-first resources, too. Normalize the
 # stamp itself to avoid a circular hash and keep successive builds byte-for-byte identical.
 shell_hash.update(re.sub(r"const CACHE = 'astha-shell-[^']*';", "const CACHE = 'astha-shell-STAMP';", sw).encode("utf-8"))
-for asset in ("config.js", "backend.js", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png"):
+for asset in ("config.js", "native-api.js", "pi-camera.js", "backend.js", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png"):
     shell_hash.update(asset.encode("utf-8"))
     shell_hash.update((DST.parent / asset).read_bytes())
 stamp = shell_hash.hexdigest()[:10]

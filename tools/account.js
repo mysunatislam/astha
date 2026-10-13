@@ -112,6 +112,10 @@ async function openDeleteAccount(keepOpen) {
   $('delete-account-pin-field').hidden = !registered; $('delete-account-pin').value = '';
   const note = $('delete-account-note');
   note.hidden = registered; note.textContent = registered ? '' : t(connected ? 'data_delete_guest' : 'data_delete_local');
+  if (typeof AsthaExperience !== 'undefined') AsthaExperience.showPage('settings', { speakTitle: false });
+  for (let ancestor = panel.parentElement; ancestor; ancestor = ancestor.parentElement) {
+    if (ancestor.tagName === 'DETAILS') ancestor.open = true;
+  }
   panel.hidden = false; $('delete-account-btn').setAttribute('aria-expanded', 'true');
   (registered ? $('delete-account-pin') : $('delete-account-confirm')).focus();
   announce(I18N.en.data_delete_warn, I18N.bn.data_delete_warn, 'system');

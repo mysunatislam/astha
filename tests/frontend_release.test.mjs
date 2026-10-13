@@ -71,10 +71,10 @@ test('no implicit demo credential or embedded Maira project credential remains',
   assert.equal(h.run('cloudReady()'), false);
 });
 
-test('explicit stored personal key remains available without fabricating a key', () => {
+test('retired stored personal key cannot activate online reasoning', () => {
   const h = harness({ 'astha.gemini': 'user-supplied-test-key' });
-  assert.equal(h.run('getEffectiveKey()'), 'user-supplied-test-key');
-  assert.equal(h.run('cloudReady()'), true);
+  assert.equal(h.run('getEffectiveKey()'), '');
+  assert.equal(h.run('cloudReady()'), false);
   h.storage.set('astha.ai_mode', 'offline');
   assert.equal(h.run('cloudReady()'), false);
 });
@@ -105,37 +105,13 @@ test('fresh profiles select on-device mode without a client-side entitlement', (
   assert(!cloudSource.includes('TRIAL_DAYS'));
 });
 
-test('documented stable Gemini default and bounded explicit runtime model list', () => {
-  const h = harness();
-  assert.equal(h.run('cloud.model'), 'gemini-3.6-flash');
-  assert.deepEqual(Array.from(h.run('configuredClientModels()')), ['gemini-3.6-flash']);
-  h.context.window.ASTHA_GEMINI_MODELS = ['explicit-first', 'explicit-second'];
-  assert.deepEqual(Array.from(h.run('configuredClientModels()')), ['explicit-first', 'explicit-second']);
-  for (const invalid of [['one', 'two', 'three', 'four'], ['bad/path'], [23], []]) {
-    h.context.window.ASTHA_GEMINI_MODELS = invalid;
-    assert.deepEqual(Array.from(h.run('configuredClientModels()')), ['gemini-3.6-flash']);
-  }
-});
-
-test('personal Gemini falls back only for a mocked 404 on explicitly configured models', async () => {
-  const h = harness({ 'astha.gemini': 'user-supplied-test-key' });
-  h.context.window.ASTHA_GEMINI_MODELS = ['explicit-first', 'explicit-second'];
-  h.context.ASTHA_SYSTEM = 'test-system';
-  h.context.fetch = async (url, options) => {
-    h.calls.fetch.push([url, options]);
-    return h.calls.fetch.length === 1 ? { status:404, ok:false } : { status:200, ok:true, json:async () => ({candidates:[{content:{parts:[{text:'{"en":"fixture response","bn":"পরীক্ষা"}'}]}}]}) };
-  };
-  h.run(gemini + section(cloudSource, 'function parseJsonLoose(', 'function cloudFail('));
-  const result = await h.run("gemini('describe', null)");
-  assert.equal(result.en, 'fixture response');
-  assert.equal(h.calls.fetch.length, 2);
-  assert(h.calls.fetch[0][0].includes('explicit-first:'));
-  assert(h.calls.fetch[1][0].includes('explicit-second:'));
-  assert.equal(h.run('cloud.model'), 'explicit-second');
-  h.calls.fetch = [];
-  h.context.fetch = async (url, options) => { h.calls.fetch.push([url,options]); return {status:500,ok:false}; };
-  await assert.rejects(h.run("gemini('describe', null)"), /Gemini 500/);
-  assert.equal(h.calls.fetch.length, 1);
+test('online reasoning never contacts a provider directly or consumes a stored personal key', async () => {
+  const h = harness({ 'astha.gemini': 'retired-key' });
+  h.run(gemini);
+  await assert.rejects(h.run("gemini('describe', null)"), /no cloud reasoning/);
+  assert.equal(h.calls.fetch.length, 0);
+  assert(!cloudSource.includes('generativelanguage.googleapis.com'));
+  assert(!cloudSource.includes('api.recommender.gigalogy.com'));
 });
 
 test('cloud entry point refuses privacy/offline processing before capture or fetch', async () => {
@@ -146,7 +122,7 @@ test('cloud entry point refuses privacy/offline processing before capture or fet
     if (mode === 'transition') h.context.privacyTransition = true;
     if (mode === 'offline') h.storage.set('astha.ai_mode', 'offline');
     if (mode === 'network') h.context.navigator.onLine = false;
-    await assert.rejects(h.run("gemini('describe', null)"), /remote processing disabled/);
+    await assert.rejects(h.run("gemini('describe', null)"), /Remote request cancelled/);
     assert.equal(h.calls.fetch.length, 0);
   }
 });
@@ -209,13 +185,13 @@ test('account switch while waiting for health cannot upload an earlier account n
   assert.equal(h.calls.fetch.length, 0);
 });
 
-test('a personal Maira key without an explicit project cannot advertise cloud readiness', () => {
+test('a provider key left in the browser can never advertise or supply cloud readiness', () => {
   const h = harness({ 'astha.gemini': 'gAAAAA-test-key' });
-  assert.equal(h.run('cloudReady()'), false);
   h.context.window.ASTHA_MAIRA_PROJECT_KEY = 'explicit-test-project';
-  assert.equal(h.run('cloudReady()'), false);
   h.context.window.ASTHA_ACCOUNT_ID = 'verified-owner';
-  assert.equal(h.run('cloudReady()'), true);
+  // Personal keys are retired: only the configured ASTHA server can make cloud features ready.
+  assert.equal(h.run('getEffectiveKey()'), '');
+  assert.equal(h.run('cloudReady()'), false);
 });
 
 test('request deadline preserves caller cancellation, including older mobile fallback', () => {
