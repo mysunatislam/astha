@@ -209,6 +209,13 @@ test('Android guardrails: screen reading is opt-in, read-only, bound by the syst
   assert.match(between(plugin, 'public void setScreenAccessConsent', '\n    }\n'), /disableSelf\(\)/);
   assert.deepEqual([...plugin.matchAll(/GLOBAL_ACTION_[A-Z_]+/g)].map(match => match[0]).sort(), ['GLOBAL_ACTION_BACK', 'GLOBAL_ACTION_HOME']);
   assert.match(activity, /registerPlugin\(AsthaNativePlugin\.class\);\s*super\.onCreate/);
+  // Only debug builds may trust a tester-installed certificate (for a Pi camera on a private CA).
+  const network = read('android/app/src/main/res/xml/network_security_config.xml');
+  assert.match(manifest, /android:networkSecurityConfig="@xml\/network_security_config"/);
+  const base = between(network, '<base-config', '</base-config>');
+  assert.match(base, /cleartextTrafficPermitted="false"/); assert.match(base, /src="system"/); assert.doesNotMatch(base, /src="user"/);
+  assert.match(between(network, '<debug-overrides>', '</debug-overrides>'), /src="user"/);
+  assert.doesNotMatch(network, /<domain-config|cleartextTrafficPermitted="true"/);
   // Bangla and English descriptions exist for the Android settings screen.
   for (const file of ['values', 'values-bn']) {
     const text = read('android/app/src/main/res/' + file + '/strings.xml');
