@@ -103,6 +103,9 @@ long-term home and is listed below as an owner decision.
 - Merging a used guest's records into an existing account at sign-in.
 
 - Whether to move the personal setup answers into their own table with a reviewed migration.
+- Whether ASTHA's own spoken output may use the online Bangla voice without the broader
+  online-processing consent. Today it may not, so a device without a Bangla voice speaks
+  English until the user allows online processing.
 - Whether asking how much a user relies on vision needs explicit wording or consent under
   the laws that apply to the deployment. This document is not legal advice.
 

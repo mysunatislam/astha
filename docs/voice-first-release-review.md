@@ -128,6 +128,30 @@ open. They are useful, and they are not a substitute for a screen reader on a ph
 - Two defects were found and fixed this way: the voice menu grew wider than the phone
   once long voice names loaded, and placeholder text fell to about 3.9:1 on tinted fields.
 
+## Where the Bangla voice comes from
+
+Almost no computer and few phones ship a Bangla voice. ASTHA's Bangla voice is therefore
+the online one: the text to be spoken goes to the ASTHA server and on to Microsoft's
+speech service, which is why it is covered by the online-processing consent.
+
+| Situation | What the user hears |
+| --- | --- |
+| Online allowed for this session | The Bangla neural voice |
+| Online off, device has a Bangla voice (some Android phones, after installing one) | The device's Bangla voice |
+| Online off, no Bangla voice on the device | English, with a one-time spoken explanation and a notice beside the Online switch. Before this fix: silence. |
+| Bangla-only text with no English version (a page being read aloud) | Nothing is spoken and the reader reports that it could not read it |
+
+Consent lasts one session. Someone who chose Online last time is asked again when ASTHA
+starts, on the page itself. The native confirmation dialog is still used when Online is
+switched on by hand, and if the host suppresses it (it answers "no" in a few
+milliseconds), the same question is asked on the page instead. Only activating **Allow**
+grants consent; nothing is granted by voice or by default.
+
+A Bangla-speaking blind user on a device without a Bangla voice therefore hears the
+consent question in English. That is a real limit of this design, and the owner's
+decision listed in [data handling](data-handling.md): whether speech output alone may use
+the online voice without the broader consent.
+
 ## A Bangla defect worth knowing about
 
 JavaScript's `\b` word boundary only understands ASCII letters, so a pattern such as
