@@ -643,6 +643,12 @@
   .astha-app .mode-buttons button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
   .astha-app .mode-status { color: var(--text); font-weight: 600; }
   .astha-app .device-status { color: var(--muted); }
+  .astha-app .mode-panel > .voice-notice { margin-top: 12px; padding: 10px 12px; border-left: 3px solid var(--warn); border-radius: 0 8px 8px 0; background: var(--warn-soft); color: var(--text); font-weight: 600; }
+  .astha-app .consent-overlay { position: fixed; inset: 0; z-index: 80; display: grid; place-items: center; padding: 16px; background: rgba(48, 32, 50, .6); }
+  .astha-app .consent-overlay[hidden] { display: none; }
+  .astha-app .consent-card { width: 100%; max-width: 560px; max-height: 100%; overflow: auto; padding: 24px; border: 1px solid var(--border-strong); border-radius: 18px; background: var(--surface); box-shadow: 0 12px 40px rgba(0, 0, 0, .25); }
+  .astha-app .consent-card h2 { margin: 0 0 12px; font-size: 1.3rem; line-height: 1.4; color: var(--text); }
+  .astha-app .consent-card p { margin: 0 0 16px; line-height: 1.7; color: var(--text); }
   /* ---- One task per screen ------------------------------------------------------ */
   .astha-app .page-title { max-width: 1280px; margin: 24px auto 0; padding: 0 28px; font-size: 1.6rem; line-height: 1.4; color: var(--text); }
   .astha-app[data-view="home"] .page-title { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
@@ -804,6 +810,7 @@
         </div>
         <p class="mode-status" id="context-status" data-i18n="mode_desc_ask">Quiet until you ask.</p>
         <p class="device-status" id="device-status" data-i18n="device_camera_off">Camera off.</p>
+        <p class="voice-notice" id="voice-notice" role="status" hidden data-i18n="voice_no_bangla">This device has no Bangla voice, so Astha is speaking English. Turn on Online AI above to hear Bangla.</p>
       </div>
 
       <form class="command-bar" onsubmit="event.preventDefault(); submitCommand()">

@@ -1191,6 +1191,22 @@
   "device_actions_info": [
    "You can also say “open the WhatsApp app”, or “write a message saying I will be late”. Astha asks before opening anything, and you choose the person and press send yourself.",
    "আপনি বলতে পারেন “হোয়াটসঅ্যাপ অ্যাপ খোলো”, অথবা “বার্তা লেখো, আমার দেরি হবে”। কিছু খোলার আগে আস্থা জিজ্ঞাসা করে, আর ব্যক্তি বাছাই ও পাঠানো আপনি নিজেই করেন।"
+  ],
+  "voice_no_bangla": [
+   "This device has no Bangla voice, so Astha is speaking English. Turn on Online AI above to hear Bangla.",
+   "এই ডিভাইসে বাংলা কণ্ঠ নেই, তাই আস্থা ইংরেজিতে বলছে। বাংলা শুনতে ওপরের অনলাইন এআই চালু করুন।"
+  ],
+  "consent_title": [
+   "Allow online processing?",
+   "অনলাইন প্রসেসিংয়ের অনুমতি দেবেন?"
+  ],
+  "consent_allow": [
+   "Allow for this session",
+   "এই সেশনের জন্য অনুমতি দিন"
+  ],
+  "consent_cancel": [
+   "Cancel, keep on this phone",
+   "বাতিল, ফোনেই রাখুন"
   ]
  },
  "hooks": [

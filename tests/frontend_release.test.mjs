@@ -194,6 +194,22 @@ test('a provider key left in the browser can never advertise or supply cloud rea
   assert.equal(h.run('cloudReady()'), false);
 });
 
+test('a host that answers the consent dialog instantly is asked again on the page; a person who declines is not', () => {
+  const h = harness({}, false); let now = 50000, onPage = 0;
+  h.context.Date = class extends Date { static now() { return now; } };
+  h.context.askRemoteConsentOnPage = () => { onPage++; };
+  // The stand-in dialog returns at once, as a host that suppresses dialogs does.
+  assert.equal(h.run('requestRemoteConsent()'), false); assert.equal(onPage, 1);
+  assert.equal(h.run('remoteProcessingAllowed()'), false, 'being asked again is not consent');
+  h.context.window.confirm = () => { now += 2500; return false; };
+  assert.equal(h.run('requestRemoteConsent()'), false); assert.equal(onPage, 1, 'someone who read the dialog and declined is left alone');
+  h.context.privacyMode = true; h.context.window.confirm = () => { throw new Error('no prompt in privacy mode'); };
+  assert.equal(h.run('requestRemoteConsent()'), false); assert.equal(onPage, 1);
+  h.context.privacyMode = false; h.context.window.confirm = () => { now += 2500; return true; };
+  assert.equal(h.run('requestRemoteConsent()'), true); assert.equal(onPage, 1);
+  assert.match(h.run('REMOTE_CONSENT.en'), /Spoken text may be sent to Microsoft/); assert.match(h.run('REMOTE_CONSENT.bn'), /Microsoft/);
+});
+
 test('request deadline preserves caller cancellation, including older mobile fallback', () => {
   for (const native of [true, false]) {
     const h = harness();

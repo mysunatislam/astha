@@ -163,7 +163,7 @@ const AsthaExperience = (() => {
       const en = photo ? 'Checking the selected image.' : 'Checking the current camera view.';
       const bn = photo ? 'নির্বাচিত ছবিটি দেখছি।' : 'ক্যামেরার বর্তমান দৃশ্য দেখছি।';
       setCaption(t('analyzing_title'), en, 'vision', 'busy', bn);
-      if (state.audio) await VoiceEngine.speak(voiceLang === 'bn' ? bn : en, voiceLang);
+      if (state.audio) await VoiceEngine.say(en, bn);
       if (!current()) return;
       return await run(current);
     } finally { pending = Math.max(0, pending - 1); }
@@ -327,7 +327,7 @@ const AsthaExperience = (() => {
     const mine = guide; if (!mine) return;
     const step = GUIDE[mine.step], en = prefixEn + step.en, bn = prefixBn + step.bn;
     setCaption(t('page_assessment'), en, 'system', null, bn);
-    if (state.audio) await VoiceEngine.speak(voiceLang === 'bn' ? bn : en, voiceLang);
+    if (state.audio) await VoiceEngine.say(en, bn);
     // Listen for the answer without another tap, once per question.
     if (guide === mine && mine.asked !== mine.step && !state.listening && typeof toggleListening === 'function') { mine.asked = mine.step; toggleListening(); }
   }
@@ -368,10 +368,15 @@ const AsthaExperience = (() => {
     const group = event.target?.closest?.('fieldset, .setup-question');
     if (!group || group === spokenGroup || !state.audio) return;
     spokenGroup = group;
-    const heading = group.querySelector('legend, .setup-label');
-    const hint = group.querySelector('.setup-hint');
-    const words = [heading?.textContent, hint?.textContent].filter(Boolean).join('. ').replace(/\s+/g, ' ').trim();
-    if (words) VoiceEngine.speak(words, uiLang);
+    // Both languages come from the dictionary, so the question can still be read in
+    // English on a device that has no Bangla voice.
+    const both = element => {
+      const key = element?.getAttribute?.('data-i18n');
+      return key && I18N.en[key] ? [I18N.en[key], I18N.bn[key]] : [element?.textContent || '', element?.textContent || ''];
+    };
+    const heading = both(group.querySelector('legend, .setup-label')), hint = both(group.querySelector('.setup-hint'));
+    const join = index => [heading[index], hint[index]].filter(Boolean).join('. ').replace(/\s+/g, ' ').trim();
+    if (join(0) || join(1)) VoiceEngine.say(join(0), join(1));
   }
 
   /* ---- Presence: what ASTHA is doing right now -------------------------------------- */
@@ -430,6 +435,10 @@ const AsthaExperience = (() => {
     document.addEventListener('visibilitychange', () => { if (document.hidden) { visualGeneration++; contextGeneration++; clearTimeout(boardTimer); boardTimer = null; } else if (mode === 'classroom' && !boardTimer) boardTimer = setTimeout(checkBoard, 5000); });
     fillForm(preferences);
     showPage('home', { focus: false, speakTitle: false });
+    // Consent lasts one session. Someone who chose Online last time is asked again at the
+    // start, so the Bangla voice does not stay unavailable until they find the switch.
+    if (typeof Subscription !== 'undefined' && Subscription.getMode() === 'gemini' && !remoteProcessingAllowed() &&
+        !privacyMode && navigator.onLine !== false) askRemoteConsentOnPage();
     loadAccountPreferences();
     renderPresence(true);
     if (typeof setInterval === 'function') setInterval(renderPresence, 200);
@@ -442,3 +451,31 @@ const AsthaExperience = (() => {
     get mode() { return mode; }, get page() { return page; }, get busy() { return busy(); },
     get preferences() { return { ...preferences }; } };
 })();
+// Consent asked on the page itself, for hosts that do not show native dialogs. It is
+// granted only by the person activating Allow; nothing here grants it on their behalf.
+function askRemoteConsentOnPage() {
+  const dialog = $('consent-dialog'); if (!dialog || !dialog.hidden) return;
+  const opener = document.activeElement, allow = $('consent-allow'), cancel = $('consent-cancel');
+  const background = () => document.querySelectorAll('body > header, body > nav, body > main, body > section');
+  $('consent-text').textContent = REMOTE_CONSENT[uiLang === 'bn' ? 'bn' : 'en'];
+  const close = granted => {
+    dialog.hidden = true; document.removeEventListener('keydown', onKey, true);
+    background().forEach(element => element.removeAttribute('inert'));
+    opener?.focus?.();
+    if (granted) { remoteProcessingConsent = true; Subscription.setMode('gemini'); }
+  };
+  const onKey = event => {
+    if (event.key === 'Escape') { event.preventDefault(); close(false); }
+    else if (event.key === 'Tab') {
+      // Two controls: keep focus moving between them while the question is open.
+      const first = event.shiftKey ? cancel : allow, last = event.shiftKey ? allow : cancel;
+      if (document.activeElement === last || !dialog.contains(document.activeElement)) { event.preventDefault(); first.focus(); }
+    }
+  };
+  allow.onclick = () => close(true); cancel.onclick = () => close(false);
+  document.addEventListener('keydown', onKey, true);
+  background().forEach(element => element.setAttribute('inert', ''));
+  dialog.hidden = false;
+  $('consent-title').focus();
+  announce('Online processing, which includes my Bangla voice, needs your permission. Choose Allow for this session, or Cancel.', 'অনলাইন প্রসেসিংয়ের জন্য, যার মধ্যে আমার বাংলা কণ্ঠও আছে, আপনার অনুমতি দরকার। এই সেশনের জন্য অনুমতি দিন, অথবা বাতিল বেছে নিন।', 'system');
+}

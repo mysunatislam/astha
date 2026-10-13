@@ -203,6 +203,7 @@ function voiceHarness() {
     URL: { createObjectURL: () => 'blob:fixture', revokeObjectURL() {} },
     $: () => ({ value: '1' }), sanitizeForSpeech: text => text,
     makeUtterance: text => ({ text }), backendReachable: () => true,
+    voices: [{ name: 'Local Bangla', lang: 'bn-BD', localService: true }], refreshVoices() {},
     offlineError: () => new Error('remote processing disabled'),
     fetch: async (url, options) => { calls.fetch.push({ url, options }); return { ok: false, status: 405 }; },
     Audio: class {

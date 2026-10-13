@@ -33,7 +33,7 @@ function harness() {
     setUiLanguage: next => { context.uiLang = next; }, setVoiceLanguage: next => { context.voiceLang = next; },
     reader: { active: false }, reading: { active: false }, speaking: false,
     Date: class extends Date { static now() { return now; } },
-    VoiceEngine: { requestController: null, speak: async () => true },
+    VoiceEngine: { requestController: null, speak: async () => true, say(en, bn) { return this.speak(context.voiceLang === 'bn' ? bn : en, context.voiceLang); } },
     asthaSpeaking: () => context.speaking,
     setMode: (...args) => modes.push(args), announce: (en, bn, kind) => announcements.push({ en, bn, kind }),
     setCaption: (...args) => context.captions.push(args), captions: [], t: key => key,
@@ -48,7 +48,7 @@ function harness() {
     document: { hidden: false, body: element('body'), documentElement: { getAttribute: name => name === 'data-theme' ? 'mulberry-apricot' : 'normal' },
       querySelectorAll: selector => selector === '[data-astha-context]' ? contextButtons : selector === '[data-astha-page]' ? pageButtons : [],
       querySelector: selector => selector === 'main' ? element('main') : element(selector),
-      addEventListener: (name, fn) => events.set(name, fn) },
+      addEventListener: (name, fn) => events.set(name, fn), removeEventListener: name => events.delete(name) },
   };
   vm.createContext(context); vm.runInContext(source + '\nglobalThis.experience = AsthaExperience;', context);
   async function tick() {
@@ -243,6 +243,45 @@ test('where continuous recognition does not exist, hands-free is hidden and aski
   const supported = harness(); supported.context.window.SpeechRecognition = function () {}; supported.experience.boot();
   assert.equal(supported.elements.get('hf-btn').hidden, false);
   assert.equal(supported.experience.route('turn on hands-free'), false, 'the existing hands-free command handles it');
+});
+
+test('consent can be given on the page itself: only Allow grants it, and Escape or Cancel leaves it off', () => {
+  const setup = () => {
+    const h = harness(), modes = [];
+    Object.assign(h.context, { REMOTE_CONSENT: { en: 'Allow online processing for this session?', bn: 'এই সেশনে অনলাইন প্রসেসিংয়ের অনুমতি দেবেন?' },
+      remoteProcessingConsent: false, Subscription: { setMode: mode => modes.push([mode, h.context.remoteProcessingConsent]) } });
+    h.elements.get('consent-dialog') || h.context.$('consent-dialog'); h.context.$('consent-dialog').hidden = true;
+    return { h, modes, dialog: h.context.$('consent-dialog') };
+  };
+  const allowed = setup(); allowed.h.context.uiLang = 'bn';
+  allowed.h.context.askRemoteConsentOnPage();
+  assert.equal(allowed.dialog.hidden, false); assert.match(allowed.h.context.$('consent-text').textContent, /অনুমতি দেবেন/);
+  assert.equal(allowed.h.context.remoteProcessingConsent, false, 'opening the question grants nothing');
+  assert.match(allowed.h.announcements.at(-1).en, /needs your permission/);
+  allowed.h.context.askRemoteConsentOnPage(); assert.equal(allowed.h.announcements.length, 1, 'the question is not stacked');
+  allowed.h.context.$('consent-allow').onclick();
+  assert.equal(allowed.dialog.hidden, true); assert.deepEqual(allowed.modes, [['gemini', true]]);
+  for (const decline of [d => d.h.context.$('consent-cancel').onclick(), d => d.h.events.get('keydown')({ key: 'Escape', preventDefault() {} })]) {
+    const declined = setup(); declined.h.context.askRemoteConsentOnPage(); decline(declined);
+    assert.equal(declined.dialog.hidden, true); assert.equal(declined.h.context.remoteProcessingConsent, false); assert.deepEqual(declined.modes, []);
+    assert.equal(declined.h.events.has('keydown'), false, 'the key handler is removed with the dialog');
+  }
+});
+
+test('someone who chose Online last time is asked again at start-up; nobody else is', () => {
+  const start = ({ mode, allowed = false, privacy = false, online = true }) => {
+    const h = harness(), asked = [];
+    Object.assign(h.context, { Subscription: { getMode: () => mode, setMode() {} }, remoteProcessingAllowed: () => allowed, privacyMode: privacy,
+      navigator: { onLine: online }, REMOTE_CONSENT: { en: 'Allow?', bn: 'অনুমতি?' }, remoteProcessingConsent: allowed });
+    h.context.$('consent-dialog').hidden = true;
+    h.experience.boot();
+    return h.context.$('consent-dialog').hidden === false;
+  };
+  assert.equal(start({ mode: 'gemini' }), true);
+  assert.equal(start({ mode: 'offline' }), false, 'on-device users are never prompted');
+  assert.equal(start({ mode: 'gemini', allowed: true }), false);
+  assert.equal(start({ mode: 'gemini', privacy: true }), false, 'privacy mode is not interrupted');
+  assert.equal(start({ mode: 'gemini', online: false }), false);
 });
 
 test('a device copy left by another account is neither applied nor uploaded', async () => {

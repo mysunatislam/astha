@@ -16,7 +16,7 @@ const between = (source, start, end) => {
 const voiceSource = between(moduleSource, 'const VoiceEngine = {', 'function startReader(');
 const liveSource = between(built, 'function afterLiveUpdate() {', '\nfunction showHazard(');
 
-function harness({ mode = 'road', audio = true, deviceVoice = true } = {}) {
+function harness({ mode = 'road', audio = true, deviceVoice = true, voiceLang = 'en', banglaVoice = false } = {}) {
   let now = 500000;
   const timers = [], captions = [], earcons = [], haptics = [], banners = [], logs = [], cancelled = [];
   const synth = {
@@ -27,14 +27,16 @@ function harness({ mode = 'road', audio = true, deviceVoice = true } = {}) {
     cancel() { const utterance = this.current; this.current = null; if (utterance) { cancelled.push(utterance.text); utterance.onerror?.(); } },
     finish() { const utterance = this.current; this.current = null; utterance?.onend?.(); },
   };
-  const element = () => ({ value: '1', textContent: '', hidden: false, setAttribute() {}, addEventListener() {}, focus() {} });
+  const nodes = new Map();
+  const element = id => { if (!nodes.has(id)) nodes.set(id, { value: '1', textContent: '', hidden: true, setAttribute() {}, addEventListener() {}, focus() {} }); return nodes.get(id); };
   const world = [];
   const context = vm.createContext({
     console, Promise, Map, Set, Math, JSON, Object, Array, String, Number, Boolean, RegExp, Error,
     Date: class extends Date { static now() { return now; } },
     setTimeout: (fn, ms) => { timers.push({ fn, ms }); return timers.length; }, clearTimeout() {},
     state: { audio, shield: false, source: 'camera', sourceEpoch: 1, busy: false, listening: false, narrate: true, hazardCooldown: new Map(), announced: new Map() },
-    reader: { active: false }, reading: { active: false }, uiLang: 'en', voiceLang: 'en', privacyTransition: false,
+    reader: { active: false }, reading: { active: false }, uiLang: 'en', voiceLang, privacyTransition: false,
+    voices: banglaVoice ? [{ lang: 'en-US' }, { lang: 'bn-BD' }] : [{ lang: 'en-US' }], refreshVoices() {},
     VoiceEchoFilter: { recordMachineSpeech() {} },
     remoteProcessingAllowed: () => false, offlineError: () => new Error('offline'), backendReachable: () => false,
     apiUrl: path => path, deadlineSignal: () => undefined,
@@ -49,7 +51,7 @@ function harness({ mode = 'road', audio = true, deviceVoice = true } = {}) {
     objLabel: object => object.id, objLabelBn: object => object.id, objLabelWithArticle: object => 'a ' + object.id,
     setMode: next => { context.state.shield = next === 'auto'; context.state.narrate = next === 'auto'; },
     announce: (en, bn) => context.speak(en, bn), stopAllSpeech() {}, captureFrame: () => null,
-    $: element, document: { hidden: false, body: element(), querySelectorAll: () => [], querySelector: () => element(), addEventListener() {} },
+    $: element, document: { hidden: false, body: element('body'), querySelectorAll: () => [], querySelector: selector => element(selector), addEventListener() {} },
     localStorage: { getItem: () => null, setItem() {}, removeItem() {} },
     I18N: { en: {}, bn: {} },
   });
@@ -58,7 +60,7 @@ function harness({ mode = 'road', audio = true, deviceVoice = true } = {}) {
     '\nglobalThis.experience = AsthaExperience; globalThis.engine = VoiceEngine; globalThis.live = afterLiveUpdate;', context);
   context.experience.setContext(mode, true);
   const settle = async () => { for (let i = 0; i < 12; i++) await Promise.resolve(); };
-  return { context, synth, timers, captions, earcons, haptics, banners, logs, cancelled, world, settle,
+  return { context, synth, timers, captions, earcons, haptics, banners, logs, cancelled, world, settle, nodes,
     experience: context.experience, engine: context.engine, live: context.live, speak: (en, bn) => context.speak(en, bn),
     advance: ms => { now += ms; } };
 }
@@ -170,4 +172,46 @@ test('live detection: routine objects are narrated only in surroundings mode and
   h.synth.finish(); await h.settle(); h.advance(5000);
   h.live(); await h.settle();
   assert.match(h.synth.current.text, /^new_object/);
+});
+
+// ---- Bangla chosen as the voice, on a device that cannot voice it -------------------
+const NOTICE = 'This device has no Bangla voice, so I am speaking English. Turn on Online AI to hear my Bangla voice. ';
+
+test('with no Bangla voice available ASTHA speaks English and explains once, instead of staying silent', async () => {
+  const h = harness({ voiceLang: 'bn' });
+  h.speak('Your tea is on the left.', 'আপনার চা বাঁ দিকে।'); await h.settle();
+  assert.equal(h.synth.current.text, NOTICE + 'Your tea is on the left.'); assert.equal(h.synth.current.lang, 'en');
+  assert.equal(h.nodes.get('voice-notice').hidden, false, 'the reason is also shown on the page');
+  h.synth.finish(); await h.settle();
+  h.speak('The door is ahead.', 'দরজা সামনে।'); await h.settle();
+  assert.equal(h.synth.current.text, 'The door is ahead.', 'the explanation is given once, not before every answer');
+});
+
+test('with a Bangla voice on the device the Bangla text is spoken and no notice appears', async () => {
+  const h = harness({ voiceLang: 'bn', banglaVoice: true });
+  h.speak('Your tea is on the left.', 'আপনার চা বাঁ দিকে।'); await h.settle();
+  assert.equal(h.synth.current.text, 'আপনার চা বাঁ দিকে।'); assert.equal(h.synth.current.lang, 'bn');
+  h.synth.finish(); await h.settle();
+  assert.equal(h.nodes.get('voice-notice').hidden, true);
+});
+
+test('a hazard alert is spoken in English at once when Bangla cannot be voiced', () => {
+  const h = harness({ voiceLang: 'bn' });
+  h.engine.emergencyAlert('Warning! Stairs directly ahead!', 'সতর্ক! সামনে সিঁড়ি!', 'stairs');
+  assert.equal(h.synth.current.text, 'Warning! Stairs directly ahead!'); assert.equal(h.synth.current.rate, 1.18);
+  assert.equal(h.nodes.get('voice-notice').hidden, false);
+  const withVoice = harness({ voiceLang: 'bn', banglaVoice: true });
+  withVoice.engine.emergencyAlert('Warning! Stairs directly ahead!', 'সতর্ক! সামনে সিঁড়ি!', 'stairs');
+  assert.equal(withVoice.synth.current.text, 'সতর্ক! সামনে সিঁড়ি!');
+});
+
+test('Bangla text with no English equivalent is reported as unspoken, and an interrupted sentence is not repeated in English', async () => {
+  const h = harness({ voiceLang: 'bn' });
+  assert.equal(await h.engine.speak('পাতার লেখা', 'bn'), false); assert.equal(h.synth.spoken.length, 0);
+  // The app voice is tried first when it exists; stopping it must not start an English copy.
+  let release; const stops = [];
+  h.context.window.AsthaNative = { canSpeak: true, speak: () => new Promise(resolve => { release = resolve; }), stopSpeaking: () => stops.push(true) };
+  h.speak('Your tea is on the left.', 'আপনার চা বাঁ দিকে।'); await h.settle();
+  h.engine.stop(true); release(false); await h.settle();
+  assert.equal(h.synth.spoken.length, 0); assert.deepEqual(stops, [true]);
 });

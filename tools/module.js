@@ -15,12 +15,18 @@ function apiUrl(path) { return (window.ASTHA_API_BASE || '') + path; }
 
 // Consent lasts only for this page session and is requested by the Online control.
 let remoteProcessingConsent = false;
+const REMOTE_CONSENT = {
+  en: 'Allow online processing for this session? Camera or screen images, requests and selected personal notes may be sent to Google Gemini or Gigalogy Maira. Spoken text may be sent to Microsoft, and browser voice recognition may use an online service. Choose Cancel to keep processing on this phone. You can turn this off with On-device or Privacy mode.',
+  bn: 'এই সেশনে অনলাইন প্রসেসিংয়ের অনুমতি দেবেন? ক্যামেরা বা স্ক্রিনের ছবি, অনুরোধ ও নির্বাচিত ব্যক্তিগত নোট Google Gemini বা Gigalogy Maira-তে পাঠানো হতে পারে। শোনানোর লেখা Microsoft-এ এবং ব্রাউজারের কণ্ঠ শনাক্তকরণ অনলাইন পরিষেবায় পাঠানো হতে পারে। এই ফোনে প্রসেসিং রাখতে Cancel চাপুন। ডিভাইস বা গোপনীয়তা মোডে অনুমতি বন্ধ করতে পারবেন।',
+};
 function requestRemoteConsent() {
   if (privacyMode || privacyTransition || navigator.onLine === false) return false;
   if (remoteProcessingConsent) return true;
-  const en = 'Allow online processing for this session? Camera or screen images, requests and selected personal notes may be sent to Google Gemini or Gigalogy Maira. Spoken text may be sent to Microsoft, and browser voice recognition may use an online service. Choose Cancel to keep processing on this phone. You can turn this off with On-device or Privacy mode.';
-  const bn = 'এই সেশনে অনলাইন প্রসেসিংয়ের অনুমতি দেবেন? ক্যামেরা বা স্ক্রিনের ছবি, অনুরোধ ও নির্বাচিত ব্যক্তিগত নোট Google Gemini বা Gigalogy Maira-তে পাঠানো হতে পারে। শোনানোর লেখা Microsoft-এ এবং ব্রাউজারের কণ্ঠ শনাক্তকরণ অনলাইন পরিষেবায় পাঠানো হতে পারে। এই ফোনে প্রসেসিং রাখতে Cancel চাপুন। ডিভাইস বা গোপনীয়তা মোডে অনুমতি বন্ধ করতে পারবেন।';
-  remoteProcessingConsent = window.confirm((typeof uiLang !== 'undefined' ? uiLang : voiceLang) === 'bn' ? bn : en);
+  const asked = Date.now();
+  remoteProcessingConsent = window.confirm(REMOTE_CONSENT[(typeof uiLang !== 'undefined' ? uiLang : voiceLang) === 'bn' ? 'bn' : 'en']);
+  // Some hosts suppress native dialogs and answer "no" at once. Nobody declines that
+  // quickly, so ask on the page itself instead of leaving Online impossible to turn on.
+  if (!remoteProcessingConsent && Date.now() - asked < 80 && typeof askRemoteConsentOnPage === 'function') askRemoteConsentOnPage();
   return remoteProcessingConsent;
 }
 
@@ -146,8 +152,29 @@ const VoiceEngine = {
   },
   // Resolves true once the text has finished playing, false if it could not be spoken at all
   // (voice off, nothing to say, and no fallback voice on this device).
+  _noticeGiven: false,
+  // Very few phones and almost no computers ship a Bangla voice.
+  _deviceVoice(lang) {
+    if (lang !== 'bn') return true;
+    if (typeof refreshVoices === 'function') refreshVoices();
+    return typeof voices !== 'undefined' && voices.some(v => /^bn/i.test(v.lang));
+  },
+  _banglaVoiced(worked) { const notice = $('voice-notice'); if (notice) notice.hidden = worked; },
+  // Bangla was wanted and could not be voiced: say so once, then carry on in English.
+  _withoutBangla(fallback) {
+    this._banglaVoiced(false);
+    if (this._noticeGiven) return fallback.text;
+    this._noticeGiven = true;
+    return 'This device has no Bangla voice, so I am speaking English. Turn on Online AI to hear my Bangla voice. ' + fallback.text;
+  },
+  // Speak in the chosen voice language, or in English when Bangla cannot be voiced here.
+  say(en, bn) {
+    const useBn = voiceLang === 'bn' && !!bn;
+    return this.speak(useBn ? bn : en, useBn ? 'bn' : 'en', { fallback: useBn && en ? { text: en, lang: 'en' } : null });
+  },
   // `local` skips the server voice, for alerts that cannot wait on the network.
-  async speak(text, lang, { local = false } = {}) {
+  // `fallback` is what to say instead when this language has no voice at all.
+  async speak(text, lang, { local = false, fallback = null } = {}) {
     this.stop();
     const generation = this.generation;
     if (!state.audio || !text) return false;
@@ -189,14 +216,19 @@ const VoiceEngine = {
         this._currentResolve = null;
         if (this.audioEl === audio) { this.mode = null; this.audioEl = null; }
         this.lastSpokeAt = Date.now();
-        if (ok) return true;
+        if (ok) { if (lang === 'bn') this._banglaVoiced(true); return true; }
         // fall through to the browser voice if playback itself failed
       }
     } catch (e) { /* offline, signed out, or the server is down: use the local voice instead */ }
     if (generation !== this.generation) return false;
     // The Android WebView has no speech synthesis; the app supplies the device voice instead.
-    const u = window.speechSynthesis ? makeUtterance(sanitizeForSpeech(text), lang) : null;
-    if (!u) return this._speakOnDevice(text, lang, generation);
+    const u = window.speechSynthesis && this._deviceVoice(lang) ? makeUtterance(sanitizeForSpeech(text), lang) : null;
+    if (!u) {
+      const spoken = await this._speakOnDevice(text, lang, generation);
+      if (spoken && lang === 'bn') this._banglaVoiced(true);
+      if (spoken || generation !== this.generation || !fallback) return spoken;
+      return this.speak(this._withoutBangla(fallback), fallback.lang, { local: true });
+    }
     this.mode = 'synth';
     const ok = await new Promise(resolve => {
       this._currentResolve = resolve;
@@ -207,6 +239,7 @@ const VoiceEngine = {
     this._currentResolve = null;
     if (this.mode === 'synth') this.mode = null;
     this.lastSpokeAt = Date.now();
+    if (ok && lang === 'bn') this._banglaVoiced(true);
     return ok;
   },
   async _speakOnDevice(text, lang, generation) {
@@ -240,10 +273,14 @@ const VoiceEngine = {
     if (!state.audio) return;
     if (typeof playEarcon === 'function') playEarcon('emergency');
     VoiceEchoFilter.recordMachineSpeech(text);
-    const lang = useBn ? 'bn' : 'en';
-    const u = window.speechSynthesis && typeof makeUtterance === 'function' ? makeUtterance(sanitizeForSpeech(text), lang) : null;
+    // An alert cannot wait for the online voice. Without a Bangla voice on this device
+    // (and no app voice to try), it is spoken in English rather than not at all.
+    const english = useBn && textEn && !this._deviceVoice('bn') && !window.AsthaNative;
+    const lang = useBn && !english ? 'bn' : 'en', words = english ? textEn : text;
+    if (english) this._banglaVoiced(false);
+    const u = window.speechSynthesis && typeof makeUtterance === 'function' && this._deviceVoice(lang) ? makeUtterance(sanitizeForSpeech(words), lang) : null;
     // Without a device voice (some Android WebViews) use the normal voice path.
-    if (!u) { this.speak(text, lang, { local: true }); return; }
+    if (!u) { this.speak(words, lang, { local: true, fallback: lang === 'bn' && textEn ? { text: textEn, lang: 'en' } : null }); return; }
     try { window.speechSynthesis.cancel(); } catch (e) {}
     u.rate = 1.18; // Urgent fast speech
     u.pitch = 1.1;
@@ -267,9 +304,7 @@ function speak(enText, bnText) {
   lastResponse = { en: enText, bn: bnText };
   if (!state.audio) return;
   stopReader();
-  const useBn = voiceLang === 'bn' && !!bnText;
-  const text = useBn ? bnText : enText;
-  if (text) VoiceEngine.speak(text, useBn ? 'bn' : 'en');
+  if (enText || bnText) VoiceEngine.say(enText, bnText);
 }
 function startReader(inputText) {
   const text = typeof inputText === 'string' ? inputText.trim() : $('reader-text').value.trim();

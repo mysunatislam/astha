@@ -116,8 +116,18 @@ public class AsthaNativePlugin extends Plugin {
             call.reject("No device voice is available.", "voice_unavailable");
             return;
         }
-        Locale locale = "bn".equals(call.getString("lang", "en")) ? new Locale("bn", "BD") : Locale.US;
-        if (voice.isLanguageAvailable(locale) < TextToSpeech.LANG_AVAILABLE) {
+        // Phones ship Bangla as Bangladesh, India or just "bn"; use whichever is installed.
+        Locale[] wanted = "bn".equals(call.getString("lang", "en"))
+            ? new Locale[] { new Locale("bn", "BD"), new Locale("bn", "IN"), new Locale("bn") }
+            : new Locale[] { Locale.US, Locale.UK, Locale.ENGLISH };
+        Locale locale = null;
+        for (Locale candidate : wanted) {
+            if (voice.isLanguageAvailable(candidate) >= TextToSpeech.LANG_AVAILABLE) {
+                locale = candidate;
+                break;
+            }
+        }
+        if (locale == null) {
             call.reject("The device has no voice for this language.", "voice_language_unavailable");
             return;
         }
