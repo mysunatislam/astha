@@ -9,7 +9,10 @@
 <h2 class="page-title" id="page-title" tabindex="-1" data-i18n="page_home">Home</h2>
 <section class="card assessment-page" id="assessment-page" hidden aria-labelledby="page-title">
   <p data-i18n="assessment_intro">Tell Astha how you would like to be helped. These are preferences, not a medical test, and you can change them at any time.</p>
-  <button class="btn" type="button" id="assessment-read" data-i18n="assessment_read">Read the instructions aloud</button>
+  <div class="utility-row">
+    <button class="btn accent" type="button" id="assessment-guided" data-i18n="assessment_guided">Answer by voice</button>
+    <button class="btn" type="button" id="assessment-read" data-i18n="assessment_read">Read the instructions aloud</button>
+  </div>
   <form id="assessment-form">
     <fieldset><legend data-i18n="assessment_vision">How much do you rely on vision?</legend>
       <label><input type="radio" name="pref-vision" value="none"><span data-i18n="vision_none">I am blind and use speech or touch</span></label>
@@ -88,5 +91,6 @@
     <p data-i18n="screen_access_explain">In the Android app you can let Astha read other apps aloud. When you ask, it reads the text on the screen and can go back or home. It does not watch in the background, never reads password fields, and cannot tap, type or send anything for you. Android shows its own warning before it is turned on, and you can turn it off here at any time.</p>
     <button class="btn" type="button" id="screen-access-toggle" aria-pressed="false" data-i18n="screen_access_on">Let Astha read other apps</button>
     <p id="screen-access-status" class="help" role="status" aria-live="polite" data-i18n="screen_status_off">Reading other apps is off.</p>
+    <p data-i18n="device_actions_info">You can also say “open the WhatsApp app”, or “write a message saying I will be late”. Astha asks before opening anything, and you choose the person and press send yourself.</p>
   </div>
 </section>

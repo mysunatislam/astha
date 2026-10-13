@@ -196,6 +196,55 @@ test('saved setup goes to the account, stays on the device when the server is un
   h.experience.accountCleared(); assert.equal(h.storage.has(KEY), false);
 });
 
+test('guided setup asks one question at a time, takes spoken answers in either language, and saves once', async () => {
+  const h = harness(), sent = [], listens = []; h.experience.boot();
+  h.context.apiSend = async (method, path, body) => { sent.push([method, body]); return { updated_at: 9 }; };
+  h.context.toggleListening = () => listens.push(h.context.captions.at(-1)[1].slice(0, 24));
+  h.context.VoiceEngine.speak = async () => true;
+  const settle = async () => { for (let i = 0; i < 10; i++) await Promise.resolve(); };
+  assert.equal(h.experience.route('Astha, start guided setup.'), true); await settle();
+  assert.equal(h.experience.guiding, true); assert.equal(h.experience.page, 'assessment'); assert.equal(h.context.state.audio, true);
+  assert.match(h.context.captions.at(-1)[1], /five short questions.*How much do you rely on vision/);
+  assert.equal(listens.length, 1, 'ASTHA listens for the answer without another tap');
+  // Requests are answers while the guide runs: nothing else is triggered.
+  for (const [answer, expected] of [['three', /Which language/], ['what is in front of me', /did not catch that.*Which language/], ['repeat', /^Which language/],
+    ['ইংরেজি', /How should I answer/], ['back', /^Which language/], ['English', /How should I answer/], ['skip', /surroundings updates/], ['না', /whiteboard focus/]]) {
+    assert.equal(h.experience.route(answer), true, answer); await settle();
+    assert.match(h.context.captions.at(-1)[1], expected, answer);
+  }
+  assert.deepEqual(h.questions, [], 'no visual question was started'); assert.equal(sent.length, 0, 'nothing is saved until the last answer');
+  assert.equal(h.experience.route('yes'), true); await settle();
+  assert.equal(h.experience.guiding, false); assert.equal(sent.length, 1);
+  const saved = JSON.parse(JSON.stringify(sent[0][1].preferences));
+  assert.equal(saved.vision, 'low'); assert.equal(saved.language, 'en'); assert.equal(saved.feedback, 'detailed', 'a skipped question keeps its value');
+  assert.deepEqual(saved.modes, ['ask', 'classroom']); assert.equal(saved.textSize, 'large', 'low vision implies larger text');
+  assert.equal(h.experience.page, 'home'); assert.match(h.announcements.at(-1).en, /saved to your account/);
+  assert.equal(h.experience.route('three'), false, 'after the guide ends, requests are ordinary again');
+});
+
+test('guided setup can be cancelled without changing anything', async () => {
+  const h = harness(), sent = []; h.experience.boot();
+  h.context.apiSend = async (...args) => { sent.push(args); return { updated_at: 1 }; };
+  h.context.VoiceEngine.speak = async () => true;
+  h.elements.get('assessment-guided').listeners.click(); await Promise.resolve();
+  h.experience.route('one'); await Promise.resolve();
+  assert.equal(h.experience.route('cancel'), true);
+  assert.equal(h.experience.guiding, false); assert.equal(sent.length, 0); assert.equal(h.storage.size, 0);
+  assert.match(h.announcements.at(-1).en, /Nothing was changed/); assert.equal(h.context.stops, 1);
+  assert.equal(h.experience.preferences.vision, 'unspecified');
+});
+
+test('where continuous recognition does not exist, hands-free is hidden and asking for it is explained', () => {
+  const without = harness(); without.experience.boot();
+  assert.equal(without.elements.get('hf-btn').hidden, true);
+  assert.equal(without.elements.get('.mic-hint').textContent, 'mic_hint_tap');
+  assert.equal(without.experience.route('turn on hands-free'), true);
+  assert.match(without.announcements.at(-1).en, /not available here yet/);
+  const supported = harness(); supported.context.window.SpeechRecognition = function () {}; supported.experience.boot();
+  assert.equal(supported.elements.get('hf-btn').hidden, false);
+  assert.equal(supported.experience.route('turn on hands-free'), false, 'the existing hands-free command handles it');
+});
+
 test('a device copy left by another account is neither applied nor uploaded', async () => {
   const KEY = 'astha.accessibility.v2', h = harness(), sent = []; h.experience.boot();
   h.storage.set(KEY, JSON.stringify({ values: { vision: 'none', textSize: 'xlarge' }, updated_at: 1, synced: false, owner: 'someone-else' }));

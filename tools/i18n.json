@@ -1179,6 +1179,18 @@
   "screen_status_on": [
    "Reading other apps is on. Say “What is on my screen?”",
    "অন্য অ্যাপ পড়া চালু আছে। বলুন “স্ক্রিনে কী আছে?”"
+  ],
+  "assessment_guided": [
+   "Answer by voice",
+   "কণ্ঠে উত্তর দিন"
+  ],
+  "mic_hint_tap": [
+   "Tap the microphone, wait for the chime, then ask. You can also type below.",
+   "মাইক্রোফোনে চাপ দিন, শব্দের পরে জিজ্ঞাসা করুন। নিচে লিখেও দিতে পারেন।"
+  ],
+  "device_actions_info": [
+   "You can also say “open the WhatsApp app”, or “write a message saying I will be late”. Astha asks before opening anything, and you choose the person and press send yourself.",
+   "আপনি বলতে পারেন “হোয়াটসঅ্যাপ অ্যাপ খোলো”, অথবা “বার্তা লেখো, আমার দেরি হবে”। কিছু খোলার আগে আস্থা জিজ্ঞাসা করে, আর ব্যক্তি বাছাই ও পাঠানো আপনি নিজেই করেন।"
   ]
  },
  "hooks": [

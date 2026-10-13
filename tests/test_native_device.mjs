@@ -65,13 +65,20 @@ function screenHarness({ consent = false, serviceEnabled = false, text = 'Inbox\
     read: async () => { calls.push('read'); if (!state.consent || !state.serviceEnabled) throw coded('service_disabled'); return { app: 'com.example.mail', text, truncated }; },
     action: async name => { calls.push('action:' + name); return true; },
   };
+  const installed = [{ id: 'com.whatsapp', label: 'WhatsApp' }, { id: 'com.whatsapp.w4b', label: 'WhatsApp Business' }, { id: 'com.example.maps', label: 'Maps' }];
+  const apps = {
+    find: async name => { calls.push('find:' + name); const wanted = name.toLowerCase(); const exact = installed.filter(app => app.label.toLowerCase() === wanted); return exact.length ? exact : installed.filter(app => app.label.toLowerCase().includes(wanted)); },
+    open: async id => { calls.push('open:' + id); }, share: async text => { calls.push('share:' + text); },
+  };
+  const confirmations = [];
   const context = vm.createContext({ Promise, String, RegExp, uiLang: 'en', announce: (en, bn) => spoken.push([en, bn]),
+    askYesNo: (en, bn, onYes, onNo) => confirmations.push({ en, bn, onYes, onNo }),
     document: { hidden: false, getElementById: id => elements.get(id) || null, addEventListener: (name, fn) => listeners.set(name, fn) },
-    window: native ? { AsthaNative: { screen } } : {} });
+    window: native ? { AsthaNative: { screen, apps } } : {} });
   context.t = key => strings[key][context.uiLang === 'bn' ? 1 : 0];
   vm.runInContext(screenSource + '\nglobalThis.access = AsthaScreenAccess;', context);
   const settle = () => new Promise(resolve => setImmediate(resolve));
-  return { access: context.access, state, calls, spoken, elements, listeners, settle };
+  return { access: context.access, state, calls, spoken, elements, listeners, settle, confirmations };
 }
 
 test('in a browser the screen-reading controls stay hidden and voice requests fall through', () => {
@@ -113,6 +120,46 @@ test('the screen is read only when it is fully enabled, and only when asked', as
   const empty = screenHarness({ consent: true, serviceEnabled: true, text: '   ' });
   empty.access.route('read my screen'); await empty.settle();
   assert.match(empty.spoken[0][0], /could not find any readable text/);
+});
+
+test('opening an app or preparing a message always asks first, and declining does nothing', async () => {
+  const h = screenHarness();
+  for (const query of ['open devices', 'open the camera', 'start camera', 'ক্যামেরা চালু করো', 'send it', 'what is a message']) assert.equal(h.access.route(query), false, query);
+  assert.deepEqual(h.calls, []);
+  // One exact match: confirm, then open only on yes.
+  assert.equal(h.access.route('Astha, open the WhatsApp app.'), true); await h.settle();
+  assert.deepEqual(h.calls, ['find:WhatsApp']); assert.equal(h.confirmations.length, 1); assert.equal(h.confirmations[0].en, 'Open WhatsApp?');
+  h.confirmations[0].onNo(); assert.deepEqual(h.calls, ['find:WhatsApp'], 'declining opens nothing');
+  assert.match(h.spoken.at(-1)[0], /nothing was opened/);
+  h.confirmations[0].onYes(); await h.settle(); assert.equal(h.calls.at(-1), 'open:com.whatsapp');
+  // No match and several matches are spoken, never guessed.
+  h.access.route('launch the Telegram app'); await h.settle();
+  assert.match(h.spoken.at(-1)[0], /could not find an app called Telegram/);
+  h.access.route('open the whats app'); await h.settle();
+  assert.match(h.spoken.at(-1)[0], /more than one: WhatsApp, WhatsApp Business/); assert.equal(h.confirmations.length, 1);
+  assert.equal(h.access.route('হোয়াটসঅ্যাপ অ্যাপ খোলো'), true); await h.settle();
+  assert.equal(h.calls.at(-1), 'find:হোয়াটসঅ্যাপ');
+  // A message goes to Android's share menu; ASTHA says who presses send.
+  assert.equal(h.access.route('Write a message saying I will be ten minutes late'), true); await h.settle();
+  const message = h.confirmations.at(-1);
+  assert.match(message.en, /share menu with this message: I will be ten minutes late\. You choose the app and the person, and you press send/);
+  assert.equal(h.calls.some(call => call.startsWith('share:')), false);
+  message.onYes(); await h.settle(); assert.equal(h.calls.at(-1), 'share:I will be ten minutes late');
+  assert.equal(h.access.route('বার্তা লেখো, আমার দেরি হবে'), true); await h.settle();
+  h.confirmations.at(-1).onNo(); assert.equal(h.calls.filter(call => call.startsWith('share:')).length, 1);
+});
+
+test('app names from the phone are bounded and malformed entries are dropped', async () => {
+  const calls = [];
+  const device = bridge({ speak: async () => ({ completed: true }),
+    findApps: async options => { calls.push(options); return { apps: [{ id: 'com.whatsapp', label: 'W'.repeat(200) }, { id: 'bad id; rm', label: 'Evil' }, { id: 7, label: 'N' }, { label: 'no id' }, ...Array.from({ length: 9 }, (_, i) => ({ id: 'com.app' + i, label: 'App ' + i }))] }; },
+    openApp: async options => { calls.push(options); }, shareText: async options => { calls.push(options); } });
+  const found = await device.apps.find('x'.repeat(500));
+  assert.equal(calls[0].name.length, 60);
+  assert.deepEqual(JSON.parse(JSON.stringify(found.map(app => app.id))), ['com.whatsapp', 'com.app0', 'com.app1', 'com.app2', 'com.app3']);
+  assert.equal(found[0].label.length, 60);
+  await device.apps.share('y'.repeat(5000)); assert.equal(calls.at(-1).text.length, 2000);
+  await device.apps.open('com.whatsapp'); assert.deepEqual({ ...calls.at(-1) }, { id: 'com.whatsapp' });
 });
 
 test('without browser speech synthesis ASTHA speaks through the device voice and Stop reaches it', async () => {
@@ -208,6 +255,12 @@ test('Android guardrails: screen reading is opt-in, read-only, bound by the syst
   assert.match(between(plugin, 'public void openAccessibilitySettings', '\n    }\n'), /if \(!screenConsent\(\)\)/);
   assert.match(between(plugin, 'public void setScreenAccessConsent', '\n    }\n'), /disableSelf\(\)/);
   assert.deepEqual([...plugin.matchAll(/GLOBAL_ACTION_[A-Z_]+/g)].map(match => match[0]).sort(), ['GLOBAL_ACTION_BACK', 'GLOBAL_ACTION_HOME']);
+  // Messages go through Android's chooser. ASTHA cannot address, send, call or text.
+  for (const forbidden of ['ACTION_SENDTO', 'ACTION_CALL', 'ACTION_DIAL', 'SmsManager', 'smsto:', 'tel:', 'EXTRA_EMAIL', 'EXTRA_PHONE_NUMBER', 'setPackage']) assert.doesNotMatch(plugin, new RegExp(forbidden), forbidden);
+  assert.match(between(plugin, 'public void shareText(PluginCall call)', '\n    }\n'), /Intent\.createChooser\(send, null\)/);
+  assert.match(between(plugin, 'protected void handleOnPause()', '\n    }\n'), /finishListening/, 'the recognizer stops when the app leaves the foreground');
+  // App lookup uses launcher visibility, not blanket package access.
+  assert.match(manifest, /<action android:name="android\.intent\.action\.MAIN" \/>\s*<category android:name="android\.intent\.category\.LAUNCHER" \/>/);
   assert.match(activity, /registerPlugin\(AsthaNativePlugin\.class\);\s*super\.onCreate/);
   // Only debug builds may trust a tester-installed certificate (for a Pi camera on a private CA).
   const network = read('android/app/src/main/res/xml/network_security_config.xml');

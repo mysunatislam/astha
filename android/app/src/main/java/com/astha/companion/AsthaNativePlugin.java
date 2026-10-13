@@ -5,6 +5,8 @@ import android.accessibilityservice.AccessibilityService;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.speech.RecognitionListener;
@@ -13,6 +15,7 @@ import android.speech.SpeechRecognizer;
 import android.speech.tts.TextToSpeech;
 import android.speech.tts.UtteranceProgressListener;
 
+import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.PermissionState;
 import com.getcapacitor.Plugin;
@@ -23,6 +26,7 @@ import com.getcapacitor.annotation.Permission;
 import com.getcapacitor.annotation.PermissionCallback;
 
 import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
@@ -43,6 +47,8 @@ public class AsthaNativePlugin extends Plugin {
     private static final int MAX_SPOKEN = 4000;
     private static final int MAX_SCREEN_NODES = 400;
     private static final int MAX_SCREEN_CHARS = 6000;
+    private static final int MAX_APP_MATCHES = 5;
+    private static final int MAX_SHARED_TEXT = 2000;
 
     private TextToSpeech voice;
     private volatile boolean voiceReady;
@@ -75,6 +81,12 @@ public class AsthaNativePlugin extends Plugin {
                 }
             });
         });
+    }
+
+    @Override
+    protected void handleOnPause() {
+        // ASTHA never listens while it is in the background.
+        getActivity().runOnUiThread(() -> finishListening("", null));
     }
 
     @Override
@@ -228,6 +240,72 @@ public class AsthaNativePlugin extends Plugin {
             finishListening("", null);
             call.resolve();
         });
+    }
+
+    // ---- Opening an app or the share sheet, each time the user asks ---------------------
+    // Ordinary intents only. ASTHA cannot choose a recipient, press send, call or text.
+
+    private List<ResolveInfo> launchable() {
+        Intent launcher = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER);
+        return getContext().getPackageManager().queryIntentActivities(launcher, 0);
+    }
+
+    @PluginMethod
+    public void findApps(PluginCall call) {
+        String wanted = call.getString("name", "");
+        wanted = wanted == null ? "" : wanted.trim().toLowerCase(Locale.ROOT);
+        if (wanted.isEmpty() || wanted.length() > 60) {
+            call.reject("Name an app to look for.", "invalid_name");
+            return;
+        }
+        PackageManager packages = getContext().getPackageManager();
+        String own = getContext().getPackageName();
+        List<JSObject> exact = new ArrayList<>();
+        List<JSObject> partial = new ArrayList<>();
+        for (ResolveInfo info : launchable()) {
+            String id = info.activityInfo.packageName;
+            if (own.equals(id)) continue;
+            CharSequence shown = info.loadLabel(packages);
+            String label = shown == null ? "" : shown.toString().trim();
+            String folded = label.toLowerCase(Locale.ROOT);
+            if (label.isEmpty() || !folded.contains(wanted)) continue;
+            JSObject app = new JSObject();
+            app.put("id", id);
+            app.put("label", label);
+            (folded.equals(wanted) ? exact : partial).add(app);
+        }
+        // An exact name wins outright; otherwise the caller hears the few candidates.
+        List<JSObject> chosen = exact.isEmpty() ? partial : exact;
+        JSArray apps = new JSArray();
+        for (int index = 0; index < chosen.size() && index < MAX_APP_MATCHES; index++) apps.put(chosen.get(index));
+        JSObject result = new JSObject();
+        result.put("apps", apps);
+        call.resolve(result);
+    }
+
+    @PluginMethod
+    public void openApp(PluginCall call) {
+        String id = call.getString("id", "");
+        Intent launch = id == null || id.isEmpty() ? null : getContext().getPackageManager().getLaunchIntentForPackage(id);
+        if (launch == null) {
+            call.reject("That app cannot be opened.", "app_unavailable");
+            return;
+        }
+        getContext().startActivity(launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void shareText(PluginCall call) {
+        String text = call.getString("text", "");
+        if (text == null || text.trim().isEmpty() || text.length() > MAX_SHARED_TEXT) {
+            call.reject("There is nothing to share.", "invalid_text");
+            return;
+        }
+        // Android's own chooser: the user picks the app and the person, and sends it.
+        Intent send = new Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text);
+        getContext().startActivity(Intent.createChooser(send, null).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        call.resolve();
     }
 
     // ---- Reading other apps, only after explicit opt-in --------------------------------

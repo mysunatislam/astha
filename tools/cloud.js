@@ -416,8 +416,8 @@ function askYesNo(en, bn, onYes, onNo) {
 function answerYesNo(q) {
   const p = state.pendingYes; if (!p) return false;
   if (Date.now() > p.until) { state.pendingYes = null; return false; }
-  if (/^(yes|yeah|yep|yup|sure|ok|okay|please|go ahead|do it|read it|হ্যাঁ|হুম|হু|পড়ো|করো|ঠিক আছে|acha|hae|hya|ha)\b/i.test(q.trim())) { state.pendingYes = null; p.onYes && p.onYes(); return true; }
-  if (/^(no|nope|nah|not now|later|না|থাক|লাগবে না|na)\b/i.test(q.trim())) { state.pendingYes = null; p.onNo ? p.onNo() : announce('Okay.', 'ঠিক আছে।', 'voice'); return true; }
+  if (/^(yes|yeah|yep|yup|sure|ok|okay|please|go ahead|do it|read it|হ্যাঁ|হুম|হু|পড়ো|করো|ঠিক আছে|acha|hae|hya|ha)(?![A-Za-z0-9_\u0980-\u09FF])/i.test(q.trim())) { state.pendingYes = null; p.onYes && p.onYes(); return true; }
+  if (/^(no|nope|nah|not now|later|না|থাক|লাগবে না|na)(?![A-Za-z0-9_\u0980-\u09FF])/i.test(q.trim())) { state.pendingYes = null; p.onNo ? p.onNo() : announce('Okay.', 'ঠিক আছে।', 'voice'); return true; }
   return false;
 }
 

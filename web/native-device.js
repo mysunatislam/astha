@@ -31,6 +31,17 @@
       } catch (error) { throw failure(error); }
     },
     stopListening() { quiet(plugin.stopListening()); },
+    // Ordinary Android intents. The app never picks a recipient or presses send.
+    apps: Object.freeze({
+      async find(name) {
+        const reply = await screen('findApps', { name: String(name || '').slice(0, 60) });
+        return (Array.isArray(reply?.apps) ? reply.apps : [])
+          .filter(app => typeof app?.id === 'string' && typeof app?.label === 'string' && /^[A-Za-z0-9_.]{1,200}$/.test(app.id))
+          .slice(0, 5).map(app => ({ id: app.id, label: app.label.slice(0, 60) }));
+      },
+      open: id => screen('openApp', { id: String(id || '') }),
+      share: text => screen('shareText', { text: String(text || '').slice(0, 2000) }),
+    }),
     screen: Object.freeze({
       async status() {
         const reply = await screen('screenAccessStatus');

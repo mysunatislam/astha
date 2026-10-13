@@ -59,6 +59,35 @@ const AsthaScreenAccess = (() => {
     })();
     return true;
   }
+  // Opening an app or preparing a message uses ordinary Android intents, not the screen
+  // reader. ASTHA asks first every time, and never chooses a recipient or presses send.
+  function routeAction(query) {
+    const apps = typeof window !== 'undefined' && window.AsthaNative ? window.AsthaNative.apps : null;
+    if (!apps) return false;
+    const q = String(query || '').trim().replace(/^(?:hey\s+)?astha[,!\s]*|^আস্থা[,।\s]*/i, '').replace(/[.!?।\s]+$/, '');
+    const open = /^(?:open|launch|start) (?:the |my )?(.{2,40}?) app$/i.exec(q) || /^(.{2,40}?) অ্যাপ(?:টি|টা)? (?:খোলো|খুলুন|খুলো|চালু করো)$/.exec(q);
+    const message = /^(?:send|write|compose) (?:a |the )?message(?: saying| that says|:|,)?\s+(.{1,500})$/i.exec(q) || /^(?:বার্তা|মেসেজ) (?:লেখো|লিখো|পাঠাও)[:,]?\s+(.{1,500})$/.exec(q);
+    if (!open && !message) return false;
+    (async () => {
+      try {
+        if (message) {
+          const text = message[1].trim();
+          askYesNo('I will open the share menu with this message: ' + text + '. You choose the app and the person, and you press send. Shall I open it?',
+            'এই বার্তাটি নিয়ে শেয়ার মেনু খুলব: ' + text + '। অ্যাপ ও ব্যক্তি আপনি বেছে নেবেন, পাঠানোর বোতামও আপনি চাপবেন। খুলব?',
+            () => apps.share(text).catch(() => say('I could not open the share menu.', 'শেয়ার মেনু খুলতে পারিনি।')),
+            () => say('Okay, nothing was opened.', 'ঠিক আছে, কিছু খোলা হয়নি।'));
+          return;
+        }
+        const found = await apps.find(open[1].trim());
+        if (!found.length) { say('I could not find an app called ' + open[1].trim() + ' on this phone.', 'এই ফোনে ' + open[1].trim() + ' নামে কোনো অ্যাপ পাইনি।'); return; }
+        if (found.length > 1) { const names = found.map(app => app.label).join(', '); say('I found more than one: ' + names + '. Say the full name.', 'একাধিক অ্যাপ পেয়েছি: ' + names + '। পুরো নাম বলুন।'); return; }
+        askYesNo('Open ' + found[0].label + '?', found[0].label + ' খুলব?',
+          () => apps.open(found[0].id).catch(() => say('I could not open it.', 'খুলতে পারিনি।')),
+          () => say('Okay, nothing was opened.', 'ঠিক আছে, কিছু খোলা হয়নি।'));
+      } catch { say('I could not do that just now.', 'এই মুহূর্তে করতে পারিনি।'); }
+    })();
+    return true;
+  }
   function boot() {
     const panel = element('screen-access'); if (!panel) return;
     panel.hidden = !native();
@@ -68,5 +97,5 @@ const AsthaScreenAccess = (() => {
     document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
     refresh();
   }
-  return { boot, toggle, refresh, route, refreshLabels: render, get status() { return current; } };
+  return { boot, toggle, refresh, route: query => route(query) || routeAction(query), refreshLabels: render, get status() { return current; } };
 })();

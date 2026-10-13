@@ -1,5 +1,5 @@
 // Cache only approved static resources. API responses and private audio are never cached.
-const CACHE = 'astha-shell-d54cc520fa';
+const CACHE = 'astha-shell-6a0d41084d';
 const SHELL = ['./', './index.html', './config.js', './native-api.js', './native-device.js', './pi-camera.js', './backend.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
 const RUNTIMES = [
   'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.21.0/dist/ort.webgpu.min.js',

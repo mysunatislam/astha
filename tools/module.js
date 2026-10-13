@@ -913,7 +913,7 @@ async function ocrPage() {
 }
 
 // ---- Voice-Led Siri Engine (Always Listening, Acoustic Echo Filter, Instant Stop) ---
-const STOP_TALKING_REGEX = /\b(stop|stop talking|shut up|be quiet|quiet|silence|pause|enough|halt|don't speak|dont speak|stop reading|থামো|চুপ|চুপ কর|চুপ করো|থামুন|কথা বন্ধ|পড়া বন্ধ|বন্ধ করো|স্টপ|thamo|chup|bondho koro|bondho kor)\b/i;
+const STOP_TALKING_REGEX = /(?:^|[^A-Za-z0-9_\u0980-\u09FF])(stop|stop talking|shut up|be quiet|quiet|silence|pause|enough|halt|don't speak|dont speak|stop reading|থামো|চুপ|চুপ কর|চুপ করো|থামুন|কথা বন্ধ|পড়া বন্ধ|বন্ধ করো|স্টপ|thamo|chup|bondho koro|bondho kor)(?![A-Za-z0-9_\u0980-\u09FF])/i;
 const WAKE_RE = /(^|[\s,.!?])(astha|asta|ashtha|aastha|astar|হে আস্থা|আস্থা|আসথা|আস্তা)(?=$|[\s,.!?])/i;
 
 const SiriVoice = {
@@ -1408,7 +1408,7 @@ async function handleOnDeviceVisualQA(query, current = () => true) {
 }
 
 function smartFallback(query, q) {
-  if (typeof AsthaAgent !== 'undefined' && (/\b(and|also|check|verify|plan|help me|find|where|এবং|আর|দেখো)\b/i.test(q) && q.split(/\s+/).length >= 3)) {
+  if (typeof AsthaAgent !== 'undefined' && (/(?:^|[^A-Za-z0-9_\u0980-\u09FF])(and|also|check|verify|plan|help me|find|where|এবং|আর|দেখো)(?![A-Za-z0-9_\u0980-\u09FF])/i.test(q) && q.split(/\s+/).length >= 3)) {
     return AsthaAgent.run(query);
   }
   const it = classifyIntent(q);

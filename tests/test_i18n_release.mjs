@@ -126,3 +126,43 @@ test('language application translates leading text and attributes in place witho
   assert.equal(texts.get('eye-start'), 'Stop watching my screen'); assert.equal(texts.get('reader-progress'), 'Paused');
   assert.equal(vm.runInContext('t("reader_part", { n: 2, total: 5 })', context), 'Part 2 of 5');
 });
+
+// JavaScript's \b only understands ASCII word characters, so a Bangla word between two
+// \b never matches. Commands and answers in Bangla were silently ignored because of it.
+test('no pattern in the built page guards a Bangla alternative with an ASCII-only word boundary', () => {
+  const offenders = [];
+  script.split('\n').forEach((line, index) => {
+    for (let at = line.indexOf('('); at >= 0; at = line.indexOf('(', at + 1)) {
+      let depth = 0, end = -1;
+      for (let j = at; j < line.length; j++) {
+        if (line[j] === '\\') { j++; continue; }
+        if (line[j] === '(') depth++;
+        else if (line[j] === ')' && --depth === 0) { end = j; break; }
+      }
+      if (end < 0) continue;
+      const group = line.slice(at, end + 1);
+      if (group.length >= 600 || !BENGALI.test(group)) continue;
+      if (line.slice(at - 2, at) === '\\b' || line.slice(end + 1, end + 3) === '\\b') offenders.push((index + 1) + ': ' + group.slice(0, 60));
+    }
+  });
+  assert.deepEqual(offenders, []);
+});
+
+test('Bangla yes and no answer a confirmation, and Bangla stop and camera commands are recognised', () => {
+  const slice = (start, end) => { const a = script.indexOf(start), b = script.indexOf(end, a + start.length); assert(a >= 0 && b > a, start); return script.slice(a, b); };
+  const outcomes = [];
+  const context = vm.createContext({ Date, state: {}, announce() {}, playEarcon() {} });
+  vm.runInContext(slice('function askYesNo(', '\n// ') + '\nglobalThis.ask = askYesNo; globalThis.answer = answerYesNo;', context);
+  for (const [reply, expected] of [['হ্যাঁ', 'yes'], ['হ্যাঁ, খোলো', 'yes'], ['না', 'no'], ['না থাক', 'no'], ['yes please', 'yes'], ['No.', 'no'], ['ঠিক আছে', 'yes']]) {
+    context.ask('Open it?', 'খুলব?', () => outcomes.push('yes'), () => outcomes.push('no'));
+    assert.equal(context.answer(reply), true, reply); assert.equal(outcomes.at(-1), expected, reply);
+  }
+  // A longer word that merely starts with the same letters is not an answer.
+  context.ask('Open it?', 'খুলব?', () => outcomes.push('yes'), () => outcomes.push('no'));
+  for (const reply of ['নাম কী', 'november', 'okra']) assert.equal(context.answer(reply), false, reply);
+  const stop = vm.runInNewContext(/const STOP_TALKING_REGEX = (\/.*\/i);/.exec(script)[1]);
+  for (const phrase of ['থামো', 'আস্থা থামো', 'stop talking', 'please be quiet']) assert.equal(stop.test(phrase), true, phrase);
+  for (const phrase of ['unstoppable', 'থামোনা']) assert.equal(stop.test(phrase), false, phrase);
+  const camera = new RegExp(/if \(\/((?:[^\/\\\n]|\\.)*start camera(?:[^\/\\\n]|\\.)*)\/i\.test\(q\)\)/.exec(script)[1], 'i');
+  assert.equal(camera.test('ক্যামেরা চালু করো'), true); assert.equal(camera.test('start camera'), true);
+});

@@ -658,6 +658,9 @@
   .astha-app:is([data-view="memory"], [data-view="settings"]) .layout { gap: 0; }
   .astha-app[data-view="memory"] aside > :not(:is(.card:has(#memory-list), #spatial-card)) { display: none; }
   .astha-app[data-view="settings"] aside > :is(.card:has(#memory-list), #spatial-card) { display: none; }
+  /* Voice names can be very long; a menu must never be wider than its field. */
+  .astha-app .field > select, .astha-app .field > input, .astha-app .field > textarea { width: 100%; min-width: 0; max-width: 100%; }
+  .astha-app ::placeholder { color: var(--muted); opacity: 1; }
   .astha-app .setup-question { margin: 16px 0; }
   .astha-app .setup-label { display: block; margin-bottom: 8px; font-weight: 700; line-height: 1.6; color: var(--text); }
   .astha-app .setup-question .select-dropdown { width: 100%; max-width: 420px; }
@@ -3015,20 +3018,20 @@ function handleQuery(query) {
   const q = query.toLowerCase().replace(/^(?:hey\s+)?astha[,.!\s]*/i, '').replace(/^(?:হেই\s+)?আস্থা[,।\s]*/, '').trim();
   if (!privacyMode) logEvent('Request: ' + query);
   // Autonomous Agent Trigger: multi-part tasks, "find ... and check ...", "plan ...", "guide me to find ..."
-  if (/\b(plan|task|autonomous|find\s+.+\s+and\s+|where\s+.+\s+and\s+|check\s+.+\s+and\s+|পরিকল্পনা|খুঁজে দেখো এবং|আর দেখো)\b/i.test(q)) {
+  if (/(?:^|[^A-Za-z0-9_\u0980-\u09FF])(plan|task|autonomous|find\s+.+\s+and\s+|where\s+.+\s+and\s+|check\s+.+\s+and\s+|পরিকল্পনা|খুঁজে দেখো এবং|আর দেখো)(?![A-Za-z0-9_\u0980-\u09FF])/i.test(q)) {
     if (typeof AsthaAgent !== 'undefined') {
       return AsthaAgent.run(query);
     }
   }
-  if (/\b(stop|stop talking|cancel|quiet|be quiet|shut up|silence|pause|enough|halt|বন্ধ করো|থামো|চুপ|চুপ কর|চুপ করো|থামুন|কথা বন্ধ|পড়া বন্ধ|স্টপ|thamo|chup|bondho koro)\b/i.test(q)) {
+  if (/(?:^|[^A-Za-z0-9_\u0980-\u09FF])(stop|stop talking|cancel|quiet|be quiet|shut up|silence|pause|enough|halt|বন্ধ করো|থামো|চুপ|চুপ কর|চুপ করো|থামুন|কথা বন্ধ|পড়া বন্ধ|স্টপ|thamo|chup|bondho koro)(?![A-Za-z0-9_\u0980-\u09FF])/i.test(q)) {
     if (typeof reading !== 'undefined' && reading.active) return stopReading(true);
     return stopAllSpeech();
   }
-  if (/\b(start camera|open camera|turn on camera|camera on|start video|start seeing|ক্যামেরা চালু করো|ক্যামেরা খোলো|ক্যামেরা অন|camera start|camera open)\b/i.test(q)) {
+  if (/(?:^|[^A-Za-z0-9_\u0980-\u09FF])(start camera|open camera|turn on camera|camera on|start video|start seeing|ক্যামেরা চালু করো|ক্যামেরা খোলো|ক্যামেরা অন|camera start|camera open)(?![A-Za-z0-9_\u0980-\u09FF])/i.test(q)) {
     if (!state.source) toggleCamera();
     return announce('Camera started.', 'ক্যামেরা চালু হয়েছে।', 'system');
   }
-  if (/\b(stop camera|close camera|turn off camera|camera off|ক্যামেরা বন্ধ করো|ক্যামেরা অফ|camera stop|stop video)\b/i.test(q)) {
+  if (/(?:^|[^A-Za-z0-9_\u0980-\u09FF])(stop camera|close camera|turn off camera|camera off|ক্যামেরা বন্ধ করো|ক্যামেরা অফ|camera stop|stop video)(?![A-Za-z0-9_\u0980-\u09FF])/i.test(q)) {
     if (['camera', 'pi'].includes(state.source)) stopCamera();
     return announce('Camera stopped.', 'ক্যামেরা বন্ধ করা হয়েছে।', 'system');
   }
@@ -3039,7 +3042,7 @@ function handleQuery(query) {
   if (/privacy|গোপনীয়তা/.test(q)) return togglePrivateMode();
   if (/read all|read book|read document|বই পড়|পুরো.*পড়/.test(q)) return startReader();
   // Voice-First Placement & Keeping Memory ("I am keeping my moneybag here", "putting my wallet on table", "remember this", etc.)
-  if (/\b(keeping|putting|placing|leaving|kept|put|placed|left|রাখছি|রাখলাম|রেখেছি)\b/i.test(q) || (/remember|মনে রাখ/.test(q) && !/room|ঘর|face|voice|lock/.test(q))) {
+  if (/(?:^|[^A-Za-z0-9_\u0980-\u09FF])(keeping|putting|placing|leaving|kept|put|placed|left|রাখছি|রাখলাম|রেখেছি)(?![A-Za-z0-9_\u0980-\u09FF])/i.test(q) || (/remember|মনে রাখ/.test(q) && !/room|ঘর|face|voice|lock/.test(q))) {
     if (typeof handleItemPlacementVoice === 'function') {
       return handleItemPlacementVoice(query);
     }

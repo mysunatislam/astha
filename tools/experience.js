@@ -115,6 +115,13 @@ const AsthaExperience = (() => {
   }
   function route(query) {
     const q = String(query || '').toLowerCase().replace(/^(?:hey\s+)?astha[,!\s]*|^আস্থা[,।\s]*/i, '').trim();
+    if (guide) { answerGuide(q); return true; }
+    if (/^(?:start |begin )?(?:the )?(?:guided|voice|spoken) setup$|^set me up$|গাইডেড সেটআপ|কণ্ঠে সেটআপ|সেটআপ শুরু করো/.test(q.replace(/[.!?।\s]+$/, ''))) { showPage('assessment', { speakTitle: false }); startGuide(); return true; }
+    // Hands-free needs continuous recognition, which this browser or app does not have.
+    if (!handsFreeAvailable() && /hands.?free|keep listening|always listen|হ্যান্ডস.?ফ্রি|সবসময় শোনো/.test(q)) {
+      say('Hands-free listening is not available here yet. Tap the microphone, wait for the chime, then ask.', 'হ্যান্ডস-ফ্রি শোনা এখানে এখনও নেই। মাইক্রোফোনে চাপ দিন, শব্দের পরে জিজ্ঞাসা করুন।');
+      return true;
+    }
     if (/busy road|busy street|keep updating|update me everything|walking outside|ব্যস্ত রাস্তা|রাস্তায় আছি|চারপাশ জানাও/.test(q)) { setContext('road'); if (!state.source) withCamera(() => {}); return true; }
     if (/(?:i am|i'm|we are|we're).*(?:classroom|safe place)|(?:focus on|only|just|keep).*(?:whiteboard|board)|(?:classroom|whiteboard) mode|ক্লাসরুমে আছি|শ্রেণিকক্ষে আছি|নিরাপদ জায়গায় আছি|শুধু.*(?:বোর্ড|হোয়াইটবোর্ড)/.test(q)) {
       setContext('classroom');
@@ -257,7 +264,10 @@ const AsthaExperience = (() => {
   }
   async function saveAssessment(event) {
     event?.preventDefault();
-    const values = readForm();
+    await commit(readForm());
+  }
+  async function commit(values) {
+    fillForm(values);
     const record = { values, updated_at: Date.now(), synced: false };
     writeLocal(record);
     applyPreferences(values, { explicit: true });
@@ -296,9 +306,62 @@ const AsthaExperience = (() => {
     try { localStorage.removeItem(PREF_KEY); localStorage.removeItem('astha.accessibility.v1'); } catch {}
     preferences = { ...DEFAULTS }; fillForm(preferences); setupStatus('');
   }
+  /* ---- Guided setup: the same answers, given by voice -------------------------------
+     ASTHA asks one short question at a time and listens. While it is running every
+     request is taken as an answer, so "one" or "yes" never reaches another feature. */
+  const YES = /^(?:yes|yeah|yep|sure|ok|okay|please|হ্যাঁ|হুম|জি|জ্বি|চাই|ha|hae)(?![A-Za-z0-9_\u0980-\u09FF])/, NO = /^(?:no|nope|nah|না|চাই না|লাগবে না|na)(?![A-Za-z0-9_\u0980-\u09FF])/;
+  const GUIDE = [
+    { key: 'vision', en: 'How much do you rely on vision? Say one if you are blind. Two if you can tell light or large shapes. Three if you have low vision. Four if you prefer not to say.',
+      bn: 'আপনি দৃষ্টির ওপর কতটা নির্ভর করেন? দৃষ্টিহীন হলে বলুন এক। আলো বা বড় আকার বুঝলে দুই। স্বল্পদৃষ্টি হলে তিন। জানাতে না চাইলে চার।',
+      options: [['none', /\b(?:1|one|blind)\b|এক|১|দৃষ্টিহীন|অন্ধ/], ['light', /\b(?:2|two|light|shapes?)\b|দুই|২|আলো/], ['low', /\b(?:3|three|low)\b|তিন|৩|স্বল্প|কম দেখ/], ['unspecified', /\b(?:4|four|prefer not|rather not)\b|চার|৪|জানাতে চাই না/]] },
+    { key: 'language', en: 'Which language should I use? Say Bangla or English.', bn: 'আমি কোন ভাষা ব্যবহার করব? বলুন বাংলা অথবা ইংরেজি।',
+      options: [['bn', /\b(?:1|one|bangla|bengali)\b|বাংলা|এক|১/], ['en', /\b(?:2|two|english)\b|ইংরেজি|ইংলিশ|দুই|২/]] },
+    { key: 'feedback', en: 'How should I answer? Say one for full descriptions. Two for short answers. Three for text only, without speech.',
+      bn: 'আমি কীভাবে উত্তর দেব? বিস্তারিত বর্ণনার জন্য বলুন এক। সংক্ষিপ্ত উত্তরের জন্য দুই। কথা না বলে শুধু লেখার জন্য তিন।',
+      options: [['detailed', /\b(?:1|one|full|detailed?)\b|এক|১|বিস্তারিত/], ['brief', /\b(?:2|two|short|brief)\b|দুই|২|সংক্ষ/], ['text', /\b(?:3|three|text|silent)\b|তিন|৩|লেখা/]] },
+    { key: 'road', en: 'Do you want surroundings updates on your home screen, for when you are walking? Say yes or no.', bn: 'হাঁটার সময়ের জন্য হোম পর্দায় চারপাশের খবর চান? হ্যাঁ বা না বলুন।', options: [[true, YES], [false, NO]] },
+    { key: 'classroom', en: 'Do you want whiteboard focus on your home screen, for classrooms? Say yes or no.', bn: 'শ্রেণিকক্ষের জন্য হোম পর্দায় হোয়াইটবোর্ডে মনোযোগ চান? হ্যাঁ বা না বলুন।', options: [[true, YES], [false, NO]] },
+  ];
+  let guide = null;
+  async function askGuide(prefixEn = '', prefixBn = '') {
+    const mine = guide; if (!mine) return;
+    const step = GUIDE[mine.step], en = prefixEn + step.en, bn = prefixBn + step.bn;
+    setCaption(t('page_assessment'), en, 'system', null, bn);
+    if (state.audio) await VoiceEngine.speak(voiceLang === 'bn' ? bn : en, voiceLang);
+    // Listen for the answer without another tap, once per question.
+    if (guide === mine && mine.asked !== mine.step && !state.listening && typeof toggleListening === 'function') { mine.asked = mine.step; toggleListening(); }
+  }
+  function startGuide() {
+    if (!state.audio) toggleAudio();
+    guide = { step: 0, asked: -1, values: {} };
+    askGuide('I will ask five short questions. Say repeat, back, skip or cancel at any time. ', 'আমি পাঁচটি ছোট প্রশ্ন করব। যেকোনো সময় বলুন আবার, পেছনে, বাদ দাও বা বাতিল। ');
+  }
+  function endGuide(en, bn) { guide = null; if (en) say(en, bn); }
+  async function finishGuide() {
+    const answers = guide.values; guide = null;
+    const values = { ...preferences };
+    for (const key of ['vision', 'language', 'feedback']) if (answers[key] !== undefined) values[key] = answers[key];
+    const modes = new Set(values.modes);
+    for (const key of ['road', 'classroom']) if (answers[key] !== undefined) { if (answers[key]) modes.add(key); else modes.delete(key); }
+    values.modes = [...modes];
+    // Larger text is the one display change a low-vision answer implies.
+    if (answers.vision === 'low' && values.textSize === 'normal') values.textSize = 'large';
+    await commit(sanitize(values));
+  }
+  function answerGuide(q) {
+    if (/^(?:stop|cancel|quit|exit|বাতিল|থামো|থামুন|বন্ধ করো)(?![A-Za-z0-9_\u0980-\u09FF])/.test(q)) { stopAllSpeech(); endGuide('Setup cancelled. Nothing was changed.', 'সেটআপ বাতিল হয়েছে। কিছুই বদলানো হয়নি।'); return; }
+    if (/^(?:repeat|again|say that again|আবার|আবার বলো)(?![A-Za-z0-9_\u0980-\u09FF])/.test(q)) { guide.asked = -1; askGuide(); return; }
+    if (/^(?:back|previous|go back|পেছনে|আগের)(?![A-Za-z0-9_\u0980-\u09FF])/.test(q)) { guide.step = Math.max(0, guide.step - 1); guide.asked = -1; askGuide(); return; }
+    const skipped = /^(?:skip|next|বাদ দাও|পরের)(?![A-Za-z0-9_\u0980-\u09FF])/.test(q);
+    const match = skipped ? null : GUIDE[guide.step].options.find(([, pattern]) => pattern.test(q));
+    if (!skipped && !match) { guide.asked = -1; askGuide('I did not catch that. ', 'বুঝতে পারিনি। '); return; }
+    if (match) guide.values[GUIDE[guide.step].key] = match[0];
+    guide.step++; guide.asked = -1;
+    if (guide.step < GUIDE.length) askGuide(); else finishGuide();
+  }
   function readAssessment() {
-    say('Personal setup. Each question is read when you reach it. Tab moves to the next choice, and Space or Enter selects it. Your answers only change how Astha presents information. Choose Save when you finish.',
-      'নিজের পছন্দ। প্রতিটি প্রশ্নে পৌঁছালে তা পড়ে শোনানো হবে। ট্যাব দিয়ে পরের পছন্দে যান, স্পেস বা এন্টার দিয়ে বাছুন। উত্তরগুলো শুধু আস্থার উপস্থাপনা বদলায়। শেষ হলে সংরক্ষণ বেছে নিন।');
+    say('Personal setup. Each question is read when you reach it. Tab moves to the next choice, and Space or Enter selects it. Your answers only change how Astha presents information. Choose Save when you finish. Or say “start guided setup” and I will ask the main questions one at a time.',
+      'নিজের পছন্দ। প্রতিটি প্রশ্নে পৌঁছালে তা পড়ে শোনানো হবে। ট্যাব দিয়ে পরের পছন্দে যান, স্পেস বা এন্টার দিয়ে বাছুন। উত্তরগুলো শুধু আস্থার উপস্থাপনা বদলায়। শেষ হলে সংরক্ষণ বেছে নিন। অথবা বলুন “গাইডেড সেটআপ শুরু করো”, আমি মূল প্রশ্নগুলো একটি একটি করে জিজ্ঞাসা করব।');
   }
   // Spoken instructions for each question: read its heading once when focus enters it.
   function speakGroup(event) {
@@ -344,9 +407,18 @@ const AsthaExperience = (() => {
     adopt('language', uiLang);
   }
 
+  const handsFreeAvailable = () => typeof window !== 'undefined' && Boolean(window.SpeechRecognition || window.webkitSpeechRecognition);
+  // A control that silently does nothing is worse than no control for someone who cannot see it.
+  function reflectHandsFree() {
+    const button = $('hf-btn'), hint = document.querySelector('.mic-hint');
+    if (button) button.hidden = !handsFreeAvailable();
+    if (hint && !handsFreeAvailable()) { hint.setAttribute('data-i18n', 'mic_hint_tap'); hint.textContent = t('mic_hint_tap'); }
+  }
   function boot() {
     // A remembered road mode must not silently resume camera analysis in a new session.
     setContext('ask', true);
+    reflectHandsFree();
+    $('assessment-guided')?.addEventListener('click', startGuide);
     document.querySelectorAll('[data-astha-page]').forEach(button => button.addEventListener('click', () => showPage(button.dataset.asthaPage)));
     document.querySelectorAll('[data-astha-context]').forEach(button => button.addEventListener('click', () => setContext(button.dataset.asthaContext)));
     $('assessment-form')?.addEventListener('submit', saveAssessment);
@@ -363,7 +435,8 @@ const AsthaExperience = (() => {
     if (typeof setInterval === 'function') setInterval(renderPresence, 200);
   }
   return { route, visualTask, allows, admit, acceptHazard, hazardPriority, cancelPending, setContext, showPage, boot,
-    refreshLabels, accountCleared, loadAccountPreferences, sanitize, adopt,
+    refreshLabels, accountCleared, loadAccountPreferences, sanitize, adopt, startGuide,
+    get guiding() { return Boolean(guide); },
     routineAllowed: () => allows('low'),
     invalidate() { visualGeneration++; },
     get mode() { return mode; }, get page() { return page; }, get busy() { return busy(); },
