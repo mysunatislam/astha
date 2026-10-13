@@ -6,6 +6,7 @@ import { all, run } from './db.js';
 import { asyncRoute } from './async-route.js';
 import { applyRetention } from './retention.js';
 import { isBody, isText } from './validate.js';
+import { PREFERENCES_CATEGORY } from './preferences.js';
 
 export const ragRouter = Router();
 
@@ -95,7 +96,8 @@ export async function searchRAG(userId, query, options = {}) {
   }).filter(r => r.score > 0);
 
   // 3. Fetch knowledge docs
-  const rawDocs = await all('SELECT * FROM knowledge_docs WHERE user_id = ? ORDER BY updated_at DESC LIMIT 50', [userId]);
+  // The reserved preferences row is account configuration, never retrieval context.
+  const rawDocs = await all('SELECT * FROM knowledge_docs WHERE user_id = ? AND category <> ? ORDER BY updated_at DESC LIMIT 50', [userId, PREFERENCES_CATEGORY]);
   const scoredDocs = rawDocs.map(d => {
     const text = `${d.title} ${d.content} ${d.tags_json || ''}`;
     const score = scoreLexical(text, terms);
@@ -163,7 +165,7 @@ ragRouter.post('/rag/docs', asyncRoute(async (req, res) => {
   if (!title || !content) return res.status(400).json({ error: 'title_and_content_required' });
   // Reject instead of silently truncating: a stored note must be exactly what was sent.
   if (!isBody(req.body) || !isText(title, 100) || !isText(content, 4000) ||
-      (category !== undefined && !isText(category, 40)) ||
+      (category !== undefined && (!isText(category, 40) || category === PREFERENCES_CATEGORY)) ||
       (tags !== undefined && (!Array.isArray(tags) || tags.length > 20 || !tags.every(tag => isText(tag, 40))))) {
     return res.status(400).json({ error: 'invalid_document_input' });
   }
@@ -179,14 +181,14 @@ ragRouter.post('/rag/docs', asyncRoute(async (req, res) => {
 
 // Personal notes can be reviewed and removed by their owner, like memories and rooms.
 ragRouter.get('/rag/docs', asyncRoute(async (req, res) => {
-  const rows = await all('SELECT id, category, title, content, tags_json, created_at, updated_at FROM knowledge_docs WHERE user_id = ? ORDER BY updated_at DESC LIMIT 200', [req.user.id]);
+  const rows = await all('SELECT id, category, title, content, tags_json, created_at, updated_at FROM knowledge_docs WHERE user_id = ? AND category <> ? ORDER BY updated_at DESC LIMIT 200', [req.user.id, PREFERENCES_CATEGORY]);
   res.json({ docs: rows });
 }));
 ragRouter.delete('/rag/docs/:id', asyncRoute(async (req, res) => {
-  await run('DELETE FROM knowledge_docs WHERE id = ? AND user_id = ?', [req.params.id, req.user.id]);
+  await run('DELETE FROM knowledge_docs WHERE id = ? AND user_id = ? AND category <> ?', [req.params.id, req.user.id, PREFERENCES_CATEGORY]);
   res.json({ ok: true });
 }));
 ragRouter.delete('/rag/docs', asyncRoute(async (req, res) => {
-  await run('DELETE FROM knowledge_docs WHERE user_id = ?', [req.user.id]);
+  await run('DELETE FROM knowledge_docs WHERE user_id = ? AND category <> ?', [req.user.id, PREFERENCES_CATEGORY]);
   res.json({ ok: true });
 }));

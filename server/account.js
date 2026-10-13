@@ -6,6 +6,7 @@ import { verifyPasscode } from './auth.js';
 import { normalizePasscode } from './security.js';
 import { asyncRoute } from './async-route.js';
 import { isBody } from './validate.js';
+import { PREFERENCES_CATEGORY, validatePreferences } from './preferences.js';
 
 export const DELETE_CONFIRMATION = 'delete_my_account';
 const EXPORT_ROW_LIMIT = 5000;
@@ -43,7 +44,11 @@ export function createAccountRouter(cookieOptions) {
     data.agent_tasks = data.agent_tasks.map(({ plan_json, step_history_json, result_json, ...task }) => ({
       ...task, plan: parseStored(plan_json), step_history: parseStored(step_history_json), result: parseStored(result_json),
     }));
-    data.knowledge_docs = data.knowledge_docs.map(({ tags_json, ...doc }) => ({ ...doc, tags: parseStored(tags_json) }));
+    // Setup preferences are exported under their own name rather than as a note.
+    const saved = data.knowledge_docs.find(doc => doc.category === PREFERENCES_CATEGORY);
+    data.preferences = saved ? { values: validatePreferences(parseStored(saved.content)), updated_at: saved.updated_at } : null;
+    data.knowledge_docs = data.knowledge_docs.filter(doc => doc.category !== PREFERENCES_CATEGORY)
+      .map(({ tags_json, ...doc }) => ({ ...doc, tags: parseStored(tags_json) }));
     res.set('Content-Disposition', 'attachment; filename="astha-export.json"');
     res.json(data);
   }));
