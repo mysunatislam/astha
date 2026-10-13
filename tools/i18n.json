@@ -1155,6 +1155,30 @@
   "setup_theme_yellow": [
    "Yellow on black",
    "কালোর ওপর হলুদ"
+  ],
+  "screen_access_explain": [
+   "In the Android app you can let Astha read other apps aloud. When you ask, it reads the text on the screen and can go back or home. It does not watch in the background, never reads password fields, and cannot tap, type or send anything for you. Android shows its own warning before it is turned on, and you can turn it off here at any time.",
+   "অ্যান্ড্রয়েড অ্যাপে আস্থাকে অন্য অ্যাপের লেখা পড়ে শোনানোর অনুমতি দিতে পারেন। আপনি বললে এটি পর্দার লেখা পড়ে এবং পেছনে বা হোমে যেতে পারে। এটি পেছন থেকে নজর রাখে না, পাসওয়ার্ডের ঘর কখনো পড়ে না, এবং আপনার হয়ে চাপ দিতে, লিখতে বা কিছু পাঠাতে পারে না। চালু করার আগে অ্যান্ড্রয়েড নিজের সতর্কবার্তা দেখায়, আর এখান থেকে যেকোনো সময় বন্ধ করা যায়।"
+  ],
+  "screen_access_on": [
+   "Let Astha read other apps",
+   "আস্থাকে অন্য অ্যাপ পড়তে দিন"
+  ],
+  "screen_access_off": [
+   "Stop Astha reading other apps",
+   "আস্থার অন্য অ্যাপ পড়া বন্ধ করুন"
+  ],
+  "screen_status_off": [
+   "Reading other apps is off.",
+   "অন্য অ্যাপ পড়া বন্ধ আছে।"
+  ],
+  "screen_status_waiting": [
+   "Almost done: turn on Astha screen reading in Android Accessibility settings.",
+   "প্রায় শেষ: অ্যান্ড্রয়েডের অ্যাক্সেসিবিলিটি সেটিংসে আস্থার স্ক্রিন পড়া চালু করুন।"
+  ],
+  "screen_status_on": [
+   "Reading other apps is on. Say “What is on my screen?”",
+   "অন্য অ্যাপ পড়া চালু আছে। বলুন “স্ক্রিনে কী আছে?”"
   ]
  },
  "hooks": [

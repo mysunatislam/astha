@@ -84,4 +84,9 @@
   <p data-i18n="sensor_info">An ultrasonic distance sensor is planned. None is connected, so Astha does not report measured distances. Distances it mentions are rough estimates from the image.</p>
   <h3 data-i18n="screen_control_title">Other apps and screen control</h3>
   <p data-i18n="screen_control_info">This version can read a screen you explicitly share. Controlling other apps is not connected yet. Camera permission does not enable it.</p>
+  <div id="screen-access" hidden>
+    <p data-i18n="screen_access_explain">In the Android app you can let Astha read other apps aloud. When you ask, it reads the text on the screen and can go back or home. It does not watch in the background, never reads password fields, and cannot tap, type or send anything for you. Android shows its own warning before it is turned on, and you can turn it off here at any time.</p>
+    <button class="btn" type="button" id="screen-access-toggle" aria-pressed="false" data-i18n="screen_access_on">Let Astha read other apps</button>
+    <p id="screen-access-status" class="help" role="status" aria-live="polite" data-i18n="screen_status_off">Reading other apps is off.</p>
+  </div>
 </section>

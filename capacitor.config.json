@@ -1,4 +1,4 @@
-﻿{
+{
   "appId": "com.astha.companion",
   "appName": "Astha",
   "webDir": "web",
@@ -15,5 +15,6 @@
   "ios": {
     "contentInset": "always",
     "allowsLinkPreview": false
-  }
+  },
+  "loggingBehavior": "none"
 }

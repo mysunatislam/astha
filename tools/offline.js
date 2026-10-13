@@ -648,9 +648,29 @@ const OfflineEar = {
 };
 
 // One-tap listening: the browser recogniser when online, Whisper on the phone otherwise.
+// The Android app has no browser speech recognition, so one request uses the device recognizer.
+async function listenOnDevice() {
+  if (privacyMode || privacyTransition) return announce('Voice recognition is off in privacy mode. Type your request.', 'গোপনীয়তা মোডে কণ্ঠ শনাক্তকরণ বন্ধ। অনুরোধ লিখে দিন।', 'voice');
+  if (reader.active) pauseReader(); else VoiceEngine.stop();
+  state.listening = true;
+  $('mic').setAttribute('aria-label', 'Stop listening'); $('mic').setAttribute('aria-pressed', 'true'); $('mic').classList.add('listening');
+  $('mic-label').textContent = t('mic_listening');
+  setCaption(t('agent_voice'), 'Listening… take your time.', 'voice', 'busy', 'শুনছি… ধীরে বলুন।');
+  playEarcon('confirm');
+  let text = '', failure = null;
+  try { text = (await window.AsthaNative.listen(sttLang())).trim(); } catch (error) { failure = error && error.code; }
+  if (!state.listening) return;   // the user tapped again to cancel
+  stopListening();
+  if (failure === 'permission') return announce('Microphone access was denied.', 'মাইক্রোফোনের অনুমতি নেই।', 'voice');
+  if (failure === 'recognizer_unavailable') return announce('This phone has no speech recognizer installed. Type your request instead.', 'এই ফোনে কণ্ঠ শনাক্ত করার ব্যবস্থা নেই। অনুরোধ লিখে দিন।', 'voice');
+  if (text) return handleQuery(text);
+  setCaption(t('agent_voice'), 'I did not hear anything. Tap the microphone and speak after the chime.', 'voice', null, 'কিছু শুনতে পাইনি। মাইক্রোফোন চেপে শব্দের পরে বলুন।');
+}
 function toggleListening() {
-  if (state.listening) { stopListening(); return; }
+  const device = window.AsthaNative && window.AsthaNative.canListen ? window.AsthaNative : null;
+  if (state.listening) { if (device) device.stopListening(); stopListening(); return; }
   if (OfflineEar.active) { OfflineEar.cancel(); return; }
+  if (device) { listenOnDevice(); return; }
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR || OfflineEar.wanted()) return OfflineEar.listenAndHandle(!SR ? 'nosr' : (navigator.onLine === false ? 'network' : 'pref'));
   if (privacyMode || privacyTransition) return announce('Voice recognition is off in privacy mode. Type your request.', 'গোপনীয়তা মোডে অনলাইন কণ্ঠ শনাক্তকরণ বন্ধ। অনুরোধ লিখুন।');

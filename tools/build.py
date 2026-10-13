@@ -546,7 +546,7 @@ rep('<a class="skip-link" href="#companion-main">Skip to companion</a>\n',
 
 # ---- client scripts: config (deployment overrides) + backend (auth gate wiring) ----
 rep('</script>\n</body>\n</html>',
-    '</script>\n<script src="config.js"></script>\n<script src="native-api.js"></script>\n<script src="pi-camera.js"></script>\n<script src="backend.js"></script>\n</body>\n</html>')
+    '</script>\n<script src="config.js"></script>\n<script src="native-api.js"></script>\n<script src="native-device.js"></script>\n<script src="pi-camera.js"></script>\n<script src="backend.js"></script>\n</body>\n</html>')
 
 
 # ---- Offline companion: no narration while a search is guiding; route the new voice abilities ----
@@ -565,14 +565,15 @@ rep("  renderSeen(); renderMemory(); renderLog();\n}\n", "  applyStaticI18n();\n
 experience_js = (HERE / "experience.js").read_text(encoding="utf-8")
 pi_ui_js = (HERE / "pi-camera-ui.js").read_text(encoding="utf-8")
 braille_js = (HERE / "braille.js").read_text(encoding="utf-8")
+screen_js = (HERE / "screen-access.js").read_text(encoding="utf-8")
 sensors_js = (HERE / "sensors.js").read_text(encoding="utf-8")
-rep("\n(function boot() {", i18n_data + i18n_js.rstrip("\n") + "\n" + module.rstrip("\n") + "\n" + eye_js.rstrip("\n") + "\n" + cloud_js.rstrip("\n") + "\n" + agent_js.rstrip("\n") + "\n" + perceive_js.rstrip("\n") + "\n" + offline_js.rstrip("\n") + "\n" + account_js.rstrip("\n") + "\n" + experience_js.rstrip("\n") + "\n" + pi_ui_js.rstrip("\n") + "\n" + braille_js.rstrip("\n") + "\n" + sensors_js.rstrip("\n") + "\n\n(function boot() {")
+rep("\n(function boot() {", i18n_data + i18n_js.rstrip("\n") + "\n" + module.rstrip("\n") + "\n" + eye_js.rstrip("\n") + "\n" + cloud_js.rstrip("\n") + "\n" + agent_js.rstrip("\n") + "\n" + perceive_js.rstrip("\n") + "\n" + offline_js.rstrip("\n") + "\n" + account_js.rstrip("\n") + "\n" + experience_js.rstrip("\n") + "\n" + pi_ui_js.rstrip("\n") + "\n" + braille_js.rstrip("\n") + "\n" + sensors_js.rstrip("\n") + "\n" + screen_js.rstrip("\n") + "\n\n(function boot() {")
 rep("  renderSpatialLayout();\n  enhancementBoot();\n})();", "  renderSpatialLayout();\n  enhancementBoot();\n  companionBoot();\n  eyeBoot();\n  cloudBoot();\n})();")
 
 # ---- boot(): expose it instead of self-invoking, so backend.js can run it after sign-in ----
 rep('(function boot() {', 'window.__asthaBoot = function boot() {')
 rep('  companionBoot();\n  eyeBoot();\n  cloudBoot();\n})();',
-    '  companionBoot();\n  eyeBoot();\n  cloudBoot();\n  offlineBoot();\n  AsthaExperience.boot();\n  AsthaPiCamera.boot();\n  AsthaBraille.boot();\n  refreshMemory();\n  refreshRooms();\n'
+    '  companionBoot();\n  eyeBoot();\n  cloudBoot();\n  offlineBoot();\n  AsthaExperience.boot();\n  AsthaPiCamera.boot();\n  AsthaBraille.boot();\n  AsthaScreenAccess.boot();\n  refreshMemory();\n  refreshRooms();\n'
     '  // Warm the on-device detector while the page settles (cached weights + WebGL shader compile),\n'
     '  // so the first "describe" or camera start does not begin with a silent wait. Skipped on data-saver.\n'
     "  setTimeout(() => { if (typeof loadCoco === 'function' && engine.coco.status === 'idle' && !(navigator.connection && navigator.connection.saveData)) loadCoco().catch(() => {}); }, 1200);\n"
@@ -620,7 +621,7 @@ shell_hash = hashlib.sha256(html.encode("utf-8"))
 # Bootstrap/config-only changes must invalidate cache-first resources, too. Normalize the
 # stamp itself to avoid a circular hash and keep successive builds byte-for-byte identical.
 shell_hash.update(re.sub(r"const CACHE = 'astha-shell-[^']*';", "const CACHE = 'astha-shell-STAMP';", sw).encode("utf-8"))
-for asset in ("config.js", "native-api.js", "pi-camera.js", "backend.js", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png"):
+for asset in ("config.js", "native-api.js", "native-device.js", "pi-camera.js", "backend.js", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png"):
     shell_hash.update(asset.encode("utf-8"))
     shell_hash.update((DST.parent / asset).read_bytes())
 stamp = shell_hash.hexdigest()[:10]

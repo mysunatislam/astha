@@ -101,7 +101,7 @@ const VoiceEngine = {
   get speaking() {
     if (this.mode === 'audio') return !!this.audioEl && !this.audioEl.paused && !this.audioEl.ended;
     if (this.mode === 'synth') return !!(window.speechSynthesis && window.speechSynthesis.speaking);
-    return false;
+    return this.mode === 'native';
   },
   _finishCritical() {
     this.criticalUntil = 0;
@@ -133,6 +133,7 @@ const VoiceEngine = {
     if (window.speechSynthesis) {
       try { window.speechSynthesis.cancel(); } catch (e) {}
     }
+    if (this.mode === 'native' && window.AsthaNative) window.AsthaNative.stopSpeaking();
     this.mode = null;
   },
   pause() {
@@ -145,7 +146,8 @@ const VoiceEngine = {
   },
   // Resolves true once the text has finished playing, false if it could not be spoken at all
   // (voice off, nothing to say, and no fallback voice on this device).
-  async speak(text, lang) {
+  // `local` skips the server voice, for alerts that cannot wait on the network.
+  async speak(text, lang, { local = false } = {}) {
     this.stop();
     const generation = this.generation;
     if (!state.audio || !text) return false;
@@ -157,7 +159,7 @@ const VoiceEngine = {
     try {
       // With no backend (static hosting, offline) go straight to the device voice instead of
       // paying a failed network round-trip before every sentence.
-      if (!remoteProcessingAllowed() || (typeof backendReachable === 'function' && !backendReachable())) throw offlineError();
+      if (local || !remoteProcessingAllowed() || (typeof backendReachable === 'function' && !backendReachable())) throw offlineError();
       const controller = new AbortController(); this.requestController = controller;
       let res, blob;
       try {
@@ -192,9 +194,9 @@ const VoiceEngine = {
       }
     } catch (e) { /* offline, signed out, or the server is down: use the local voice instead */ }
     if (generation !== this.generation) return false;
-    if (!window.speechSynthesis) return false;
-    const u = makeUtterance(sanitizeForSpeech(text), lang);
-    if (!u) return false;
+    // The Android WebView has no speech synthesis; the app supplies the device voice instead.
+    const u = window.speechSynthesis ? makeUtterance(sanitizeForSpeech(text), lang) : null;
+    if (!u) return this._speakOnDevice(text, lang, generation);
     this.mode = 'synth';
     const ok = await new Promise(resolve => {
       this._currentResolve = resolve;
@@ -204,6 +206,15 @@ const VoiceEngine = {
     });
     this._currentResolve = null;
     if (this.mode === 'synth') this.mode = null;
+    this.lastSpokeAt = Date.now();
+    return ok;
+  },
+  async _speakOnDevice(text, lang, generation) {
+    const device = window.AsthaNative;
+    if (!device || !device.canSpeak) return false;
+    this.mode = 'native';
+    const ok = await device.speak(sanitizeForSpeech(text), lang, Number($('speech-rate') && $('speech-rate').value) || 1);
+    if (generation === this.generation && this.mode === 'native') this.mode = null;
     this.lastSpokeAt = Date.now();
     return ok;
   },
@@ -232,7 +243,7 @@ const VoiceEngine = {
     const lang = useBn ? 'bn' : 'en';
     const u = window.speechSynthesis && typeof makeUtterance === 'function' ? makeUtterance(sanitizeForSpeech(text), lang) : null;
     // Without a device voice (some Android WebViews) use the normal voice path.
-    if (!u) { this.speak(text, lang); return; }
+    if (!u) { this.speak(text, lang, { local: true }); return; }
     try { window.speechSynthesis.cancel(); } catch (e) {}
     u.rate = 1.18; // Urgent fast speech
     u.pitch = 1.1;

@@ -136,6 +136,7 @@ const AsthaExperience = (() => {
       ['tools', new RegExp('^(?:' + open + '(?:the )?(?:camera view|camera tools|tools)|ক্যামেরা(?: খোলো| দেখাও))$')],
     ];
     for (const [name, pattern] of pages) if (pattern.test(bare)) { showPage(name); return true; }
+    if (typeof AsthaScreenAccess !== 'undefined' && AsthaScreenAccess.route(query)) return true;
     if (lastVisualQuery && /^(?:check again|look again|is it still there|and now|আবার দেখো|এখনো আছে|এখন কী)[?।.!\s]*$/.test(q)) { handleVisualQA(lastVisualQuery); return true; }
     // Historical recall keeps its existing path. Current visual questions take a fresh frame.
     if (!/where did i|last seen|remember|কোথায় রেখেছিলাম|মনে রাখ/.test(q) &&

@@ -1,0 +1,217 @@
+// Android device bridge: voice, recognizer and opt-in screen reading. The JavaScript runs
+// here against a stand-in plugin; the Java side is checked for its guardrails as source.
+// None of this proves behaviour on a phone.
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import vm from 'node:vm';
+
+const read = file => fs.readFileSync(new URL('../' + file, import.meta.url), 'utf8').replace(/\r\n/g, '\n');
+const bridgeSource = read('web/native-device.js');
+const screenSource = read('tools/screen-access.js');
+const moduleSource = read('tools/module.js');
+const offlineSource = read('tools/offline.js');
+const strings = JSON.parse(read('tools/i18n.json')).strings;
+const between = (source, start, end) => {
+  const a = source.indexOf(start), b = source.indexOf(end, a + start.length);
+  assert(a >= 0 && b > a, 'missing source boundary: ' + start);
+  return source.slice(a, b);
+};
+const coded = code => Object.assign(new Error('native'), { code });
+
+function bridge(plugin, { platform = 'android', native = true } = {}) {
+  const window = plugin === null ? {} : { Capacitor: { isNativePlatform: () => native, getPlatform: () => platform, Plugins: { AsthaNative: plugin } } };
+  vm.runInNewContext(bridgeSource, { window, Promise, Object, String, Number, Error });
+  return window.AsthaNative;
+}
+
+test('a browser, iOS and an app without the plugin get no native bridge', () => {
+  const plugin = { speak: async () => ({ completed: true }) };
+  assert.equal(bridge(null), undefined);
+  assert.equal(bridge(plugin, { native: false }), undefined);
+  assert.equal(bridge(plugin, { platform: 'ios' }), undefined);
+  assert.equal(bridge({}), undefined);
+  assert.equal(bridge(plugin).canSpeak, true);
+});
+
+test('device voice and recognizer calls are bounded and report plain results', async () => {
+  const calls = [];
+  const device = bridge({
+    speak: async options => { calls.push(['speak', options]); if (options.text === 'fail') throw coded('voice_unavailable'); return { completed: options.text !== 'cut' }; },
+    stopSpeaking: async () => { calls.push(['stopSpeaking']); }, stopListening: async () => { throw new Error('ignored'); },
+    listen: async options => { calls.push(['listen', options]); if (options.language === 'en-US') throw coded('permission'); return { text: 'x'.repeat(900) }; },
+  });
+  assert.equal(await device.speak('হ্যালো', 'bn', 1.2), true);
+  assert.deepEqual([calls[0][0], { ...calls[0][1] }], ['speak', { text: 'হ্যালো', lang: 'bn', rate: 1.2 }]);
+  assert.equal(await device.speak('y'.repeat(9000), 'fr', 'fast'), true);
+  assert.equal(calls[1][1].text.length, 4000); assert.equal(calls[1][1].lang, 'en'); assert.equal(calls[1][1].rate, 1);
+  assert.equal(await device.speak('cut', 'en'), false); assert.equal(await device.speak('fail', 'en'), false);
+  assert.equal(await device.speak('   ', 'en'), false, 'nothing to say is not sent to the device');
+  assert.equal((await device.listen('bn-BD')).length, 500);
+  await device.listen('not a language tag'); assert.equal(calls.at(-1)[1].language, 'bn-BD');
+  await assert.rejects(device.listen('en-US'), { code: 'permission' });
+  device.stopSpeaking(); device.stopListening();   // neither may throw or leave an unhandled rejection
+  await new Promise(resolve => setImmediate(resolve));
+});
+
+function screenHarness({ consent = false, serviceEnabled = false, text = 'Inbox\nRahim: See you at 5', truncated = false, native = true } = {}) {
+  const state = { consent, serviceEnabled }, calls = [], spoken = [], elements = new Map(), listeners = new Map();
+  const element = id => { if (!elements.has(id)) elements.set(id, { id, hidden: true, textContent: '', attributes: {}, listeners: {}, setAttribute(key, value) { this.attributes[key] = value; }, addEventListener(name, fn) { this.listeners[name] = fn; } }); return elements.get(id); };
+  for (const id of ['screen-access', 'screen-access-toggle', 'screen-access-status']) element(id);
+  const screen = {
+    status: async () => ({ ...state }),
+    setConsent: async granted => { calls.push('consent:' + granted); state.consent = granted; if (!granted) state.serviceEnabled = false; },
+    openSettings: async () => { calls.push('settings'); if (!state.consent) throw coded('consent_required'); },
+    read: async () => { calls.push('read'); if (!state.consent || !state.serviceEnabled) throw coded('service_disabled'); return { app: 'com.example.mail', text, truncated }; },
+    action: async name => { calls.push('action:' + name); return true; },
+  };
+  const context = vm.createContext({ Promise, String, RegExp, uiLang: 'en', announce: (en, bn) => spoken.push([en, bn]),
+    document: { hidden: false, getElementById: id => elements.get(id) || null, addEventListener: (name, fn) => listeners.set(name, fn) },
+    window: native ? { AsthaNative: { screen } } : {} });
+  context.t = key => strings[key][context.uiLang === 'bn' ? 1 : 0];
+  vm.runInContext(screenSource + '\nglobalThis.access = AsthaScreenAccess;', context);
+  const settle = () => new Promise(resolve => setImmediate(resolve));
+  return { access: context.access, state, calls, spoken, elements, listeners, settle };
+}
+
+test('in a browser the screen-reading controls stay hidden and voice requests fall through', () => {
+  const h = screenHarness({ native: false }); h.access.boot();
+  assert.equal(h.elements.get('screen-access').hidden, true);
+  assert.equal(h.access.route('What is on my screen?'), false);
+});
+
+test('turning screen reading on explains first, records consent, then hands over to Android settings', async () => {
+  const h = screenHarness(); h.access.boot(); await h.settle();
+  assert.equal(h.elements.get('screen-access').hidden, false); assert.equal(h.access.status, 'off');
+  assert.equal(h.elements.get('screen-access-toggle').attributes['aria-pressed'], 'false');
+  await h.elements.get('screen-access-toggle').listeners.click();
+  assert.deepEqual(h.calls, ['consent:true', 'settings'], 'ASTHA never opens settings before the user agreed');
+  assert.match(h.spoken[0][0], /Android will show its own warning/);
+  assert.equal(h.access.status, 'waiting'); assert.equal(h.elements.get('screen-access-status').textContent, strings.screen_status_waiting[0]);
+  // The user switches the service on in Android and comes back.
+  h.state.serviceEnabled = true; h.listeners.get('visibilitychange')(); await h.settle();
+  assert.equal(h.access.status, 'on'); assert.equal(h.elements.get('screen-access-toggle').textContent, strings.screen_access_off[0]);
+  await h.elements.get('screen-access-toggle').listeners.click();
+  assert.equal(h.calls.at(-1), 'consent:false'); assert.equal(h.access.status, 'off'); assert.equal(h.state.serviceEnabled, false);
+  assert.match(h.spoken.at(-1)[0], /can no longer read other apps/);
+});
+
+test('the screen is read only when it is fully enabled, and only when asked', async () => {
+  for (const state of [{ consent: false, serviceEnabled: false }, { consent: true, serviceEnabled: false }, { consent: false, serviceEnabled: true }]) {
+    const off = screenHarness(state);
+    assert.equal(off.access.route('Astha, what is on my screen?'), true); await off.settle();
+    assert.equal(off.calls.includes('read'), false, JSON.stringify(state)); assert.match(off.spoken[0][0], /turned off/);
+  }
+  const h = screenHarness({ consent: true, serviceEnabled: true, truncated: true });
+  for (const query of ['Where is my pen?', 'read this', 'go home', 'press back']) assert.equal(h.access.route(query), false, query);
+  assert.deepEqual(h.calls, [], 'nothing is read for unrelated requests');
+  assert.equal(h.access.route('স্ক্রিনে কী আছে?'), true); await h.settle();
+  assert.deepEqual(h.calls, ['read']);
+  assert.equal(h.spoken[0][0], 'On the screen: Inbox\nRahim: See you at 5 There is more that I did not read.');
+  assert.equal(h.access.route('press back on my phone'), true); await h.settle();
+  assert.equal(h.calls.at(-1), 'action:back');
+  const empty = screenHarness({ consent: true, serviceEnabled: true, text: '   ' });
+  empty.access.route('read my screen'); await empty.settle();
+  assert.match(empty.spoken[0][0], /could not find any readable text/);
+});
+
+test('without browser speech synthesis ASTHA speaks through the device voice and Stop reaches it', async () => {
+  const spoken = [], stops = [], fetches = []; let finish;
+  const context = vm.createContext({ console, Promise, Date, AbortController, state: { audio: true }, voiceLang: 'en',
+    VoiceEchoFilter: { recordMachineSpeech() {} }, remoteProcessingAllowed: () => true, backendReachable: () => true,
+    offlineError: () => new Error('offline'), apiUrl: path => path, deadlineSignal: () => undefined,
+    fetch: async (...args) => { fetches.push(args); return { ok: false }; },
+    makeUtterance: () => { throw new Error('speechSynthesis must not be used'); }, sanitizeForSpeech: text => text,
+    $: () => ({ value: '1.2' }), setTimeout, clearTimeout, playEarcon() {}, haptic() {}, setCaption() {}, showHazard() {}, t: key => key, stopReader() {},
+    window: { AsthaNative: { canSpeak: true, speak: (text, lang, rate) => { spoken.push([text, lang, rate]); return new Promise(resolve => { finish = resolve; }); }, stopSpeaking: () => stops.push(true) } } });
+  vm.runInContext(between(moduleSource, 'const VoiceEngine = {', 'function startReader(') + '\nglobalThis.engine = VoiceEngine;', context);
+  const { engine } = context;
+  const answer = engine.speak('Your tea is on the left.', 'en');
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(fetches.length, 1, 'the server voice is still tried first');
+  assert.deepEqual(spoken, [['Your tea is on the left.', 'en', 1.2]]); assert.equal(engine.speaking, true);
+  engine.stop(true); assert.deepEqual(stops, [true]); assert.equal(engine.speaking, false);
+  finish(false); assert.equal(await answer, false);
+  // An alert cannot wait for the network, so it goes straight to the device voice.
+  engine.emergencyAlert('Warning! Stairs directly ahead!', '', 'stairs', 'critical');
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(fetches.length, 1); assert.equal(spoken.at(-1)[0], 'Warning! Stairs directly ahead!');
+});
+
+test('in the Android app one tap listens through the device recognizer and handles the result', async () => {
+  // The slice ends inside toggleListening, so close it for the test.
+  const source = between(offlineSource, '// The Android app has no browser speech recognition', '  const SR = window.SpeechRecognition') + '}';
+  const run = listen => {
+    const queries = [], spoken = [], captions = [], stops = [];
+    const context = vm.createContext({ console, Promise, state: { listening: false }, privacyMode: false, privacyTransition: false,
+      reader: { active: false }, OfflineEar: { active: false }, VoiceEngine: { stop() {} }, pauseReader() {}, playEarcon() {}, sttLang: () => 'bn-BD', t: key => key,
+      $: () => ({ setAttribute() {}, classList: { add() {}, remove() {} }, textContent: '' }),
+      setCaption: (...args) => captions.push(args), announce: (en, bn) => spoken.push([en, bn]), handleQuery: text => queries.push(text),
+      window: { AsthaNative: { canListen: true, listen, stopListening: () => stops.push(true) } } });
+    context.stopListening = () => { context.state.listening = false; };
+    vm.runInContext(source + '\nglobalThis.toggle = toggleListening;', context);
+    return { context, queries, spoken, captions, stops };
+  };
+  const settle = () => new Promise(resolve => setImmediate(resolve));
+
+  const heard = run(async language => { assert.equal(language, 'bn-BD'); return '  আমার চশমা কোথায়  '; });
+  heard.context.toggle(); assert.equal(heard.context.state.listening, true);
+  await settle(); assert.deepEqual(heard.queries, ['আমার চশমা কোথায়']); assert.equal(heard.context.state.listening, false);
+
+  const silent = run(async () => ''); silent.context.toggle(); await settle();
+  assert.deepEqual(silent.queries, []); assert.match(silent.captions.at(-1)[1], /did not hear anything/);
+
+  const denied = run(async () => { throw coded('permission'); }); denied.context.toggle(); await settle();
+  assert.match(denied.spoken[0][0], /Microphone access was denied/);
+  const missing = run(async () => { throw coded('recognizer_unavailable'); }); missing.context.toggle(); await settle();
+  assert.match(missing.spoken[0][0], /no speech recognizer/);
+
+  let release;
+  const cancelled = run(() => new Promise(resolve => { release = resolve; }));
+  cancelled.context.toggle(); cancelled.context.toggle();
+  assert.deepEqual(cancelled.stops, [true]); assert.equal(cancelled.context.state.listening, false);
+  release('late words'); await settle();
+  assert.deepEqual(cancelled.queries, [], 'words that arrive after the user cancelled are ignored');
+
+  const privacy = run(async () => { throw new Error('the recognizer must not start in privacy mode'); });
+  privacy.context.privacyMode = true; privacy.context.toggle(); await settle();
+  assert.match(privacy.spoken[0][0], /privacy mode/); assert.equal(privacy.context.state.listening, false);
+});
+
+test('Android guardrails: screen reading is opt-in, read-only, bound by the system and unable to act for the user', () => {
+  const manifest = read('android/app/src/main/AndroidManifest.xml');
+  const config = read('android/app/src/main/res/xml/astha_accessibility_service.xml');
+  const service = read('android/app/src/main/java/com/astha/companion/AsthaAccessibilityService.java');
+  const plugin = read('android/app/src/main/java/com/astha/companion/AsthaNativePlugin.java');
+  const activity = read('android/app/src/main/java/com/astha/companion/MainActivity.java');
+  assert.match(manifest, /<service[^>]*android:name="\.AsthaAccessibilityService"[^>]*android:permission="android\.permission\.BIND_ACCESSIBILITY_SERVICE"/s);
+  for (const permission of ['SYSTEM_ALERT_WINDOW', 'READ_SMS', 'SEND_SMS', 'READ_CONTACTS', 'FOREGROUND_SERVICE', 'RECEIVE_BOOT_COMPLETED', 'ACCESS_FINE_LOCATION', 'QUERY_ALL_PACKAGES']) {
+    assert.doesNotMatch(manifest, new RegExp(permission), permission + ' is not needed and must not be requested');
+  }
+  assert.match(config, /android:canRetrieveWindowContent="true"/);
+  for (const power of ['canPerformGestures', 'canRequestFilterKeyEvents', 'canRequestTouchExplorationMode', 'canTakeScreenshot', 'flagRetrieveInteractiveWindows', 'flagRequestFilterKeyEvents', 'typeAllMask', 'typeViewTextChanged', 'typeNotificationStateChanged']) {
+    assert.doesNotMatch(config, new RegExp(power), power);
+  }
+  // Nothing is observed in the background, stored, logged, tapped or typed.
+  assert.match(service, /public void onAccessibilityEvent\(AccessibilityEvent event\) \{\s*\/\/[^\n]*\n\s*\}/);
+  assert.match(service, /isPassword\(\)/);
+  for (const source of [service, plugin]) {
+    for (const forbidden of ['ACTION_CLICK', 'ACTION_SET_TEXT', 'ACTION_PASTE', 'dispatchGesture', 'takeScreenshot', 'Log\\.', 'System\\.out', 'openFileOutput', 'HttpURLConnection']) {
+      assert.doesNotMatch(source, new RegExp(forbidden), forbidden);
+    }
+  }
+  // Every use of the service passes the in-app consent check, and consent off disables it.
+  for (const method of ['readScreen', 'globalAction']) {
+    assert.match(between(plugin, 'public void ' + method + '(PluginCall call)', '\n    }\n'), /permittedService\(call\)/, method);
+  }
+  assert.match(between(plugin, 'private AsthaAccessibilityService permittedService', '\n    }\n'), /if \(!screenConsent\(\)\)/);
+  assert.match(between(plugin, 'public void openAccessibilitySettings', '\n    }\n'), /if \(!screenConsent\(\)\)/);
+  assert.match(between(plugin, 'public void setScreenAccessConsent', '\n    }\n'), /disableSelf\(\)/);
+  assert.deepEqual([...plugin.matchAll(/GLOBAL_ACTION_[A-Z_]+/g)].map(match => match[0]).sort(), ['GLOBAL_ACTION_BACK', 'GLOBAL_ACTION_HOME']);
+  assert.match(activity, /registerPlugin\(AsthaNativePlugin\.class\);\s*super\.onCreate/);
+  // Bangla and English descriptions exist for the Android settings screen.
+  for (const file of ['values', 'values-bn']) {
+    const text = read('android/app/src/main/res/' + file + '/strings.xml');
+    for (const name of ['astha_accessibility_label', 'astha_accessibility_summary', 'astha_accessibility_description']) assert.match(text, new RegExp('name="' + name + '"'), file + ' ' + name);
+  }
+});
