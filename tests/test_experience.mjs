@@ -196,6 +196,38 @@ test('saved setup goes to the account, stays on the device when the server is un
   h.experience.accountCleared(); assert.equal(h.storage.has(KEY), false);
 });
 
+test('a device copy left by another account is neither applied nor uploaded', async () => {
+  const KEY = 'astha.accessibility.v2', h = harness(), sent = []; h.experience.boot();
+  h.storage.set(KEY, JSON.stringify({ values: { vision: 'none', textSize: 'xlarge' }, updated_at: 1, synced: false, owner: 'someone-else' }));
+  h.context.apiSend = async (method, path, body) => { sent.push([method, path, body]); return { preferences: null, updated_at: null }; };
+  await h.experience.loadAccountPreferences();
+  assert.deepEqual(sent.map(call => call[0]), ['GET'], 'the other person\'s answers are never sent to this account');
+  assert.equal(h.experience.preferences.vision, 'unspecified'); assert.deepEqual(h.applied, []);
+  // This account's own unsynced copy is still uploaded.
+  h.storage.set(KEY, JSON.stringify({ values: { vision: 'low' }, updated_at: 2, synced: false, owner: 'experience-account-a' }));
+  await h.experience.loadAccountPreferences();
+  assert.equal(sent.at(-1)[0], 'PUT'); assert.equal(sent.at(-1)[2].preferences.vision, 'low');
+});
+
+test('a setting changed elsewhere updates the saved setup, and the voice language follows only an explicit Save', async () => {
+  const KEY = 'astha.accessibility.v2', h = harness(), sent = []; h.experience.boot();
+  h.context.apiSend = async (method, path, body) => { sent.push([method, body]); return method === 'GET' ? { preferences: { language: 'en', textSize: 'large' }, updated_at: 5 } : { updated_at: 6 }; };
+  h.context.uiLang = 'bn'; h.context.voiceLang = 'bn';
+  await h.experience.loadAccountPreferences();
+  assert.equal(h.context.uiLang, 'en'); assert.equal(h.context.voiceLang, 'bn', 'a separately chosen voice language survives loading the setup');
+  // The user picks extra-large text in the header menu.
+  h.elements.get('font-select').listeners.change({ target: { value: 'xlarge' } });
+  await Promise.resolve(); await Promise.resolve();
+  assert.equal(JSON.parse(h.storage.get(KEY)).values.textSize, 'xlarge'); assert.equal(sent.at(-1)[0], 'PUT'); assert.equal(sent.at(-1)[1].preferences.textSize, 'xlarge');
+  // ...and switches the interface to Bangla there too.
+  h.context.uiLang = 'bn'; h.experience.refreshLabels();
+  assert.equal(JSON.parse(h.storage.get(KEY)).values.language, 'bn');
+  h.experience.adopt('textSize', 'enormous'); assert.equal(JSON.parse(h.storage.get(KEY)).values.textSize, 'xlarge', 'an unknown value is ignored');
+  // Without any saved setup, changing a menu creates nothing.
+  const fresh = harness(); fresh.experience.boot(); fresh.experience.adopt('textSize', 'large');
+  assert.equal(fresh.storage.size, 0);
+});
+
 test('the account copy of the setup is applied on sign-in, and a reply for a previous account is ignored', async () => {
   const h = harness(); h.experience.boot();
   h.context.apiSend = async () => ({ preferences: { textSize: 'xlarge', feedback: 'text', modes: ['classroom'], unknown: 1 }, updated_at: 77 });

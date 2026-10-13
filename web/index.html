@@ -9734,10 +9734,16 @@ const AsthaExperience = (() => {
     if (typeof input.haptics === 'boolean') clean.haptics = input.haptics;
     return clean;
   }
+  // The device copy belongs to one account. Another person signing in on this phone must
+  // neither inherit it nor have it uploaded into their account.
+  const owner = () => window.ASTHA_LOCAL_ACCOUNT_ID || null;
   function readLocal() {
-    try { const saved = JSON.parse(localStorage.getItem(PREF_KEY) || 'null'); return saved && typeof saved === 'object' ? saved : null; } catch { return null; }
+    try {
+      const saved = JSON.parse(localStorage.getItem(PREF_KEY) || 'null');
+      return saved && typeof saved === 'object' && saved.owner === owner() ? saved : null;
+    } catch { return null; }
   }
-  function writeLocal(record) { try { localStorage.setItem(PREF_KEY, JSON.stringify(record)); } catch {} }
+  function writeLocal(record) { try { localStorage.setItem(PREF_KEY, JSON.stringify({ ...record, owner: owner() })); } catch {} }
   const field = name => document.querySelector('#assessment-form [name="' + name + '"]:checked');
   const boxes = name => [...document.querySelectorAll('#assessment-form [name="' + name + '"]')];
   function readForm() {
@@ -9758,10 +9764,12 @@ const AsthaExperience = (() => {
     const haptics = $('pref-haptics'); if (haptics) haptics.checked = values.haptics;
   }
   // Apply through the established controls so both views of each setting stay consistent.
-  function applyPreferences(values) {
+  // The spoken language follows only an explicit Save: it can be chosen separately from
+  // the interface language, and that choice must survive the next start.
+  function applyPreferences(values, { explicit = false } = {}) {
     preferences = values;
     if (values.language && values.language !== uiLang) setUiLanguage(values.language);
-    if (values.language && values.language !== voiceLang) setVoiceLanguage(values.language, true);
+    if (explicit && values.language && values.language !== voiceLang) setVoiceLanguage(values.language, true);
     if ((values.feedback !== 'text') !== Boolean(state.audio)) toggleAudio();
     const style = $('description-style'); if (style) style.value = values.feedback === 'brief' ? 'short' : 'detailed';
     const rate = $('speech-rate'); if (rate) rate.value = values.speechRate;
@@ -9788,13 +9796,21 @@ const AsthaExperience = (() => {
     const values = readForm();
     const record = { values, updated_at: Date.now(), synced: false };
     writeLocal(record);
-    applyPreferences(values);
+    applyPreferences(values, { explicit: true });
     setupStatus('setup_saving');
     const synced = await syncPreferences(record);
     setupStatus(synced ? 'setup_saved_account' : 'setup_saved_device');
     showPage('home', { speakTitle: false });
     say(synced ? 'Your setup is saved to your account.' : 'Your setup is saved on this device. It will be copied to your account when ASTHA can reach the server.',
       synced ? 'আপনার পছন্দ অ্যাকাউন্টে রাখা হয়েছে।' : 'আপনার পছন্দ এই ডিভাইসে রাখা হয়েছে। সার্ভারে সংযোগ পেলে অ্যাকাউন্টে তোলা হবে।');
+  }
+  // A setting changed elsewhere in the app (header menus, Settings) replaces the saved
+  // setup answer, so the two never disagree on the next start.
+  function adopt(key, value) {
+    const local = readLocal();
+    if (!local?.values || local.values[key] === value || !CHOICES[key]?.includes(value)) return;
+    const record = { values: sanitize({ ...local.values, [key]: value }), updated_at: Date.now(), synced: false };
+    preferences = record.values; writeLocal(record); fillForm(record.values); syncPreferences(record);
   }
   // After sign-in the account's saved setup wins; an unsynced local setup is uploaded instead.
   async function loadAccountPreferences() {
@@ -9861,6 +9877,7 @@ const AsthaExperience = (() => {
     const title = $('page-title'); if (title) title.textContent = t(PAGE_KEYS[page]);
     // The header language menu and the setup question are two views of one choice.
     boxes('pref-language').forEach(input => { input.checked = input.value === uiLang; });
+    adopt('language', uiLang);
   }
 
   function boot() {
@@ -9871,6 +9888,9 @@ const AsthaExperience = (() => {
     $('assessment-form')?.addEventListener('submit', saveAssessment);
     $('assessment-form')?.addEventListener('focusin', speakGroup);
     $('assessment-read')?.addEventListener('click', () => { if (!state.audio) toggleAudio(); readAssessment(); });
+    for (const [id, key] of [['font-select', 'textSize'], ['theme-select', 'theme'], ['speech-rate', 'speechRate']]) {
+      $(id)?.addEventListener('change', event => adopt(key, event.target.value));
+    }
     document.addEventListener('visibilitychange', () => { if (document.hidden) { visualGeneration++; contextGeneration++; clearTimeout(boardTimer); boardTimer = null; } else if (mode === 'classroom' && !boardTimer) boardTimer = setTimeout(checkBoard, 5000); });
     fillForm(preferences);
     showPage('home', { focus: false, speakTitle: false });
@@ -9879,7 +9899,7 @@ const AsthaExperience = (() => {
     if (typeof setInterval === 'function') setInterval(renderPresence, 200);
   }
   return { route, visualTask, allows, admit, acceptHazard, hazardPriority, cancelPending, setContext, showPage, boot,
-    refreshLabels, accountCleared, loadAccountPreferences, sanitize,
+    refreshLabels, accountCleared, loadAccountPreferences, sanitize, adopt,
     routineAllowed: () => allows('low'),
     invalidate() { visualGeneration++; },
     get mode() { return mode; }, get page() { return page; }, get busy() { return busy(); },
