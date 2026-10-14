@@ -7,6 +7,7 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
+import android.os.Build;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.speech.RecognitionListener;
@@ -14,6 +15,8 @@ import android.speech.RecognizerIntent;
 import android.speech.SpeechRecognizer;
 import android.speech.tts.TextToSpeech;
 import android.speech.tts.UtteranceProgressListener;
+
+import androidx.core.app.NotificationManagerCompat;
 
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
@@ -39,11 +42,16 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 @CapacitorPlugin(
     name = "AsthaNative",
-    permissions = { @Permission(alias = "microphone", strings = { Manifest.permission.RECORD_AUDIO }) }
+    permissions = {
+        @Permission(alias = "microphone", strings = { Manifest.permission.RECORD_AUDIO }),
+        @Permission(alias = "notifications", strings = { Manifest.permission.POST_NOTIFICATIONS })
+    }
 )
 public class AsthaNativePlugin extends Plugin {
     private static final String PREFERENCES = "astha_native";
     private static final String SCREEN_CONSENT = "screen_access_consent";
+    private static final String MESSAGE_CONSENT = "message_access_consent";
+    private static final int MAX_REPLY = 1000;
     private static final int MAX_SPOKEN = 4000;
     private static final int MAX_SCREEN_NODES = 400;
     private static final int MAX_SCREEN_CHARS = 6000;
@@ -58,6 +66,16 @@ public class AsthaNativePlugin extends Plugin {
 
     @Override
     public void load() {
+        AsthaMessageAssistant.appVisible = true;
+        if (messageConsent()) AsthaNotificationListener.deliverTo(this::forwardMessage);
+        // Turned on earlier by the user: start it again now that ASTHA is on screen.
+        if (messageConsent() && backgroundWanted() && getPermissionState("microphone") == PermissionState.GRANTED) {
+            try {
+                AsthaMessageAssistant.start(getContext(), preferences().getString(AsthaMessageAssistant.LANGUAGE, "en"));
+            } catch (RuntimeException refused) {
+                // The status line then reports that it is not running.
+            }
+        }
         voice = new TextToSpeech(getContext().getApplicationContext(), status -> {
             voiceReady = status == TextToSpeech.SUCCESS;
             if (!voiceReady) return;
@@ -84,13 +102,21 @@ public class AsthaNativePlugin extends Plugin {
     }
 
     @Override
+    protected void handleOnResume() {
+        AsthaMessageAssistant.appVisible = true;
+    }
+
+    @Override
     protected void handleOnPause() {
-        // ASTHA never listens while it is in the background.
+        AsthaMessageAssistant.appVisible = false;
+        // The page never listens while it is in the background; only the assistant may, if on.
         getActivity().runOnUiThread(() -> finishListening("", null));
     }
 
     @Override
     protected void handleOnDestroy() {
+        AsthaMessageAssistant.appVisible = false;
+        AsthaNotificationListener.deliverTo(null);
         if (voice != null) voice.shutdown();
         getActivity().runOnUiThread(this::releaseRecognizer);
     }
@@ -316,6 +342,126 @@ public class AsthaNativePlugin extends Plugin {
         Intent send = new Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text);
         getContext().startActivity(Intent.createChooser(send, null).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
         call.resolve();
+    }
+
+    // ---- Messages: announce, and reply only with words the user confirmed ---------------
+
+    private boolean messageConsent() {
+        return preferences().getBoolean(MESSAGE_CONSENT, false);
+    }
+
+    private void forwardMessage(JSObject message) {
+        notifyListeners("message", message);
+    }
+
+    private boolean notificationAccessEnabled() {
+        return NotificationManagerCompat.getEnabledListenerPackages(getContext()).contains(getContext().getPackageName());
+    }
+
+    @PluginMethod
+    public void messageAccessStatus(PluginCall call) {
+        JSObject result = new JSObject();
+        result.put("consent", messageConsent());
+        result.put("enabled", notificationAccessEnabled());
+        result.put("background", messageConsent() && backgroundWanted());
+        call.resolve(result);
+    }
+
+    @PluginMethod
+    public void setMessageAccessConsent(PluginCall call) {
+        boolean granted = Boolean.TRUE.equals(call.getBoolean("granted", false));
+        preferences().edit().putBoolean(MESSAGE_CONSENT, granted).apply();
+        if (!granted) {
+            preferences().edit().putBoolean(AsthaMessageAssistant.BACKGROUND, false).apply();
+            AsthaMessageAssistant.stop(getContext());
+            AsthaNotificationListener.clear();
+        }
+        // Without consent the listener has nowhere to deliver, so it ignores and keeps nothing.
+        AsthaNotificationListener.deliverTo(granted ? this::forwardMessage : null);
+        call.resolve();
+    }
+
+    private boolean backgroundWanted() {
+        return preferences().getBoolean(AsthaMessageAssistant.BACKGROUND, false);
+    }
+
+    /** Reading messages aloud while ASTHA is not on screen: a separate choice, off by default. */
+    @PluginMethod
+    public void setBackgroundMessages(PluginCall call) {
+        boolean enabled = Boolean.TRUE.equals(call.getBoolean("enabled", false));
+        preferences().edit().putString(AsthaMessageAssistant.LANGUAGE, "bn".equals(call.getString("lang", "en")) ? "bn" : "en").apply();
+        if (!enabled) {
+            preferences().edit().putBoolean(AsthaMessageAssistant.BACKGROUND, false).apply();
+            AsthaMessageAssistant.stop(getContext());
+            call.resolve();
+            return;
+        }
+        if (!messageConsent()) {
+            call.reject("Message help has not been turned on in ASTHA.", "consent_required");
+            return;
+        }
+        // It needs the microphone for the answer, and shows a notification while it runs.
+        List<String> needed = new ArrayList<>();
+        if (getPermissionState("microphone") != PermissionState.GRANTED) needed.add("microphone");
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && getPermissionState("notifications") != PermissionState.GRANTED) needed.add("notifications");
+        if (!needed.isEmpty()) {
+            requestPermissionForAliases(needed.toArray(new String[0]), call, "backgroundPermissionResult");
+            return;
+        }
+        startBackground(call);
+    }
+
+    @PermissionCallback
+    private void backgroundPermissionResult(PluginCall call) {
+        if (getPermissionState("microphone") != PermissionState.GRANTED) {
+            call.reject("Microphone permission was not granted.", "permission");
+            return;
+        }
+        startBackground(call);
+    }
+
+    private void startBackground(PluginCall call) {
+        try {
+            AsthaMessageAssistant.start(getContext(), preferences().getString(AsthaMessageAssistant.LANGUAGE, "en"));
+        } catch (RuntimeException refused) {
+            call.reject("Android did not let ASTHA keep running.", "not_started");
+            return;
+        }
+        preferences().edit().putBoolean(AsthaMessageAssistant.BACKGROUND, true).apply();
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void openNotificationAccessSettings(PluginCall call) {
+        if (!messageConsent()) {
+            call.reject("Message help has not been turned on in ASTHA.", "consent_required");
+            return;
+        }
+        // Android shows its own warning and only the user can grant notification access.
+        getContext().startActivity(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void replyToMessage(PluginCall call) {
+        if (!messageConsent()) {
+            call.reject("Message help has not been turned on in ASTHA.", "consent_required");
+            return;
+        }
+        AsthaNotificationListener listener = AsthaNotificationListener.running();
+        if (listener == null) {
+            call.reject("ASTHA does not have notification access.", "service_disabled");
+            return;
+        }
+        String key = call.getString("key", "");
+        String text = call.getString("text", "");
+        if (key == null || key.isEmpty() || text == null || text.trim().isEmpty() || text.length() > MAX_REPLY) {
+            call.reject("There is nothing to send.", "invalid_reply");
+            return;
+        }
+        JSObject result = new JSObject();
+        result.put("sent", listener.reply(key, text));
+        call.resolve(result);
     }
 
     // ---- Reading other apps, only after explicit opt-in --------------------------------

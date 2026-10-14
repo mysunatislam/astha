@@ -97,6 +97,17 @@
     <p data-i18n="screen_access_explain">In the Android app you can let Astha read other apps aloud. When you ask, it reads the text on the screen and can go back or home. It does not watch in the background, never reads password fields, and cannot tap, type or send anything for you. Android shows its own warning before it is turned on, and you can turn it off here at any time.</p>
     <button class="btn" type="button" id="screen-access-toggle" aria-pressed="false" data-i18n="screen_access_on">Let Astha read other apps</button>
     <p id="screen-access-status" class="help" role="status" aria-live="polite" data-i18n="screen_status_off">Reading other apps is off.</p>
+    <h3 data-i18n="messages_title">Messages</h3>
+    <p id="messages-web" class="help" data-i18n="messages_web">Reading and answering messages from apps such as Messenger works in the ASTHA Android app.</p>
+    <div id="messages-access" hidden>
+      <p data-i18n="messages_explain">Astha can tell you when a message arrives in an app such as Messenger or WhatsApp, read it to you, and send the reply you dictate or one she suggests. Nothing is sent until you say yes, and messages are never saved. Android asks you to allow notification access first.</p>
+      <button class="btn" type="button" id="messages-toggle" aria-pressed="false" data-i18n="messages_on">Let Astha read and answer my messages</button>
+      <p id="messages-status" class="help" role="status" aria-live="polite" data-i18n="messages_status_off">Message help is off.</p>
+      <div id="messages-background-area" hidden>
+        <label><input type="checkbox" id="messages-background"><span data-i18n="messages_background">Also read messages aloud when the phone is locked</span></label>
+        <p class="help" data-i18n="messages_background_explain">Astha keeps a notification showing while this is on, with a Turn off button. She listens only for a few seconds right after reading a message or asking a question, and waits while you are on a call.</p>
+      </div>
+    </div>
     <p data-i18n="device_actions_info">You can also say “open the WhatsApp app”, or “write a message saying I will be late”. Astha asks before opening anything, and you choose the person and press send yourself.</p>
   </div>
 </section>

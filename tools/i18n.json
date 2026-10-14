@@ -1243,6 +1243,46 @@
   "status_reading": [
    "Reading as the text changes",
    "লেখা বদলালে পড়ছি"
+  ],
+  "messages_title": [
+   "Messages",
+   "বার্তা"
+  ],
+  "messages_explain": [
+   "Astha can tell you when a message arrives in an app such as Messenger or WhatsApp, read it to you, and send the reply you dictate or one she suggests. Nothing is sent until you say yes, and messages are never saved. Android asks you to allow notification access first.",
+   "মেসেঞ্জার বা হোয়াটসঅ্যাপের মতো অ্যাপে বার্তা এলে আস্থা আপনাকে জানাতে, পড়ে শোনাতে, এবং আপনার বলা বা তার সাজানো উত্তর পাঠাতে পারে। আপনি হ্যাঁ না বলা পর্যন্ত কিছুই পাঠানো হয় না, আর বার্তা কখনো সংরক্ষণ করা হয় না। অ্যান্ড্রয়েড আগে নোটিফিকেশন অ্যাক্সেসের অনুমতি চাইবে।"
+  ],
+  "messages_on": [
+   "Let Astha read and answer my messages",
+   "আস্থাকে আমার বার্তা পড়তে ও উত্তর দিতে দিন"
+  ],
+  "messages_off": [
+   "Stop Astha reading my messages",
+   "আস্থার বার্তা পড়া বন্ধ করুন"
+  ],
+  "messages_status_off": [
+   "Message help is off.",
+   "বার্তা সহায়তা বন্ধ আছে।"
+  ],
+  "messages_status_waiting": [
+   "Almost done: turn on Astha in Android notification access settings.",
+   "প্রায় শেষ: অ্যান্ড্রয়েডের নোটিফিকেশন অ্যাক্সেস সেটিংসে আস্থা চালু করুন।"
+  ],
+  "messages_status_on": [
+   "Message help is on.",
+   "বার্তা সহায়তা চালু আছে।"
+  ],
+  "messages_background": [
+   "Also read messages aloud when the phone is locked",
+   "ফোন লক থাকলেও বার্তা পড়ে শোনাও"
+  ],
+  "messages_background_explain": [
+   "Astha keeps a notification showing while this is on, with a Turn off button. She listens only for a few seconds right after reading a message or asking a question, and waits while you are on a call.",
+   "এটি চালু থাকলে আস্থা একটি নোটিফিকেশন দেখিয়ে রাখে, তাতে বন্ধ করার বোতাম থাকে। সে শুধু বার্তা পড়া বা প্রশ্ন করার ঠিক পরে কয়েক সেকেন্ড শোনে, আর আপনি ফোনে কথা বললে অপেক্ষা করে।"
+  ],
+  "messages_web": [
+   "Reading and answering messages from apps such as Messenger works in the ASTHA Android app.",
+   "মেসেঞ্জারের মতো অ্যাপের বার্তা পড়া ও উত্তর দেওয়া আস্থার অ্যান্ড্রয়েড অ্যাপে কাজ করে।"
   ]
  },
  "hooks": [

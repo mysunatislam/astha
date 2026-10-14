@@ -567,14 +567,15 @@ experience_js = (HERE / "experience.js").read_text(encoding="utf-8")
 pi_ui_js = (HERE / "pi-camera-ui.js").read_text(encoding="utf-8")
 braille_js = (HERE / "braille.js").read_text(encoding="utf-8")
 screen_js = (HERE / "screen-access.js").read_text(encoding="utf-8")
+messages_js = (HERE / "messages.js").read_text(encoding="utf-8")
 sensors_js = (HERE / "sensors.js").read_text(encoding="utf-8")
-rep("\n(function boot() {", i18n_data + i18n_js.rstrip("\n") + "\n" + module.rstrip("\n") + "\n" + eye_js.rstrip("\n") + "\n" + cloud_js.rstrip("\n") + "\n" + agent_js.rstrip("\n") + "\n" + perceive_js.rstrip("\n") + "\n" + offline_js.rstrip("\n") + "\n" + account_js.rstrip("\n") + "\n" + experience_js.rstrip("\n") + "\n" + pi_ui_js.rstrip("\n") + "\n" + braille_js.rstrip("\n") + "\n" + sensors_js.rstrip("\n") + "\n" + screen_js.rstrip("\n") + "\n\n(function boot() {")
+rep("\n(function boot() {", i18n_data + i18n_js.rstrip("\n") + "\n" + module.rstrip("\n") + "\n" + eye_js.rstrip("\n") + "\n" + cloud_js.rstrip("\n") + "\n" + agent_js.rstrip("\n") + "\n" + perceive_js.rstrip("\n") + "\n" + offline_js.rstrip("\n") + "\n" + account_js.rstrip("\n") + "\n" + experience_js.rstrip("\n") + "\n" + pi_ui_js.rstrip("\n") + "\n" + braille_js.rstrip("\n") + "\n" + sensors_js.rstrip("\n") + "\n" + screen_js.rstrip("\n") + "\n" + messages_js.rstrip("\n") + "\n\n(function boot() {")
 rep("  renderSpatialLayout();\n  enhancementBoot();\n})();", "  renderSpatialLayout();\n  enhancementBoot();\n  companionBoot();\n  eyeBoot();\n  cloudBoot();\n})();")
 
 # ---- boot(): expose it instead of self-invoking, so backend.js can run it after sign-in ----
 rep('(function boot() {', 'window.__asthaBoot = function boot() {')
 rep('  companionBoot();\n  eyeBoot();\n  cloudBoot();\n})();',
-    '  companionBoot();\n  eyeBoot();\n  cloudBoot();\n  offlineBoot();\n  AsthaExperience.boot();\n  AsthaPiCamera.boot();\n  AsthaBraille.boot();\n  AsthaScreenAccess.boot();\n  refreshMemory();\n  refreshRooms();\n'
+    '  companionBoot();\n  eyeBoot();\n  cloudBoot();\n  offlineBoot();\n  AsthaExperience.boot();\n  AsthaPiCamera.boot();\n  AsthaBraille.boot();\n  AsthaScreenAccess.boot();\n  AsthaMessages.boot();\n  refreshMemory();\n  refreshRooms();\n'
     '  // Warm the on-device detector while the page settles (cached weights + WebGL shader compile),\n'
     '  // so the first "describe" or camera start does not begin with a silent wait. Skipped on data-saver.\n'
     "  setTimeout(() => { if (typeof loadCoco === 'function' && engine.coco.status === 'idle' && !(navigator.connection && navigator.connection.saveData)) loadCoco().catch(() => {}); }, 1200);\n"

@@ -232,9 +232,11 @@ test('Android guardrails: screen reading is opt-in, read-only, bound by the syst
   const plugin = read('android/app/src/main/java/com/astha/companion/AsthaNativePlugin.java');
   const activity = read('android/app/src/main/java/com/astha/companion/MainActivity.java');
   assert.match(manifest, /<service[^>]*android:name="\.AsthaAccessibilityService"[^>]*android:permission="android\.permission\.BIND_ACCESSIBILITY_SERVICE"/s);
-  for (const permission of ['SYSTEM_ALERT_WINDOW', 'READ_SMS', 'SEND_SMS', 'READ_CONTACTS', 'FOREGROUND_SERVICE', 'RECEIVE_BOOT_COMPLETED', 'ACCESS_FINE_LOCATION', 'QUERY_ALL_PACKAGES']) {
+  for (const permission of ['SYSTEM_ALERT_WINDOW', 'READ_SMS', 'SEND_SMS', 'READ_CONTACTS', 'RECEIVE_BOOT_COMPLETED', 'ACCESS_FINE_LOCATION', 'ACCESS_BACKGROUND_LOCATION', 'QUERY_ALL_PACKAGES', 'WAKE_LOCK']) {
     assert.doesNotMatch(manifest, new RegExp(permission), permission + ' is not needed and must not be requested');
   }
+  // The one background service is the message assistant, and its only special access is the microphone.
+  assert.deepEqual([...manifest.matchAll(/android\.permission\.(FOREGROUND_SERVICE\w*)/g)].map(match => match[1]).sort(), ['FOREGROUND_SERVICE', 'FOREGROUND_SERVICE_MICROPHONE']);
   assert.match(config, /android:canRetrieveWindowContent="true"/);
   for (const power of ['canPerformGestures', 'canRequestFilterKeyEvents', 'canRequestTouchExplorationMode', 'canTakeScreenshot', 'flagRetrieveInteractiveWindows', 'flagRequestFilterKeyEvents', 'typeAllMask', 'typeViewTextChanged', 'typeNotificationStateChanged']) {
     assert.doesNotMatch(config, new RegExp(power), power);
@@ -273,5 +275,46 @@ test('Android guardrails: screen reading is opt-in, read-only, bound by the syst
   for (const file of ['values', 'values-bn']) {
     const text = read('android/app/src/main/res/' + file + '/strings.xml');
     for (const name of ['astha_accessibility_label', 'astha_accessibility_summary', 'astha_accessibility_description']) assert.match(text, new RegExp('name="' + name + '"'), file + ' ' + name);
+  }
+});
+
+test('Android guardrails: messages need consent, and the locked-phone assistant a separate choice and a spoken yes', () => {
+  const manifest = read('android/app/src/main/AndroidManifest.xml');
+  const plugin = read('android/app/src/main/java/com/astha/companion/AsthaNativePlugin.java');
+  const listener = read('android/app/src/main/java/com/astha/companion/AsthaNotificationListener.java');
+  const assistant = read('android/app/src/main/java/com/astha/companion/AsthaMessageAssistant.java');
+  const commands = read('android/app/src/main/java/com/astha/companion/MessageCommands.java');
+  assert.match(manifest, /<service[^>]*android:name="\.AsthaNotificationListener"[^>]*android:permission="android\.permission\.BIND_NOTIFICATION_LISTENER_SERVICE"/s);
+  const service = between(manifest, 'android:name=".AsthaMessageAssistant"', '/>');
+  assert.match(service, /android:exported="false"/); assert.match(service, /android:foregroundServiceType="microphone"/);
+  // Nothing is stored, logged or sent anywhere else; no app is tapped or typed into.
+  for (const source of [listener, assistant, commands]) {
+    for (const forbidden of ['Log\\.', 'System\\.out', 'openFileOutput', 'HttpURLConnection', 'SmsManager', 'ACTION_CLICK', 'ACTION_SET_TEXT', 'dispatchGesture', 'START_STICKY\\b', 'BOOT_COMPLETED']) {
+      assert.doesNotMatch(source, new RegExp(forbidden), forbidden);
+    }
+  }
+  // Every way to answer requires the in-app consent; withdrawing it stops the assistant and forgets.
+  for (const method of ['openNotificationAccessSettings', 'replyToMessage', 'setBackgroundMessages']) {
+    assert.match(between(plugin, 'public void ' + method + '(PluginCall call)', '\n    }\n'), /if \(!messageConsent\(\)\)/, method);
+  }
+  const revoke = between(plugin, 'public void setMessageAccessConsent', '\n    }\n');
+  assert.match(revoke, /AsthaMessageAssistant\.stop\(getContext\(\)\)/); assert.match(revoke, /AsthaNotificationListener\.clear\(\)/);
+  assert.match(between(plugin, 'public void load()', '\n    }\n'), /messageConsent\(\) && backgroundWanted\(\)/, 'it restarts only if the user left it on');
+  // A notification goes to the page while ASTHA is in front, else to the assistant, else nowhere.
+  const posted = between(listener, 'public void onNotificationPosted', '\n    }\n');
+  assert.match(posted, /AsthaMessageAssistant\.appVisible \? null : AsthaMessageAssistant\.running\(\)/);
+  assert.match(posted, /if \(\(assistant == null && target == null\) \|\| posted == null\) return;/);
+  // The assistant shows it is running, can be turned off from the notification, and sends only
+  // in the confirm step after a yes. Its microphone closes on a timer and it waits during calls.
+  assert.match(assistant, /\.addAction\(0, getString\(R\.string\.astha_messages_turn_off\), turnOff\)/);
+  assert.match(assistant, /return START_NOT_STICKY;/); assert.match(assistant, /main\.postDelayed\(listenLimit, LISTEN_LIMIT_MS\)/);
+  assert.match(assistant, /if \(inCall\(\)\)/);
+  assert.equal(assistant.match(/listener\.reply\(/g).length, 1); assert.equal(assistant.match(/\bsend\(\);/g).length, 1);
+  assert.match(between(assistant, 'case YES:', 'break;'), /if \(MessageCommands\.CONFIRM\.equals\(stage\)\) \{\s*send\(\);/);
+  assert.match(between(commands, 'if (CONFIRM.equals(stage)) {', '\n        }\n'), /return new Command\(Kind\.NO, ""\);/, 'anything but yes or change is a no');
+  assert(fs.existsSync(new URL('../android/app/src/test/java/com/astha/companion/MessageCommandsTest.java', import.meta.url)), 'the spoken commands have JVM unit tests');
+  for (const file of ['values', 'values-bn']) {
+    const text = read('android/app/src/main/res/' + file + '/strings.xml');
+    for (const name of ['astha_messages_label', 'astha_messages_running', 'astha_messages_turn_off']) assert.match(text, new RegExp('name="' + name + '"'), file + ' ' + name);
   }
 });

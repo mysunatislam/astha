@@ -42,6 +42,21 @@
       open: id => screen('openApp', { id: String(id || '') }),
       share: text => screen('shareText', { text: String(text || '').slice(0, 2000) }),
     }),
+    // Message notifications, only after both consents. Replies use the app's own reply action.
+    messages: Object.freeze({
+      async status() {
+        const reply = await screen('messageAccessStatus');
+        return { consent: reply?.consent === true, enabled: reply?.enabled === true, background: reply?.background === true };
+      },
+      setConsent: granted => screen('setMessageAccessConsent', { granted: granted === true }),
+      // Reading messages aloud while ASTHA is not on screen, even with the phone locked.
+      setBackground: (enabled, lang) => screen('setBackgroundMessages', { enabled: enabled === true, lang: lang === 'bn' ? 'bn' : 'en' }),
+      openSettings: () => screen('openNotificationAccessSettings'),
+      async reply(key, text) {
+        return (await screen('replyToMessage', { key: String(key || '').slice(0, 300), text: String(text || '').slice(0, 1000) }))?.sent === true;
+      },
+      onMessage(handler) { try { quiet(plugin.addListener('message', event => handler(event))); } catch {} },
+    }),
     screen: Object.freeze({
       async status() {
         const reply = await screen('screenAccessStatus');

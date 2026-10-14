@@ -2,6 +2,9 @@
 <resources>
     <string name="app_name">আস্থা</string>
     <string name="title_activity_main">আস্থা</string>
+    <string name="astha_messages_label">আস্থার বার্তা</string>
+    <string name="astha_messages_running">নতুন বার্তা পড়ে শোনাচ্ছে। শুধু বার্তার ঠিক পরেই শোনে।</string>
+    <string name="astha_messages_turn_off">বন্ধ করুন</string>
     <string name="astha_accessibility_label">আস্থার স্ক্রিন পড়া</string>
     <string name="astha_accessibility_summary">আপনি বললে আস্থা অন্য অ্যাপের লেখা পড়ে শোনায়।</string>
     <string name="astha_accessibility_description">আপনি বললে আস্থা সামনে থাকা অ্যাপের লেখা পড়ে শোনায়, এবং পেছনে বা হোম পর্দায় যেতে পারে। এটি পেছন থেকে আপনার কাজ নজরে রাখে না, পাসওয়ার্ডের ঘর পড়ে না, এবং কোথাও চাপ দিতে, লিখতে বা কিছু পাঠাতে পারে না। এখান থেকে অথবা আস্থার ভেতর থেকে যেকোনো সময় বন্ধ করতে পারেন।</string>

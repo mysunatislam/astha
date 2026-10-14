@@ -121,6 +121,8 @@ const AsthaExperience = (() => {
     markAsked();
     const q = String(query || '').toLowerCase().replace(/^(?:hey\s+)?astha[,!\s]*|^আস্থা[,।\s]*/i, '').trim();
     if (guide) { answerGuide(q); return true; }
+    // A message being answered owns the next request, as the guide does.
+    if (typeof AsthaMessages !== 'undefined' && AsthaMessages.route(query)) return true;
     if (/^(?:start |begin )?(?:the )?(?:guided|voice|spoken) setup$|^set me up$|গাইডেড সেটআপ|কণ্ঠে সেটআপ|সেটআপ শুরু করো/.test(q.replace(/[.!?।\s]+$/, ''))) { showPage('assessment', { speakTitle: false }); startGuide(); return true; }
     // Hands-free needs continuous recognition, which this browser or app does not have.
     if (!handsFreeAvailable() && /hands.?free|keep listening|always listen|হ্যান্ডস.?ফ্রি|সবসময় শোনো/.test(q)) {
