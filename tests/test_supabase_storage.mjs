@@ -29,7 +29,8 @@ test('static SQL keeps injected values bound, qualifies private tables and rejec
   assert.deepEqual(postgresQuery('SELECT * FROM memories WHERE user_id = ? LIMIT 200', [value]),
     { text: 'SELECT * FROM astha.memories WHERE user_id = $1 LIMIT 200', values: [value] });
   for (const query of ['SELECT * FROM public.users', 'SELECT * FROM secrets', 'SELECT * FROM users; DELETE FROM users',
-    'SELECT * FROM users -- bypass', "SELECT * FROM users WHERE id = 'literal'", 'DROP TABLE users']) {
+    'SELECT * FROM users -- bypass', "SELECT * FROM users WHERE id = 'literal'", 'DROP TABLE users',
+    'UPDATE SET name = ?', 'INSERT INTO secrets (id) VALUES (?) ON CONFLICT (id) DO UPDATE SET id = ?']) {
     assert.throws(() => postgresQuery(query));
   }
   assert.throws(() => postgresQuery('SELECT * FROM users WHERE id = ?', []));
@@ -40,6 +41,14 @@ test('static SQL keeps injected values bound, qualifies private tables and rejec
       postgresQuery(match[1], Array((match[1].match(/\?/g) || []).length).fill('fixture'));
     }
   }
+});
+
+test('upsert qualifies its target table without treating DO UPDATE SET as another table', () => {
+  const sql = 'INSERT INTO knowledge_docs (id, user_id, category, content) VALUES (?,?,?,?) ON CONFLICT (id) DO UPDATE SET content = excluded.content WHERE knowledge_docs.user_id = excluded.user_id AND knowledge_docs.category = excluded.category';
+  const values = ['fixture-id', 'fixture-owner', 'astha_preferences', '{"vision":"low"}'];
+  const compiled = postgresQuery(sql, values);
+  assert.equal(compiled.text, sql.replace('INTO knowledge_docs', 'INTO astha.knowledge_docs').replace(/\?/g, (() => { let n = 0; return () => '$' + ++n; })()));
+  assert.deepEqual(compiled.values, values);
 });
 
 test('Postgres adapter normalizes millisecond strings and rejects unsafe timestamps', async () => {

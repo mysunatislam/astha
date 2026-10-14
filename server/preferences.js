@@ -4,7 +4,6 @@
 // Supabase schema is unchanged and no migration is needed. The row follows the account:
 // it is included in the export, removed by account deletion, and never used as a note.
 import { Router } from 'express';
-import { nanoid } from 'nanoid';
 import { all, run } from './db.js';
 import { asyncRoute } from './async-route.js';
 import { isBody, jsonWithin } from './validate.js';
@@ -74,15 +73,15 @@ preferencesRouter.put('/preferences', asyncRoute(async (req, res) => {
   if (!preferences) return res.status(400).json({ error: 'invalid_preferences' });
   const content = JSON.stringify(preferences);
   const now = Date.now();
-  const [current, ...duplicates] = await stored(req.user.id);
-  if (current) {
-    await run('UPDATE knowledge_docs SET content = ?, updated_at = ? WHERE id = ? AND user_id = ?', [content, now, current.id, req.user.id]);
-    // Two devices saving at once can each insert; keep only the row just written.
-    for (const extra of duplicates) await run('DELETE FROM knowledge_docs WHERE id = ? AND user_id = ?', [extra.id, req.user.id]);
-  } else {
-    await run('INSERT INTO knowledge_docs (id, user_id, category, title, content, tags_json, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)',
-      [nanoid(), req.user.id, PREFERENCES_CATEGORY, TITLE, content, '[]', now, now]);
-  }
+  // The existing primary key serializes first saves from different devices without DDL.
+  // Never update a colliding row belonging to another owner or a non-preference record.
+  const id = 'astha.preferences.' + req.user.id;
+  const saved = await run('INSERT INTO knowledge_docs (id, user_id, category, title, content, tags_json, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?) ON CONFLICT (id) DO UPDATE SET content = excluded.content, updated_at = excluded.updated_at WHERE knowledge_docs.user_id = ? AND knowledge_docs.category = ?',
+    [id, req.user.id, PREFERENCES_CATEGORY, TITLE, content, '[]', now, now, req.user.id, PREFERENCES_CATEGORY]);
+  if (saved.changes !== 1) throw new Error('Preferences ownership conflict');
+  // Earlier versions could insert random IDs concurrently. Remove all of this owner's
+  // reserved duplicates only after the canonical write succeeds; normal notes stay intact.
+  await run('DELETE FROM knowledge_docs WHERE user_id = ? AND category = ? AND id <> ?', [req.user.id, PREFERENCES_CATEGORY, id]);
   res.json({ ok: true, preferences, updated_at: now });
 }));
 

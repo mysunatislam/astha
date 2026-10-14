@@ -12,6 +12,9 @@ import { fileURLToPath } from 'node:url';
 import { randomBytes } from 'node:crypto';
 import { DatabaseSync } from 'node:sqlite';
 import { postgresQuery } from '../server/postgres.js';
+import { createPostgresStorage } from '../server/postgres.js';
+import { registerHooks } from 'node:module';
+import { PGlite } from '@electric-sql/pglite';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
@@ -29,6 +32,62 @@ test('every preferences statement is accepted by the restricted Supabase query a
   }
   // The reserved row is selected by a bound value, never by text spliced into SQL.
   assert.doesNotMatch(sources, /astha_preferences'[^;]*(?:SELECT|DELETE|UPDATE)|category\s*(?:=|<>)\s*'/);
+});
+
+test('concurrent preference upserts preserve one owner-scoped row under actual local PostgreSQL and forced RLS', async () => {
+  const engine = await PGlite.create();
+  const storageUrl = new URL('../server/db.js', import.meta.url).href;
+  const globalKey = '__ASTHA_PREFERENCES_POSTGRES_FIXTURE__';
+  let hooks;
+  try {
+    await engine.exec('CREATE ROLE astha_backend LOGIN');
+    await engine.exec(readFileSync(new URL('../server/migrations/001_supabase.sql', import.meta.url), 'utf8'));
+    await engine.exec('SET ROLE astha_backend');
+    const storage = createPostgresStorage({ query: async (sql, params = []) => {
+      const result = await engine.query(sql, params);
+      return { rows: result.rows, rowCount: result.affectedRows };
+    } });
+    globalThis[globalKey] = storage;
+    hooks = registerHooks({ load(url, context, nextLoad) {
+      if (url !== storageUrl) return nextLoad(url, context);
+      return { format: 'module', shortCircuit: true,
+        source: `export const run = globalThis.${globalKey}.run, all = globalThis.${globalKey}.all;` };
+    } });
+    const { preferencesRouter } = await import('../server/preferences.js?atomic-preferences-postgres-fixture');
+    hooks.deregister(); hooks = null;
+    const put = preferencesRouter.stack.find(layer => layer.route?.methods.put).route.stack[0].handle;
+    const save = async (owner, preferences) => {
+      const response = { statusCode: 200, status(value) { this.statusCode = value; return this; }, json(value) { this.body = value; return this; } };
+      await put({ user: { id: owner }, body: { preferences } }, response, error => { response.error = error; });
+      return response;
+    };
+    const insert = 'INSERT INTO users (id,name,phone,passcode_hash,passcode_salt,created_at) VALUES (?,?,?,?,?,?)';
+    for (const owner of ['pg-pref-a', 'pg-pref-b', 'pg-pref-c']) await storage.run(insert, [owner, 'Synthetic preferences', null, 'fixture-hash', 'fixture-salt', 1]);
+    const choices = [{ vision: 'none', language: 'bn' }, { vision: 'low', language: 'en' }, { feedback: 'brief', haptics: true }];
+    const replies = await Promise.all(choices.map(preferences => save('pg-pref-a', preferences)));
+    assert(replies.every(reply => !reply.error && reply.body?.ok === true));
+    assert.deepEqual(replies.map(reply => reply.body.preferences), choices);
+    let rows = (await engine.query('SELECT id,user_id,category,content FROM astha.knowledge_docs WHERE user_id=$1', ['pg-pref-a'])).rows;
+    assert.equal(rows.length, 1); assert.equal(rows[0].id, 'astha.preferences.pg-pref-a');
+    assert(choices.some(value => JSON.stringify(value) === rows[0].content));
+
+    const noteInsert = 'INSERT INTO knowledge_docs (id,user_id,category,title,content,tags_json,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?)';
+    for (let index = 0; index < 8; index++) await storage.run(noteInsert, ['pg-legacy-' + index, 'pg-pref-a', 'astha_preferences', 'Legacy', '{}', '[]', 1, 1]);
+    await storage.run(noteInsert, ['pg-normal', 'pg-pref-a', 'general', 'Normal note', 'Keep me', '[]', 1, 1]);
+    await storage.run(noteInsert, ['pg-other', 'pg-pref-b', 'astha_preferences', 'Other setup', '{"vision":"low"}', '[]', 1, 1]);
+    assert.equal((await save('pg-pref-a', { language: 'bn' })).body.ok, true);
+    rows = (await engine.query('SELECT id FROM astha.knowledge_docs WHERE user_id=$1 AND category=$2', ['pg-pref-a', 'astha_preferences'])).rows;
+    assert.equal(rows.length, 1); assert.equal(rows[0].id, 'astha.preferences.pg-pref-a');
+    assert.equal((await engine.query('SELECT content FROM astha.knowledge_docs WHERE id=$1', ['pg-normal'])).rows[0].content, 'Keep me');
+    assert.equal((await engine.query('SELECT content FROM astha.knowledge_docs WHERE id=$1', ['pg-other'])).rows[0].content, '{"vision":"low"}');
+    await storage.run(noteInsert, ['astha.preferences.pg-pref-c', 'pg-pref-b', 'general', 'Collision', 'Unchanged', '[]', 1, 1]);
+    const refused = await save('pg-pref-c', { vision: 'none' });
+    assert(refused.error); assert.equal(refused.body, undefined);
+    assert.equal((await engine.query('SELECT content FROM astha.knowledge_docs WHERE id=$1', ['astha.preferences.pg-pref-c'])).rows[0].content, 'Unchanged');
+    assert.equal((await engine.query("SELECT count(*)::int AS count FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='astha' AND c.relkind='r'")).rows[0].count, 6);
+  } finally {
+    hooks?.deregister(); delete globalThis[globalKey]; await engine.close();
+  }
 });
 
 test('setup preferences are validated, isolated per account, exported, kept out of notes and deleted with the account', { timeout: 90000 }, async t => {
@@ -112,6 +171,36 @@ test('setup preferences are validated, isolated per account, exported, kept out 
   await api('/api/preferences', { method: 'PUT', token: owner.token, body: { preferences: changed } });
   assert.equal(rows(owner.userId).length, 1);
   assert.deepEqual((await api('/api/preferences', { token: owner.token })).data.preferences, { ...changed, devices: ['phone_camera', 'braille_controller'] });
+
+  // Concurrent first saves share the existing primary key rather than racing a SELECT.
+  const fresh = (await api('/api/auth/guest', { method: 'POST', body: {} })).data;
+  const simultaneous = [{ vision: 'none', language: 'bn' }, { vision: 'low', language: 'en' }, { feedback: 'brief', haptics: true }];
+  const acknowledged = await Promise.all(simultaneous.map(preferences => api('/api/preferences', { method: 'PUT', token: fresh.token, body: { preferences } })));
+  assert(acknowledged.every(result => result.status === 200));
+  assert.deepEqual(acknowledged.map(result => result.data.preferences), simultaneous);
+  const freshRows = rows(fresh.userId);
+  assert.equal(freshRows.length, 1, 'concurrent initial saves must leave exactly one reserved row');
+  assert(simultaneous.some(value => JSON.stringify(value) === freshRows[0].content), 'stored settings must be one whole acknowledged save');
+  assert.deepEqual((await api('/api/preferences', { token: fresh.token })).data.preferences, JSON.parse(freshRows[0].content));
+
+  // Clean every legacy duplicate, even when more than the old five-row read limit exist.
+  const insert = inspection.prepare('INSERT INTO knowledge_docs (id,user_id,category,title,content,tags_json,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?)');
+  for (let index = 0; index < 8; index++) insert.run('legacy-pref-' + index, owner.userId, 'astha_preferences', 'Legacy setup', '{"vision":"none"}', '[]', index, index);
+  insert.run('ordinary-owner-note', owner.userId, 'general', 'Ordinary note', 'This must stay', '[]', 1, 1);
+  await api('/api/preferences', { method: 'PUT', token: owner.token, body: { preferences: changed } });
+  assert.equal(rows(owner.userId).length, 1);
+  assert.equal(inspection.prepare('SELECT COUNT(*) AS n FROM knowledge_docs WHERE id = ? AND user_id = ?').get('ordinary-owner-note', owner.userId).n, 1);
+
+  // An unexpected primary-key collision cannot change an unrelated owner's row.
+  const collision = (await api('/api/auth/guest', { method: 'POST', body: {} })).data;
+  const collisionId = 'astha.preferences.' + collision.userId;
+  insert.run(collisionId, other.userId, 'general', 'Collision fixture', 'Untouched', '[]', 2, 2);
+  const refused = await api('/api/preferences', { method: 'PUT', token: collision.token, body: { preferences: { vision: 'none' } } });
+  assert.equal(refused.status, 500);
+  assert.equal(inspection.prepare('SELECT content FROM knowledge_docs WHERE id = ? AND user_id = ?').get(collisionId, other.userId).content, 'Untouched');
+  assert.equal(rows(collision.userId).length, 0);
+  // Remove only the directly seeded ordinary fixture before the existing notes-list assertions.
+  inspection.prepare('DELETE FROM knowledge_docs WHERE id = ? AND user_id = ?').run('ordinary-owner-note', owner.userId);
 
   // Another account neither sees nor changes them.
   assert.deepEqual((await api('/api/preferences', { token: other.token })).data, { preferences: null, updated_at: null });
