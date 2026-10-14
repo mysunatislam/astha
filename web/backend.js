@@ -28,6 +28,8 @@
     window.ASTHA_ACCOUNT_ID = null;
     window.ASTHA_LOCAL_ACCOUNT_ID = null;
     if (typeof refreshOwnerContext === 'function') refreshOwnerContext();
+    // The next person to use this phone must not inherit the setup answers.
+    if (logout && typeof AsthaExperience !== 'undefined') AsthaExperience.accountCleared();
     if (typeof LocalStore !== 'undefined') { clearTimeout(LocalStore.timer); LocalStore.loadedKey = null; }
     if (typeof state !== 'undefined') {
       state.memory = []; state.spatialHome = []; state.log = [];

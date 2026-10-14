@@ -13,7 +13,13 @@ the legal basis, provider retention and backup handling are owner decisions list
 | Activity log, agent task history, personal notes | Server database | Agent tasks record the spoken goal, the plan and the result. |
 | Face and voice templates | This browser only (`astha.owner.v2.<account id>.*`) | The app never uploads them. The `face_descriptor` column exists for older clients and is cleared by "Forget my face and voice". |
 | Interface language, theme, text size, voice choices | This browser | Not personal records; kept when an account is deleted. |
-| Optional personal provider key | This browser (`astha.gemini`) | Removed when the account is deleted from this phone. |
+| Personal setup answers: how much the user relies on vision, language, feedback style, devices used, modes, text size, colours, speaking speed, vibration | Server database (one reserved row in `knowledge_docs`, category `astha_preferences`) and this browser (`astha.accessibility.v2`) | The vision answer is information about a disability. It is optional ("Prefer not to say" is the default), is used only to present the app, is included in the export, is removed with the account, is never used as search context, and is cleared from the phone on sign-out. |
+| Wi-Fi camera pairing code and pictures | Memory of this app only | The code is never written to storage and is discarded when the camera is disconnected or the app closes. Pictures go from the camera to the phone; they reach the online AI only under the normal online-processing consent. The camera stores and logs nothing. |
+| Names of installed apps (Android) | Not stored | Looked up on the phone only when the user says "open the … app", to find the one named. Never uploaded. |
+| Text read from other apps (Android, only if the user turned it on) | Not stored | Read on request, spoken, and discarded. Password fields are never read. Nothing is observed in the background. |
+| Incoming messages (Android, only if the user turned message help on) | Memory of this app only | Sender, app name and text of up to 20 recent conversation notifications, so a reply can reach the right conversation. Never written to storage or logged; cleared when consent is withdrawn. The text goes to the online model only when the user asks ASTHA to suggest a reply, under the session consent. Replies go through the messaging app itself. |
+| Speech sent to the phone's recognizer (Android app) | The recognizer's provider, usually Google | Outside this server. Not used in Privacy mode. |
+| Personal provider key (retired) | Not stored | The app no longer accepts a personal key. A key left by an older version (`astha.gemini`) is deleted from the browser at start-up. |
 | Camera or screen frames, prompts, speech text | Sent to the configured provider only after session consent | Not stored by this server. Provider retention is outside this code. |
 
 Request monitoring keeps counters by route and status only. It holds no account identity,
@@ -76,6 +82,15 @@ and no PIN its owner knows.
 - Sign out is offered only to registered accounts. A guest is pointed to registration or to
   account deletion, because signing out would leave its records where no one can reach them.
 
+### Why the setup answers are in `knowledge_docs`
+
+The Supabase schema is checked column by column at start-up and a schema change needs a
+reviewed migration. Until one is authorized, the setup answers use one reserved row per
+account in the existing notes table. The server validates every value against a fixed
+list, excludes the row from note listing, deletion, retention pruning and retrieval, and
+refuses to create it through the notes API. A dedicated table or column is the cleaner
+long-term home and is listed below as an owner decision.
+
 ## Decisions that remain with the owner
 
 - The published Bangla and English privacy policy, the operator's identity and a contact for
@@ -87,6 +102,13 @@ and no PIN its owner knows.
 - A retention rule for guest accounts that hold records and are never registered. It needs a
   last-used timestamp, which is a schema change.
 - Merging a used guest's records into an existing account at sign-in.
+
+- Whether to move the personal setup answers into their own table with a reviewed migration.
+- Whether ASTHA's own spoken output may use the online Bangla voice without the broader
+  online-processing consent. Today it may not, so a device without a Bangla voice speaks
+  English until the user allows online processing.
+- Whether asking how much a user relies on vision needs explicit wording or consent under
+  the laws that apply to the deployment. This document is not legal advice.
 
 ## বাংলা সারসংক্ষেপ
 

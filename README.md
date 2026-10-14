@@ -7,8 +7,12 @@ one URL to deploy and one process to run.
 Round 1 scope: read a board or book aloud with a concise explanation, remember approved object
 events ("glasses seen on the bedside table at 10:05") and answer with location, time and
 confidence, short safety-conscious Bangla voice interaction, and advisory-only obstacle warnings.
-Astha's eye can also watch a shared computer screen and narrate it. See `docs/ROADMAP.md` for
-what is intentionally out of scope for now.
+Reading covers any text in view (a page, a board, a slide or a screen), and can keep reading as
+it changes. Astha's eye can also watch a shared computer screen and explain it: slides,
+documents, designs or code. In the Android app, with the user's consent, Astha announces new
+messages from apps such as Messenger and sends the reply the user dictates after a spoken yes,
+also with the phone locked. Online answers come from Maira (Gemini by default). See
+`docs/ROADMAP.md` for what is intentionally out of scope for now.
 
 ## How it fits together
 
@@ -29,6 +33,17 @@ provider and Supabase is the selected database service. Deployment credentials s
 server secret storage. Existing on-device detection remains available; model readiness,
 accuracy and cold offline behavior require device verification.
 
+## What works, what is simulated, what is pending
+
+[docs/voice-first-release-review.md](docs/voice-first-release-review.md) is the honest
+status page: how ASTHA decides when to speak, what the automated tests cover, and what
+still needs a phone, a Raspberry Pi or a blind tester. Related guides:
+
+- [Raspberry Pi Wi-Fi camera](docs/pi-camera.md) — the clip-on camera bridge.
+- [Braille controller and distance sensor design](docs/braille-controller.md) — ready for hardware that is not built yet.
+- [Native release notes](docs/native-release.md) — debug APK, release APK and Play bundle, and the Android-only capabilities.
+- [Data handling](docs/data-handling.md) — what is stored, exported and deleted.
+
 ## Run it locally
 
 Requires Node 22.5+ (for the built-in `node:sqlite`) and Python 3 (only to run the build step).
@@ -38,6 +53,9 @@ npm ci
 npm run install:server
 cp server/.env.example server/.env
 # For local SQLite development, set DB_PROVIDER=sqlite in server/.env.
+# `npm run dev` reads server/.env. If that file holds deployment credentials, start the
+# server with DB_PROVIDER=sqlite and empty provider keys in the environment instead, so a
+# local run cannot reach the hosted database or the paid AI project.
 # Set a strong JWT_SECRET; fill in server-only Maira keys if testing cloud processing.
 npm run build                          # regenerates web/index.html from tools/
 npm start                              # serves the API + PWA on http://localhost:8787

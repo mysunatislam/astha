@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Release builds trust only the system certificate store and never use cleartext.
+     Debug builds additionally trust certificates the tester installed on the phone, so a
+     Raspberry Pi camera using a private test certificate authority can be paired during
+     hardware testing. This override does not exist in a release build. -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+    <debug-overrides>
+        <trust-anchors>
+            <certificates src="user" />
+        </trust-anchors>
+    </debug-overrides>
+</network-security-config>

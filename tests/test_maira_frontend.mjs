@@ -107,113 +107,47 @@ test('configured ASTHA server stays preferred and personal deployment credential
   assert.equal(h.calls.length, 1);
 });
 
-test('personal Maira retains the supported ask JSON image contract, scoped identity and optional profile', async () => {
-  const h = harness({ key: 'gAAAAA-personal-test-key' });
-  h.context.ASTHA_MAIRA_PROJECT_KEY = 'personal-test-project';
-  h.mockFetch(() => mairaReply({ en: 'A fixture is visible.', bn: 'পরীক্ষার ছবি।' }));
-  assert.equal(h.run('cloudReady()'), true);
-  await h.run("gemini('inspect fixture', {})");
-  let body = JSON.parse(h.calls[0].options.body);
-  assert.equal(h.calls[0].url, 'https://api.recommender.gigalogy.com/v1/maira/ask');
-  assert.equal(body.user_id, 'verified-account');
-  assert.equal(body.conversation_type, 'question');
-  assert.deepEqual(body.images, [{ file_content: 'data:image/jpeg;base64,fixture-image-base64', filename: 'frame.jpg' }]);
-  assert.equal('gpt_profile_id' in body, false);
-  h.context.ASTHA_MAIRA_PROFILE_ID = ' explicit-owner-profile ';
-  await h.run("gemini('text fixture', null)");
-  body = JSON.parse(h.calls[1].options.body);
-  assert.equal(body.gpt_profile_id, 'explicit-owner-profile');
-  assert.deepEqual(body.images, []);
-});
-
-test('unknown or cached-only identity cannot use personal Maira; explicit device-owner identity can', async () => {
-  const h = harness({ key: 'gAAAAA-personal-test-key', account: null });
-  h.context.ASTHA_LOCAL_ACCOUNT_ID = 'cached-someone-else';
-  h.context.ASTHA_MAIRA_PROJECT_KEY = 'personal-test-project';
-  assert.equal(h.run('cloudReady()'), false);
-  await assert.rejects(h.run("gemini('text fixture', null)"), error => error.noCloud === true);
-  assert.equal(h.calls.length, 0);
-  h.context.ASTHA_MAIRA_USER_ID = 'explicit-device-owner';
-  h.mockFetch(() => mairaReply({ en: 'Fixture' }));
-  assert.equal(h.run('cloudReady()'), true);
-  await h.run("gemini('text fixture', null)");
-  assert.equal(JSON.parse(h.calls[0].options.body).user_id, 'explicit-device-owner');
-  assert(!cloudSource.includes("user_id: 'astha-browser-user'"));
-  assert(!cloudSource.includes('7edb5168-fafd-432c-80e9-de59acc9d0a2'));
-});
-
-test('personal Maira rejects incomplete/empty/malformed responses and preserves plain text compatibility', async () => {
-  const h = harness({ key: 'gAAAAA-personal-test-key' });
-  h.context.ASTHA_MAIRA_PROJECT_KEY = 'personal-test-project';
-  for (const reply of [
-    response({ detail: { response: '{"en":"not final"}' } }, 202),
-    response({}), response({ detail: { response: { en: 'not a string' } } }),
-    ...['', '   ', '{}', '[]', 'null', '42', '"scalar"', '{"en":"truncated', '```json\n{invalid}\n```', '```json\n{"en":"missing closing fence"}',
-      '{"en":[]}', '{"bn":false}', 'x'.repeat(131073)].map(text => mairaReply(text)),
-  ]) {
-    h.mockFetch(() => reply);
-    await assert.rejects(h.run("gemini('text fixture', null)"), /Maira unavailable/);
-  }
-  h.mockFetch(() => mairaReply('A plain text response.'));
-  assert.equal((await h.run("gemini('text fixture', null)")).en, 'A plain text response.');
-  h.mockFetch(() => mairaReply('```json\n{"en":"A valid object","bn":"পরীক্ষা"}\n```'));
-  assert.equal((await h.run("gemini('text fixture', null)")).bn, 'পরীক্ষা');
-  h.mockFetch(() => mairaReply({ found: false }));
-  assert.equal((await h.run("gemini('text fixture', null)")).found, false);
-});
-
-test('personal Maira late responses cannot cross owner/consent/caller-cancellation boundaries', async () => {
-  for (const change of [
-    h => { h.context.ASTHA_ACCOUNT_ID = 'another-owner'; },
-    h => { h.context.privacyMode = true; },
-    h => { h.stored.set('astha.ai_mode', 'offline'); },
-    h => { h.context.caller.abort(); },
-  ]) {
-    const h = harness({ key: 'gAAAAA-personal-test-key' });
-    h.context.ASTHA_MAIRA_PROJECT_KEY = 'personal-test-project';
-    h.context.caller = new AbortController();
-    let complete;
-    h.mockFetch(() => new Promise(resolve => { complete = resolve; }));
-    const result = h.run("gemini('text fixture', null, {signal:caller.signal})");
-    change(h); complete(mairaReply({ en: 'Late answer' }));
-    await assert.rejects(result, error => error.noCloud === true);
-    assert.equal(h.calls.length, 1);
-    if (h.context.caller.signal.aborted) assert.equal(h.calls[0].options.signal.aborted, true);
-  }
-});
-
-test('personal Maira has no provider requests without consent, online access or project credentials', async () => {
-  for (const change of [
-    h => { h.run('remoteProcessingConsent = false'); },
-    h => { h.context.navigator.onLine = false; },
-    h => { h.context.privacyMode = true; },
-    h => { h.context.ASTHA_MAIRA_PROJECT_KEY = ''; },
-  ]) {
-    const h = harness({ key: 'gAAAAA-personal-test-key' });
-    h.context.ASTHA_MAIRA_PROJECT_KEY = 'personal-test-project';
-    change(h);
-    await assert.rejects(h.run("gemini('text fixture', null)"), error => error.noCloud === true);
+test('retired browser credentials cannot bypass the configured server', async () => {
+  for (const key of ['old-gemini-key', 'gAAAAA-old-maira-key']) {
+    const h = harness({key}); h.context.ASTHA_MAIRA_PROJECT_KEY = 'old-project';
+    assert.equal(h.run('cloudReady()'), false);
+    await assert.rejects(h.run("gemini('inspect', null)"), error => error.noCloud === true);
     assert.equal(h.calls.length, 0);
   }
 });
 
-test('personal Maira retries a rate limit once and never retries after the owner or consent changes', async () => {
-  const h = harness({ key: 'gAAAAA-personal-test-key' });
-  h.context.ASTHA_MAIRA_PROJECT_KEY = 'personal-test-project';
-  h.mockFetch(() => response({}, 429));
-  await assert.rejects(h.run("gemini('text fixture', null)"), /rate limit/);
-  assert.equal(h.calls.length, 2);
+test('server errors never fail over to a personal provider and unauthenticated state is cleared', async () => {
+  for (const status of [401, 403, 429, 500, 503]) {
+    const h = harness({key:'old-personal-key'}); h.run('serverCloud.available = true');
+    h.mockFetch(url => { assert.equal(url, '/api/vision'); return response({}, status); });
+    await assert.rejects(h.run("gemini('inspect', null)"));
+    assert.equal(h.calls.length, 1);
+    if ([401,503].includes(status)) assert.equal(h.run('serverCloud.available'), false);
+  }
+});
+
+test('late server results cannot cross account, consent or cancellation boundaries', async () => {
   for (const change of [
-    h => { h.context.ASTHA_ACCOUNT_ID = 'another-owner'; },
+    h => { h.context.ASTHA_ACCOUNT_ID = 'another'; },
     h => { h.context.privacyMode = true; },
+    h => { h.stored.set('astha.ai_mode', 'offline'); },
     h => { h.context.caller.abort(); },
   ]) {
-    const s = harness({ key: 'gAAAAA-personal-test-key' });
-    s.context.ASTHA_MAIRA_PROJECT_KEY = 'personal-test-project';
-    s.context.caller = new AbortController();
-    s.mockFetch(() => response({}, 429));
-    s.context.setTimeout = callback => { change(s); queueMicrotask(callback); return 1; };
-    await assert.rejects(s.run("gemini('text fixture', null, {signal:caller.signal})"), error => error.noCloud === true);
-    assert.equal(s.calls.length, 1);
+    const h = harness(); h.run('serverCloud.available = true');
+    h.context.caller = new AbortController(); let complete;
+    h.mockFetch(() => new Promise(resolve => { complete = resolve; }));
+    const result = h.run("gemini('inspect', null, {signal:caller.signal})");
+    change(h); complete(response({en:'late'}));
+    await assert.rejects(result, error => error.noCloud === true);
+    assert.equal(h.calls.length, 1);
+  }
+});
+
+test('privacy, consent and offline guards run before any image is captured or request sent', async () => {
+  for (const change of [h=>h.run('remoteProcessingConsent=false'), h=>h.context.navigator.onLine=false, h=>h.context.privacyMode=true]) {
+    const h=harness(); h.run('serverCloud.available=true'); change(h);
+    h.context.frameToJpeg=()=>{throw new Error('must not capture');};
+    await assert.rejects(h.run("gemini('inspect', {})"),error=>error.noCloud===true);
+    assert.equal(h.calls.length,0);
   }
 });

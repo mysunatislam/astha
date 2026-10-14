@@ -10,6 +10,20 @@ The owner-supplied `mairaapi.json` was read only into process memory for two bou
 
 Each server request uses the authenticated ASTHA user ID, ignoring caller-supplied IDs. Shared default user/profile IDs were removed. Existing personal-key browser integration requires a verified owner ID and cloud consent. Health reports configuration, not provider reachability. Deadlines, request/response limits, redirect refusal, private caching and response validation apply before reporting a result.
 
+## Which model answers
+
+ASTHA does not name a model in its requests. Maira answers with the model of the GPT
+profile it is given (`MAIRA_PROFILE_ID`), or of the project's default profile when none is
+set. On 15 October 2026 the project default was the "Asha" profile on `gemini-3.5-flash`,
+so online answers already come from Gemini; no change was made.
+
+`node tools/maira-model.mjs` lists the project's models and profiles and marks the default.
+`node tools/maira-model.mjs --set <model>` points the profile ASTHA reaches at another model
+from that list (for example a lighter Gemini model for lower latency); it changes the
+project for every client using that profile, so it is the owner's decision. The tool reads
+the keys from the environment or `server/.env`, sends them only to Maira and never prints
+them. No latency comparison between models has been measured here.
+
 ## Finding S24: incomplete production Maira configuration
 
 Files: `server/gemini.js`, `server/index.js`, `server/agent.js`, `server/.env.example`, `render.yaml`, `tools/cloud.js`, `web/config.js`, and the Maira regression fixtures/tests.

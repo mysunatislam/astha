@@ -1,46 +1,27 @@
 
-/* =====================================================================
-   16. Cloud reasoning (configured Maira/Gemini), modes, owner ID, yes/no follow-ups,
-       secure-connection guidance
-       The on-device models are fast but guess; with a Gemini key the
-       heavy understanding goes to the cloud with a strict "never invent"
-       instruction. The key is stored only in this browser.
-   ===================================================================== */
-const cloud = { key: '', model: 'gemini-3.6-flash', models: ['gemini-3.6-flash'], lastCallAt: 0, lastVerifyAt: 0, badKeyWarned: false };
+/* Server-backed reasoning; provider credentials stay on the ASTHA server. */
+const cloud = { lastCallAt: 0, lastVerifyAt: 0 };
 const serverCloud = { checked: false, available: false, provider: null };
-
-function configuredClientModels() {
-  const models = window.ASTHA_GEMINI_MODELS;
-  if (Array.isArray(models) && models.length > 0 && models.length <= 3 &&
-      models.every(id => typeof id === 'string' && /^[a-zA-Z0-9][a-zA-Z0-9._-]{0,99}$/.test(id))) return [...new Set(models)];
-  return ['gemini-3.6-flash'];
-}
-
-function promptGeminiKey() {
-  const current = cloud.key || '';
-  const input = window.prompt(t('gemini_prompt'), current);
-  if (input !== null) {
-    setGeminiKey(input.trim());
-    if ($('gemini-key')) $('gemini-key').value = input.trim();
-  }
-}
 
 // ---- Engine preference; account entitlement is not inferred in the browser ----
 const Subscription = {
   MODE_KEY: 'astha.ai_mode',
   init() {
-    try { if (!localStorage.getItem(this.MODE_KEY)) localStorage.setItem(this.MODE_KEY, 'offline'); } catch (e) {}
+    // Online is the default choice so the Bangla voice and the assistant are offered at
+    // first start. Nothing is sent until the person allows it for the session.
+    try { if (!localStorage.getItem(this.MODE_KEY)) localStorage.setItem(this.MODE_KEY, 'gemini'); } catch (e) {}
     this.renderButtons();
     return { mode: this.getMode() };
   },
   getMode() {
-    try { if (localStorage.getItem(this.MODE_KEY) === 'gemini') return 'gemini'; } catch (e) {}
-    return 'offline';
+    try { if (localStorage.getItem(this.MODE_KEY) === 'offline') return 'offline'; } catch (e) {}
+    return 'gemini';
   },
   setMode(mode, silent) {
     if (mode !== 'gemini') mode = 'offline';
     if (mode === 'gemini' && !requestRemoteConsent()) return;
     if (mode === 'offline') {
+      if (typeof AsthaExperience !== 'undefined') AsthaExperience.invalidatePreferences();
       remoteProcessingConsent = false;
       if (typeof SiriVoice !== 'undefined') { SiriVoice.enabled = false; SiriVoice.stop(true); }
       if (typeof stopAllSpeech === 'function') stopAllSpeech();
@@ -49,13 +30,16 @@ const Subscription = {
     updateCloudBadge(); this.renderButtons();
     if (mode === 'gemini') {
       const session = typeof window.ASTHA_REFRESH_SESSION === 'function' ? window.ASTHA_REFRESH_SESSION() : Promise.resolve();
-      Promise.resolve(session).then(() => refreshCloudStatus()).catch(() => updateCloudBadge());
+      Promise.resolve(session).then(async () => {
+        await refreshCloudStatus();
+        if (typeof AsthaExperience !== 'undefined') await AsthaExperience.loadAccountPreferences();
+      }).catch(() => updateCloudBadge());
     }
     if (!silent) announce(mode === 'gemini'
-      ? 'Online processing is permitted for this session. Requests use your configured server or personal key; unavailable services fall back to this phone.'
+      ? 'Online processing is permitted for this session. Requests use the configured ASTHA server; unavailable services fall back to this phone.'
       : 'On-device mode selected. Remote processing is off; each feature needs its downloaded model and a local voice.',
       mode === 'gemini'
-      ? 'এই সেশনে অনলাইন প্রসেসিংয়ের অনুমতি দেওয়া হয়েছে। কনফিগার করা সার্ভার বা ব্যক্তিগত কী ব্যবহার হবে; পরিষেবা না পেলে এই ফোনের মডেল ব্যবহার করব।'
+      ? 'এই সেশনে অনলাইন প্রসেসিংয়ের অনুমতি দেওয়া হয়েছে। আস্থার কনফিগার করা সার্ভার ব্যবহার হবে; পরিষেবা না পেলে এই ফোনের মডেল ব্যবহার করব।'
       : 'ডিভাইস মোড নির্বাচিত। অনলাইন প্রসেসিং বন্ধ; প্রতিটি সুবিধার জন্য ডাউনলোড করা মডেল ও স্থানীয় কণ্ঠ দরকার।', 'system');
   },
   renderButtons() {
@@ -67,46 +51,10 @@ const Subscription = {
   }
 };
 
-function getEffectiveKey() {
-  if (cloud.key) return cloud.key;
-  try {
-    const saved = localStorage.getItem('astha.gemini');
-    if (saved) return saved;
-  } catch (e) {}
-  return '';
-}
-
-function personalMairaUserId() {
-  const valid = value => typeof value === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(value);
-  if (valid(window.ASTHA_ACCOUNT_ID)) return window.ASTHA_ACCOUNT_ID;
-  if (valid(window.ASTHA_MAIRA_USER_ID)) return window.ASTHA_MAIRA_USER_ID;
-  // A cached local account is not authenticated and must not be sent as another person's identity.
-  return null;
-}
-function personalMairaConfigured() {
-  return typeof window.ASTHA_MAIRA_PROJECT_KEY === 'string' &&
-    Boolean(window.ASTHA_MAIRA_PROJECT_KEY.trim()) && Boolean(personalMairaUserId());
-}
-
+// Retained as a compatibility helper for older integrations; personal keys are retired.
+function getEffectiveKey() { return ''; }
 function cloudReady() {
-  if (!remoteProcessingAllowed()) return false;
-  if (typeof Subscription !== 'undefined') {
-    if (Subscription.getMode() === 'offline') return false;
-  }
-  const key = getEffectiveKey();
-  const configuredPersonalKey = key && (!key.startsWith('gAAAAA') || personalMairaConfigured());
-  return Boolean(serverCloud.available || configuredPersonalKey);
-}
-function setGeminiKey(v, silent) {
-  cloud.key = (v || '').trim(); cloud.badKeyWarned = false;
-  try { localStorage.setItem('astha.gemini', cloud.key); } catch (e) {}
-  updateCloudBadge();
-  const effective = getEffectiveKey();
-  const isMaira = effective.startsWith('gAAAAA');
-  const engineName = isMaira ? 'Gigalogy Maira AI' : 'Gemini';
-  const engineNameBn = isMaira ? 'মায়রা এআই' : 'জেমিনি';
-  if (!silent) announce(effective ? `${engineName} key saved. The connection will be checked on your next request.` : 'Personal key cleared. I will use the configured server or on-device models.',
-    effective ? `${engineNameBn} কী সংরক্ষিত। পরের অনুরোধে সংযোগ পরীক্ষা হবে।` : 'ব্যক্তিগত কী মুছে ফেলা হয়েছে। কনফিগার করা সার্ভার বা ডিভাইসের মডেল ব্যবহার করব।', 'system');
+  return remoteProcessingAllowed() && Subscription.getMode() !== 'offline' && Boolean(serverCloud.available);
 }
 function updateCloudBadge() {
   const b = $('cloud-pill'); if (!b) return;
@@ -114,15 +62,11 @@ function updateCloudBadge() {
   const bn = typeof uiLang !== 'undefined' && uiLang === 'bn';
   if (Subscription.getMode() === 'offline') { b.textContent = bn ? 'ডিভাইস মোড' : 'On-device mode'; b.className = 'pill'; return; }
   if (!remoteProcessingConsent) { b.textContent = bn ? 'অনলাইন: অনুমতি প্রয়োজন' : 'Online: consent required'; b.className = 'pill warn'; return; }
-  const key = getEffectiveKey();
-  const personalConfigured = key && (!key.startsWith('gAAAAA') || personalMairaConfigured());
   const provider = serverCloud.provider === 'maira' ? (bn ? 'মায়রা এআই' : 'Maira AI')
     : serverCloud.provider === 'gemini' ? (bn ? 'জেমিনি' : 'Gemini') : (bn ? 'ক্লাউড' : 'Cloud');
-  const personalProvider = key.startsWith('gAAAAA') ? (bn ? 'মায়রা এআই' : 'Maira AI') : (bn ? 'জেমিনি' : 'Gemini');
   b.textContent = serverCloud.available ? (bn ? `${provider} কনফিগার করা আছে (সার্ভার)` : `${provider} configured (server)`)
-    : personalConfigured ? (bn ? `${personalProvider} কনফিগার করা আছে (ব্যক্তিগত কী)` : `${personalProvider} configured (personal key)`)
     : bn ? 'ক্লাউড পাওয়া যাচ্ছে না; ডিভাইসের মডেল ব্যবহার হবে' : 'Cloud unavailable; on-device fallback';
-  b.className = 'pill ' + (serverCloud.available || personalConfigured ? '' : 'warn');
+  b.className = 'pill ' + (serverCloud.available ? '' : 'warn');
 }
 // Health reports configuration, not a verified provider response. No credentials reach the client.
 async function refreshCloudStatus() {
@@ -134,7 +78,7 @@ async function refreshCloudStatus() {
       const d = await r.json(); serverCloud.available = d?.cloud === true;
       serverCloud.provider = serverCloud.available && ['maira', 'gemini'].includes(d?.cloudProvider) ? d.cloudProvider : null;
     }
-  } catch (e) { serverCloud.reachable = false; serverCloud.available = false; serverCloud.provider = null; /* personal key (if any) still works */ }
+  } catch (e) { serverCloud.reachable = false; serverCloud.available = false; serverCloud.provider = null; }
   serverCloud.checked = true;
   updateCloudBadge();
 }
@@ -151,11 +95,11 @@ const CLOUD_PROMPTS = {
   clothes: 'Describe the garment in view: type (shirt, saree, salwar kameez, panjabi, dress, t-shirt, lungi...), colours, pattern, and fabric if visible (cotton, silk, denim, wool, synthetic, lace). Say whether a person is wearing it or it is being held. Return JSON: {"en": string, "bn": string, "garment": string, "colour": string}.',
   read: 'Transcribe ALL readable text exactly as printed, in its original script (Bangla or English), keeping line breaks, into "text". If it is a medicine, a sign, a label, a letter or a page, give a one-sentence explanation in "en" and "bn". If there is no readable text, set "text" to "". Return JSON: {"text": string, "en": string, "bn": string}.',
   read_broad: 'Read and transcribe ALL visible text in the camera view: blackboard, whiteboard, computer screen, classroom board, poster, book, document, paper, medicine packaging or sign. Transcribe the full text into "text". Provide a clear, natural spoken explanation of what is written in "en" and "bn". Set "isBoardOrSign": true if it is a blackboard, whiteboard, screen, or sign. Return JSON: {"text": string, "en": string, "bn": string, "isBoardOrSign": boolean}.',
-  stairs_hazard: 'The visually impaired user is moving or pointing the camera. Verify if there are REAL physical stairs, steps, or an elevated drop-off edge ahead in the camera view (NOT a computer keyboard, desk slats, striped pattern, book edges, floor tiles, or shadows). If real stairs/steps exist, report whether they go UP or DOWN, distance, step count visible, and handrail location. Return JSON: {"stairs": boolean, "edge": boolean, "direction": "up"|"down"|"none", "en": string, "bn": string, "hazard": boolean}. If NO stairs or danger, set "stairs": false, "hazard": false, and return reassuring clearance in "en" and "bn".',
-  screen: 'This is a screenshot of the user\'s computer. Return JSON: {"app": name of the foreground app or website, "content": exact transcription of the main editor, document, chat or page text (skip menus, toolbars and sidebars; keep code indentation and line breaks), "dialog": {"present": boolean, "button": text of the safest dismiss button or "", "location": one of "top-left","top","top-right","left","center","right","bottom-left","bottom","bottom-right"}, "error": {"present": boolean, "line": exact error text or "", "fix": one short sentence or ""}, "en": one-sentence spoken summary of where the user is and what is on screen, "bn": the same in Bangla}.',
+  stairs_hazard: 'The visually impaired user is moving or pointing the camera. Verify if there are REAL physical stairs, steps, or an elevated drop-off edge ahead in the camera view (NOT a computer keyboard, desk slats, striped pattern, book edges, floor tiles, or shadows). If real stairs/steps exist, report whether they go UP or DOWN, distance, step count visible, and handrail location. Return JSON: {"stairs": boolean, "edge": boolean, "direction": "up"|"down"|"none", "en": string, "bn": string, "hazard": boolean}. If NO stairs or danger, set "stairs": false, "hazard": false, and say that no hazard was confirmed in this image; never declare the route safe.',
+  screen: 'This is a screenshot of the user\'s screen: a computer, a tablet or a phone. It may show a document, a slide, a chat, a web page, a design, a form, a spreadsheet or code. Return JSON: {"app": name of the foreground app or website, "content": exact transcription of the main content, whatever kind it is (skip menus, toolbars and sidebars; keep line breaks, and indentation where it matters), "dialog": {"present": boolean, "button": text of the safest dismiss button or "", "location": one of "top-left","top","top-right","left","center","right","bottom-left","bottom","bottom-right"}, "error": {"present": boolean, "line": exact error text or "", "fix": one short sentence or ""}, "en": one-sentence spoken summary of where the user is and what is on screen, "bn": the same in Bangla}.',
   verify: (names) => `The on-device detector thinks it sees: ${names}. Look at the frame: say in one short sentence what is really there that matters to a blind person (hazards first, then people and objects with position). If the detector was wrong, do not repeat its mistake. If nothing notable, set "none" true. Return JSON: {"en": string, "bn": string, "none": boolean, "mirror": boolean}.`,
   mirror: 'Is this image the user\'s own reflection in a mirror (a person holding up a phone toward a mirror)? Return JSON: {"mirror": boolean, "en": one sentence describing what the person is wearing if mirror is true else "", "bn": same in Bangla}.',
-  vqa: (query, history) => `The visually impaired user asks: "${query}". Prior conversation context: ${history || 'none'}. Look closely at the image. Directly, accurately and concisely answer the user's specific question (e.g. if they ask if their ID card, pen, phone, powerbank, or medication is visible, check carefully). If visible, state its position (left, ahead, right) and details (text, color, brand, or what surface it is on). If not visible, say clearly that it is not visible. Return JSON: {"en": string, "bn": string, "found": boolean, "item": string, "surface": string, "room_hint": string}.`,
+  vqa: (query, history) => `The visually impaired user asks: "${query}". Prior conversation context: ${history || 'none'}. The current image is the only evidence of present visibility. Prior context is not proof that an object is still present. Verify the requested colour, object and spatial relation; if any is unclear say so. Never invent a table/laptop relation or a room. Look closely at the image. Directly, accurately and concisely answer the user's specific question (e.g. if they ask if their ID card, pen, phone, powerbank, or medication is visible, check carefully). If visible, state its position (left, ahead, right) and details (text, color, brand, or what surface it is on). If not visible, say clearly that it is not visible. Return JSON: {"en": string, "bn": string, "found": boolean, "item": string, "surface": string, "room_hint": string}.`,
   calibrate_video: (roomName) => `The user is holding the camera while walking through or showing a room called "${roomName || 'unnamed room'}". Analyze this video frame for home layout calibration. Identify any detected furniture or landmark structures (e.g. dressing table, reading table, desk, bed, bookshelf, chair, sofa, wardrobe, door, window, mirror, counter). Note their relative positions (left, ahead, right, near, far). Return JSON: {"room": string, "furniture": [string], "landmarks": [string], "en_feedback": string, "bn_feedback": string}. "en_feedback" should be 1 short sentence announcing newly seen furniture (e.g. "I see a dressing table ahead and a chair on your left").`,
   placement: (query, rooms) => `The visually impaired user says: "${query}". They are holding up an object or keeping/placing it on a surface in their home (e.g. moneybag, wallet, powerbank, keys, glasses, medicine, watch, phone, charger). Look closely at the camera frame. Identify the exact object (prefer the name the user said if it matches the object, e.g. "moneybag" or "wallet"). Identify which furniture surface it is resting on or held over (e.g. dressing table, reading table, desk, bed, bookshelf, chair, counter). Identify which room this matches from their calibrated rooms: ${rooms || 'Reading Room'}. Return JSON: {"item": string, "surface": string, "room": string, "en": string, "bn": string}. "en" must be a reassuring confirmation sentence like "Got it. I see your moneybag. Remembered: keeping your moneybag on the dressing table in the reading room." "bn" must be the natural spoken Bangla equivalent.`,
   passive_placement: (rooms) => `The visually impaired user is in their room. Analyze this camera frame for passive object placement.
@@ -168,135 +112,34 @@ If an item is clearly placed/resting on a furniture surface, return JSON:
 If no target item is clearly placed on a surface, return JSON:
 {"found": false}`,
 };
-// `task` here is the fully-resolved prompt text (CLOUD_PROMPTS.describe, etc). Astha's own
-// server holds the configured provider credentials and is tried first; a personal key pasted into Your
-// preferences is only a fallback for when that server is unreachable or has none configured.
+// Existing callers use this function name; all provider requests go through ASTHA.
 async function gemini(task, frame, opts = {}) {
-  if (!remoteProcessingAllowed()) { const e = new Error('remote processing disabled'); e.noCloud = true; throw e; }
+  const requester = window.ASTHA_ACCOUNT_ID;
+  const stillAllowed = () => {
+    if (!remoteProcessingAllowed() || window.ASTHA_ACCOUNT_ID !== requester || opts.signal?.aborted) {
+      const error = new Error('Remote request cancelled or account changed'); error.noCloud = true; throw error;
+    }
+  };
+  stillAllowed();
+  if (!serverCloud.available) { const error = new Error('no cloud reasoning available'); error.noCloud = true; throw error; }
   cloud.lastCallAt = Date.now();
   const image = frame ? frameToJpeg(frame, opts.maxW || 800) : undefined;
-  if (serverCloud.available) {
-    try {
-      const res = await fetch(apiUrl('/api/vision'), {
-        method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ task: 'custom', prompt: task, image, maxTokens: opts.maxTokens || 900 }),
-        signal: deadlineSignal(30000, opts.signal),
-      });
-      if (res.ok) { serverCloud.available = true; serverCloud.checked = true; return await res.json(); }
-      if (res.status === 401) { serverCloud.checked = true; serverCloud.available = false; serverCloud.provider = null; /* not signed in yet; fall through */ }
-      else if (res.status === 503) { serverCloud.checked = true; serverCloud.available = false; serverCloud.provider = null; /* server has no key */ }
-      else if (res.status === 429) { throw new Error('rate limit'); }
-      // any other server-side failure: fall through to a personal key if the user has one
-    } catch (e) { if (String(e.message) === 'rate limit') throw e; /* network error reaching our own server: fall through */ }
+  const res = await fetch(apiUrl('/api/vision'), {
+    method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ task: 'custom', prompt: task, image, maxTokens: opts.maxTokens || 900 }),
+    signal: deadlineSignal(30000, opts.signal),
+  });
+  stillAllowed();
+  if (res.status === 401 || res.status === 503) {
+    serverCloud.checked = true; serverCloud.available = false; serverCloud.provider = null;
+    updateCloudBadge();
   }
-  const effectiveKey = getEffectiveKey();
-  if (!effectiveKey) { const e = new Error('no cloud reasoning available'); e.noCloud = true; throw e; }
-
-  // Direct client call only with an explicitly configured personal Maira project.
-  if (effectiveKey.startsWith('gAAAAA')) {
-    const userId = personalMairaUserId();
-    const pKey = typeof window.ASTHA_MAIRA_PROJECT_KEY === 'string' ? window.ASTHA_MAIRA_PROJECT_KEY.trim() : '';
-    if (!pKey || !userId) { const e = new Error('Personal Maira project and verified account or device owner required'); e.noCloud = true; throw e; }
-    const stillAllowed = () => {
-      if (!remoteProcessingAllowed() || personalMairaUserId() !== userId || opts.signal?.aborted) {
-        const e = new Error('Personal Maira request cancelled or owner changed'); e.noCloud = true; throw e;
-      }
-    };
-    try {
-      stillAllowed();
-      const images = image ? [{ file_content: `data:image/jpeg;base64,${image}`, filename: 'frame.jpg' }] : [];
-      const mairaBody = {
-        user_id: userId,
-        query: `${ASTHA_SYSTEM}\n\nTask: ${task}`,
-        conversation_type: 'question',
-        images
-      };
-      const profile = typeof window.ASTHA_MAIRA_PROFILE_ID === 'string' ? window.ASTHA_MAIRA_PROFILE_ID.trim() : '';
-      if (profile) mairaBody.gpt_profile_id = profile;
-      const mRes = await fetch('https://api.recommender.gigalogy.com/v1/maira/ask', {
-        method: 'POST',
-        headers: {
-          'project-key': pKey,
-          'api-key': effectiveKey,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(mairaBody),
-        signal: deadlineSignal(30000, opts.signal)
-      });
-      stillAllowed();
-      if (mRes.ok && mRes.status === 200) {
-        const mData = await mRes.json();
-        stillAllowed();
-        return parseMairaResponse(mData);
-      }
-      if (mRes.status === 401 || mRes.status === 403) {
-        if (!cloud.badKeyWarned) {
-          cloud.badKeyWarned = true;
-          announce('The AI API key was rejected. Check it in Your preferences.', 'এআই কী গ্রহণ হয়নি। প্রেফারেন্সে দেখুন।', 'system');
-        }
-        throw new Error('bad key');
-      }
-      if (mRes.status === 429) {
-        if (!opts.isRetry) {
-          await new Promise(r => setTimeout(r, 1800));
-          stillAllowed();
-          return await gemini(task, frame, { ...opts, isRetry: true });
-        }
-        throw new Error('rate limit');
-      }
-      throw new Error('Maira ' + mRes.status);
-    } catch (e) {
-      if (e.noCloud || e.name === 'AbortError' || opts.signal?.aborted) throw e;
-      if (/bad key|rate limit/.test(String(e))) throw e;
-      throw new Error('Maira unavailable');
-    }
-  }
-
-  const parts = [{ text: task }];
-  if (image) parts.push({ inline_data: { mime_type: 'image/jpeg', data: image } });
-  const body = { system_instruction: { parts: [{ text: ASTHA_SYSTEM }] }, contents: [{ role: 'user', parts }], generationConfig: { temperature: 0.2, response_mime_type: 'application/json', max_output_tokens: opts.maxTokens || 900 } };
-  cloud.models = configuredClientModels();
-  if (!cloud.models.includes(cloud.model)) cloud.model = cloud.models[0];
-  const order = [cloud.model, ...cloud.models.filter(m => m !== cloud.model)];
-  let lastErr = null;
-  for (const model of order) {
-    let res;
-    try {
-      res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(effectiveKey)}`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: deadlineSignal(30000, opts.signal) });
-    } catch (e) { throw new Error('network'); }
-    if (res.status === 404) { lastErr = new Error('model ' + model + ' not found'); continue; }
-    if (res.status === 400 || res.status === 403) { if (!cloud.badKeyWarned) { cloud.badKeyWarned = true; announce('Your personal Gemini key was rejected. Check it in Your preferences.', 'আপনার ব্যক্তিগত জেমিনি কী গ্রহণ হয়নি। প্রেফারেন্সে দেখুন।', 'system'); } throw new Error('bad key'); }
-    if (res.status === 429) {
-      if (!opts.isRetry) {
-        await new Promise(r => setTimeout(r, 1800));
-        return await gemini(task, frame, { ...opts, isRetry: true });
-      }
-      throw new Error('rate limit');
-    }
-    if (!res.ok) throw new Error('Gemini ' + res.status);
-    const data = await res.json();
-    const text = ((((data.candidates || [])[0] || {}).content || {}).parts || []).map(p => p.text || '').join('');
-    cloud.model = model;
-    return parseJsonLoose(text);
-  }
-  throw lastErr || new Error('Gemini unavailable');
-}
-function parseMairaResponse(payload) {
-  const text = payload?.detail?.response;
-  if (typeof text !== 'string' || !text.trim() || text.length > 131072) throw new Error('Invalid Maira response');
-  const trimmed = text.trim();
-  let result;
-  if (/^[{\[]|^```/.test(trimmed)) {
-    const fenced = trimmed.startsWith('```') ? trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i) : null;
-    if (trimmed.startsWith('```') && !fenced) throw new Error('Invalid Maira JSON response');
-    const candidate = fenced ? fenced[1] : trimmed;
-    try { result = JSON.parse(candidate); } catch (e) { throw new Error('Invalid Maira JSON response'); }
-  } else {
-    try { result = JSON.parse(trimmed); } catch (e) { return { en: trimmed, bn: '' }; }
-  }
-  if (!result || typeof result !== 'object' || Array.isArray(result) || !Object.keys(result).length ||
-      (result.en !== undefined && typeof result.en !== 'string') ||
-      (result.bn !== undefined && typeof result.bn !== 'string')) throw new Error('Invalid Maira response');
+  if (res.status === 429) throw new Error('rate limit');
+  if (!res.ok) { const error = new Error('ASTHA online service unavailable'); error.noCloud = true; throw error; }
+  const result = await res.json();
+  stillAllowed();
+  if (!result || typeof result !== 'object' || Array.isArray(result)) throw new Error('Invalid ASTHA response');
+  serverCloud.checked = true;
   return result;
 }
 function parseJsonLoose(text) {
@@ -306,7 +149,7 @@ function parseJsonLoose(text) {
 }
 function cloudFail(e) { console.warn('cloud', e); return /rate limit/.test(String(e)); }
 
-// ---- Cloud-backed actions (called first when a key exists; fall back to on-device) ----
+// ---- Server-backed actions with on-device fallback ----
 async function cloudDescribe() {
   return withBusy(t('analyzing_title'), async () => {
     const frame = captureFrame(896); if (!frame) return;
@@ -379,12 +222,16 @@ async function cloudVerifyAndSpeak(fresh, fallbackEn, fallbackBn) {
   if (now - cloud.lastVerifyAt < 6000) return;   // stay quiet rather than chatter
   cloud.lastVerifyAt = now;
   const frame = captureFrame(768); if (!frame) return;
+  const epoch = state.sourceEpoch;
+  // The reply can arrive after the camera changed or the user started speaking.
+  const stillWanted = () => epoch === state.sourceEpoch && (typeof AsthaExperience === 'undefined' || AsthaExperience.admit('low', null));
   try {
     const r = await gemini(CLOUD_PROMPTS.verify(fresh.map(o => objLabel(o)).join(', ')), frame, { maxTokens: 600 });
+    if (!stillWanted()) return;
     if (r.mirror === true && now - (state.lastComplimentAt || 0) > 60000) return cloudCompliment(frame, r);
     if (r.none || !r.en) return;
     setCaption(t('new_title'), r.en, 'vision', null, r.bn); speak(r.en, r.bn); heartPointAt(fresh[0]);
-  } catch (e) { if (!cloudFail(e)) { setCaption(t('new_title'), fallbackEn, 'vision', null, fallbackBn); speak(fallbackEn, fallbackBn); } }
+  } catch (e) { if (!cloudFail(e) && stillWanted()) { setCaption(t('new_title'), fallbackEn, 'vision', null, fallbackBn); speak(fallbackEn, fallbackBn); } }
 }
 async function cloudScreen(frame) { return gemini(CLOUD_PROMPTS.screen, frame, { maxW: 1280, maxTokens: 2500 }); }
 
@@ -456,16 +303,15 @@ async function cloudSafetyCheck(silentIfClear) {
 }
 
 // Conversational Visual Question Answering (VQA)
-async function cloudVisualQA(query, frame, history = '') {
+async function cloudVisualQA(query, frame, history = '', current = () => true) {
   const f = frame || captureFrame(896);
   if (!f) return null;
   heartSet({ x: 0.5, y: 0.5, mode: 'seek', label: 'Looking…' });
   try {
     const prompt = typeof CLOUD_PROMPTS.vqa === 'function' ? CLOUD_PROMPTS.vqa(query, history) : CLOUD_PROMPTS.vqa;
-    const r = await Promise.race([
-      gemini(prompt, f, { maxTokens: 600 }),
-      new Promise((_, reject) => setTimeout(() => reject(new Error('Cloud VQA timeout')), 9000))
-    ]);
+    // Maira may take longer than nine seconds. The shared request has a 30-second deadline.
+    const r = await gemini(prompt, f, { maxTokens: 600 });
+    if (!current()) return null;
     if (r && (r.en || r.bn)) {
       announce(r.en, r.bn, 'vision');
       playEarcon('confirm');
@@ -483,7 +329,7 @@ async function cloudVisualQA(query, frame, history = '') {
     }
     return null;
   } catch (e) {
-    // Return null silently on cloud failure or timeout so on-device fallback runs without delay
+    // Failure falls back to the local detector without claiming the object was verified.
     return null;
   }
 }
@@ -576,8 +422,8 @@ function askYesNo(en, bn, onYes, onNo) {
 function answerYesNo(q) {
   const p = state.pendingYes; if (!p) return false;
   if (Date.now() > p.until) { state.pendingYes = null; return false; }
-  if (/^(yes|yeah|yep|yup|sure|ok|okay|please|go ahead|do it|read it|হ্যাঁ|হুম|হু|পড়ো|করো|ঠিক আছে|acha|hae|hya|ha)\b/i.test(q.trim())) { state.pendingYes = null; p.onYes && p.onYes(); return true; }
-  if (/^(no|nope|nah|not now|later|না|থাক|লাগবে না|na)\b/i.test(q.trim())) { state.pendingYes = null; p.onNo ? p.onNo() : announce('Okay.', 'ঠিক আছে।', 'voice'); return true; }
+  if (/^(yes|yeah|yep|yup|sure|ok|okay|please|go ahead|do it|read it|হ্যাঁ|হুম|হু|পড়ো|করো|ঠিক আছে|acha|hae|hya|ha)(?![A-Za-z0-9_\u0980-\u09FF])/i.test(q.trim())) { state.pendingYes = null; p.onYes && p.onYes(); return true; }
+  if (/^(no|nope|nah|not now|later|না|থাক|লাগবে না|na)(?![A-Za-z0-9_\u0980-\u09FF])/i.test(q.trim())) { state.pendingYes = null; p.onNo ? p.onNo() : announce('Okay.', 'ঠিক আছে।', 'voice'); return true; }
   return false;
 }
 
@@ -753,11 +599,8 @@ function cloudBoot() {
     Subscription.init();
     Subscription.renderButtons();
   }
-  try { cloud.key = localStorage.getItem('astha.gemini') || ''; } catch (e) {}
-  if ($('gemini-key')) {
-    $('gemini-key').value = cloud.key;
-    if (!cloud.key) $('gemini-key').placeholder = 'Optional personal key; otherwise the configured server or on-device models';
-  }
+  // Remove a retired browser credential rather than silently using it as fallback.
+  try { localStorage.removeItem('astha.gemini'); } catch (e) {}
   updateCloudBadge();
   serverCloud.ready = refreshCloudStatus(); // memory/room syncs await this before their first request
   let mode = 'auto'; try { mode = localStorage.getItem('astha.mode') || 'auto'; } catch (e) {}

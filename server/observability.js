@@ -6,7 +6,7 @@ const STATE = Symbol('astha-request-observability');
 const ROUTES = Object.freeze([
   '/api/health', '/api/auth/signup', '/api/auth/login', '/api/auth/guest',
   '/api/auth/logout', '/api/auth/me', '/api/memories', '/api/memories/:id',
-  '/api/rooms', '/api/rooms/:id', '/api/log', '/api/settings', '/api/rag/query',
+  '/api/rooms', '/api/rooms/:id', '/api/log', '/api/settings', '/api/preferences', '/api/rag/query',
   '/api/rag/docs', '/api/rag/docs/:id', '/api/agent/plan', '/api/agent/evaluate', '/api/agent/run',
   '/api/account/export', '/api/account/delete', '/api/vision', '/api/speak', 'other',
 ]);

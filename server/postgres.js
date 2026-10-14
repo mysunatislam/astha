@@ -48,7 +48,11 @@ export function postgresQuery(sql, params = []) {
       !/^\s*(SELECT|INSERT|UPDATE|DELETE)\b/i.test(sql)) throw new Error('Unsupported storage query');
   let bindings = 0;
   let tables = 0;
-  const text = sql.replace(/\b(FROM|INTO|UPDATE|JOIN)\s+([a-z_][a-z_0-9]*)\b/gi, (match, keyword, table) => {
+  const text = sql.replace(/\b(FROM|INTO|UPDATE|JOIN)\s+([a-z_][a-z_0-9]*)\b/gi, (match, keyword, table, offset) => {
+    // The UPDATE in a static INSERT ... ON CONFLICT ... DO UPDATE SET has no table.
+    // Continue validating real table references; values are still bound below.
+    if (/^UPDATE$/i.test(keyword) && /^SET$/i.test(table) &&
+        /^\s*INSERT\b/i.test(sql) && /\bON\s+CONFLICT\s*\([a-z_][a-z_0-9]*\)\s+DO\s*$/i.test(sql.slice(0, offset))) return match;
     if (!TABLES.includes(table)) throw new Error('Unsupported storage table');
     tables++;
     return `${keyword} astha.${table}`;

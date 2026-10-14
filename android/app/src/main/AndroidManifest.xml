@@ -5,6 +5,7 @@
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
+        android:networkSecurityConfig="@xml/network_security_config"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
@@ -23,6 +24,41 @@
             </intent-filter>
 
         </activity>
+
+        <!-- Off until the user enables it in Android Accessibility settings. Only the
+             system can bind it, and ASTHA also requires its own in-app consent. -->
+        <service
+            android:name=".AsthaAccessibilityService"
+            android:exported="true"
+            android:label="@string/astha_accessibility_label"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/astha_accessibility_service" />
+        </service>
+
+        <!-- Off until the user grants notification access in Android settings, and ASTHA
+             also requires its own in-app consent. Replies use each app's own reply action. -->
+        <service
+            android:name=".AsthaNotificationListener"
+            android:exported="true"
+            android:label="@string/astha_messages_label"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
+
+        <!-- Reads messages aloud while ASTHA is not on screen. Runs only after the user turns
+             it on in ASTHA, always with a visible notification and a Turn off button, and
+             opens the microphone only right after it has asked a question. -->
+        <service
+            android:name=".AsthaMessageAssistant"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
 
         <provider
             android:name="androidx.core.content.FileProvider"
@@ -43,6 +79,25 @@
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <uses-permission android:name="android.permission.VIBRATE" />
+    <!-- Only for reading messages aloud with the phone locked, after the user turns it on. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- Lets the app find the device's speech recognizer and voice on Android 11 and later. -->
+    <queries>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.TTS_SERVICE" />
+        </intent>
+        <!-- So "open the ... app" can find an app by the name on its launcher icon. -->
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
 
     <!-- Hardware Features -->
     <uses-feature android:name="android.hardware.camera" android:required="false" />

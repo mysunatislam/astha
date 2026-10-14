@@ -14,6 +14,10 @@ on:
         description: 'Unused Google Play version code (positive integer)'
         required: true
         type: string
+      api_origin:
+        description: 'Exact HTTPS ASTHA backend origin (no credentials or path)'
+        required: true
+        type: string
 
 permissions:
   contents: read
@@ -51,6 +55,7 @@ jobs:
     runs-on: ubuntu-24.04
     environment: mobile-release
     env:
+      ASTHA_MOBILE_API_ORIGIN: ${{ inputs.api_origin || vars.ASTHA_MOBILE_API_ORIGIN }}
       ASTHA_VERSION_CODE: ${{ inputs.version_code || vars.ASTHA_ANDROID_VERSION_CODE }}
       ASTHA_VERSION_NAME: ${{ inputs.version_name || github.ref_name }}
       ASTHA_ANDROID_KEYSTORE_BASE64: ${{ secrets.ASTHA_ANDROID_KEYSTORE_BASE64 }}

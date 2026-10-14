@@ -1,0 +1,113 @@
+<div class="consent-overlay" id="consent-dialog" hidden role="alertdialog" aria-modal="true" aria-labelledby="consent-title" aria-describedby="consent-text">
+  <div class="consent-card">
+    <h2 id="consent-title" tabindex="-1" data-i18n="consent_title">Allow online processing?</h2>
+    <p id="consent-text"></p>
+    <div class="utility-row">
+      <button class="btn accent" type="button" id="consent-allow" data-i18n="consent_allow">Allow for this session</button>
+      <button class="btn" type="button" id="consent-cancel" data-i18n="consent_cancel">Cancel, keep on this phone</button>
+    </div>
+  </div>
+</div>
+<nav class="app-navigation" aria-label="Astha pages" data-i18n-aria-label="nav_label">
+  <button class="tab" type="button" data-astha-page="home" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 11l8-7 8 7M6 10v9h4v-5h4v5h4v-9"/></svg><span data-i18n="page_home">Home</span></button>
+  <button class="tab" type="button" data-astha-page="memory" aria-current="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 12a8 8 0 108-8 8 8 0 00-6 2.7M4 4v3.5h3.5M12 8v4l2.5 2"/></svg><span data-i18n="page_memory">Memories</span></button>
+  <button class="tab" type="button" data-astha-page="devices" aria-current="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M8 8l8 8-4 4V4l4 4-8 8"/></svg><span data-i18n="page_devices">Devices</span></button>
+</nav>
+<h2 class="page-title" id="page-title" tabindex="-1" data-i18n="page_home">Home</h2>
+<section class="card assessment-page" id="assessment-page" hidden aria-labelledby="page-title">
+  <p data-i18n="assessment_intro">Tell Astha how you would like to be helped. These are preferences, not a medical test, and you can change them at any time.</p>
+  <div class="utility-row">
+    <button class="btn accent" type="button" id="assessment-guided" data-i18n="assessment_guided">Answer by voice</button>
+    <button class="btn" type="button" id="assessment-read" data-i18n="assessment_read">Read the instructions aloud</button>
+  </div>
+  <form id="assessment-form">
+    <fieldset><legend data-i18n="assessment_vision">How much do you rely on vision?</legend>
+      <label><input type="radio" name="pref-vision" value="none"><span data-i18n="vision_none">I am blind and use speech or touch</span></label>
+      <label><input type="radio" name="pref-vision" value="light"><span data-i18n="vision_light">I can tell light or large shapes, but not detail</span></label>
+      <label><input type="radio" name="pref-vision" value="low"><span data-i18n="vision_low">I have low vision and prefer larger text</span></label>
+      <label><input type="radio" name="pref-vision" value="unspecified" checked><span data-i18n="vision_unspecified">Prefer not to say</span></label>
+    </fieldset>
+    <fieldset><legend data-i18n="assessment_language">Which language should Astha use?</legend>
+      <label><input type="radio" name="pref-language" value="bn"><span lang="bn">বাংলা</span></label>
+      <label><input type="radio" name="pref-language" value="en"><span lang="en">English</span></label>
+    </fieldset>
+    <fieldset><legend data-i18n="assessment_feedback">How should Astha answer you?</legend>
+      <label><input type="radio" name="pref-feedback" value="detailed" checked><span data-i18n="feedback_detailed">Speak full descriptions</span></label>
+      <label><input type="radio" name="pref-feedback" value="brief"><span data-i18n="feedback_brief">Speak short answers</span></label>
+      <label><input type="radio" name="pref-feedback" value="text"><span data-i18n="feedback_text">Show text only, without speech</span></label>
+    </fieldset>
+    <fieldset><legend data-i18n="assessment_devices">Which devices do you use with Astha?</legend>
+      <p class="setup-hint" data-i18n="assessment_devices_hint">Choose every one that applies. Leave all empty if you are not sure.</p>
+      <label><input type="checkbox" name="pref-devices" value="phone_camera"><span data-i18n="device_phone">Smartphone camera</span></label>
+      <label><input type="checkbox" name="pref-devices" value="smart_glasses"><span data-i18n="device_glasses">Smart glasses</span></label>
+      <label><input type="checkbox" name="pref-devices" value="clip_camera"><span data-i18n="device_clip">Clip-on camera</span></label>
+      <label><input type="checkbox" name="pref-devices" value="braille_controller"><span data-i18n="device_braille">Six-key Braille controller</span></label>
+    </fieldset>
+    <fieldset><legend data-i18n="assessment_modes">Do you want Awareness on the home screen?</legend>
+      <p class="setup-hint" data-i18n="assessment_modes_hint">Answering when you ask is always available.</p>
+      <label><input type="checkbox" name="pref-modes" value="road" checked><span data-i18n="context_road">Awareness: updates about what is around me</span></label>
+    </fieldset>
+    <fieldset><legend data-i18n="assessment_access">Display and feedback</legend>
+      <div class="setup-question"><label class="setup-label" for="pref-text-size" data-i18n="pref_text_size">Text size</label>
+        <select class="select-dropdown" id="pref-text-size">
+          <option value="normal" data-i18n="size_standard">Standard</option>
+          <option value="large" data-i18n="size_large">Large</option>
+          <option value="xlarge" data-i18n="size_xlarge">Extra large</option>
+        </select></div>
+      <div class="setup-question"><label class="setup-label" for="pref-theme" data-i18n="pref_theme">Colours and contrast</label>
+        <select class="select-dropdown" id="pref-theme">
+          <option value="mulberry-apricot" data-i18n="theme_calm">Mulberry &amp; Apricot</option>
+          <option value="navy-cyan" data-i18n="setup_theme_navy">Navy and cyan</option>
+          <option value="monochrome" data-i18n="setup_theme_mono">White on black</option>
+          <option value="clinical-yellow" data-i18n="setup_theme_yellow">Yellow on black</option>
+        </select></div>
+      <div class="setup-question"><label class="setup-label" for="pref-speech-rate" data-i18n="pref_speech_rate">Speaking speed</label>
+        <select class="select-dropdown" id="pref-speech-rate">
+          <option value="0.8" data-i18n="speed_slower">Slower</option>
+          <option value="1" selected data-i18n="speed_normal">Normal</option>
+          <option value="1.2" data-i18n="speed_faster">Faster</option>
+          <option value="1.5" data-i18n="speed_fastest">Very fast</option>
+        </select></div>
+      <label><input type="checkbox" id="pref-haptics" checked><span data-i18n="pref_haptics">Vibrate for alerts and confirmations</span></label>
+    </fieldset>
+    <p data-i18n="assessment_permissions">Camera, microphone and online processing each ask for permission when first used. Stop and Privacy mode are always available.</p>
+    <p data-i18n="assessment_storage">Your answers are saved to your Astha account so they follow you to another phone. You can export or delete them in Settings.</p>
+    <button class="btn accent" type="submit" data-i18n="assessment_save">Save and return home</button>
+    <p id="assessment-status" class="help" role="status" aria-live="polite"></p>
+  </form>
+</section>
+<section class="card assessment-page" id="devices-page" hidden aria-labelledby="page-title">
+  <p data-i18n="devices_intro">Astha works with the phone camera alone. A paired Wi-Fi camera and a Braille controller are optional.</p>
+  <h3 data-i18n="devices_camera_title">Clip-on or glasses camera</h3>
+  <p data-i18n="devices_camera">A clip-on camera or smart glasses connect over your own Wi-Fi with a private pairing code. Images go from the camera to this phone only.</p>
+  <div id="pi-connection-slot"></div>
+  <h3 data-i18n="braille_title">Six-key Braille controller</h3>
+  <p data-i18n="braille_info">The wireless controller is not built yet, so nothing can be paired. You can practise its key combinations now on a computer keyboard: F, D and S are dots 1, 2 and 3; J, K and L are dots 4, 5 and 6. Press the keys together and release.</p>
+  <button class="btn" type="button" id="braille-practice" aria-pressed="false" data-i18n="braille_practice_off">Start keyboard practice</button>
+  <p id="braille-status" class="help" role="status" aria-live="polite" data-i18n="braille_status_off">Braille controller: not connected.</p>
+  <details class="panel-disclosure" id="braille-commands-panel">
+    <summary data-i18n="braille_commands">Controller commands</summary>
+    <ul id="braille-command-list"></ul>
+  </details>
+  <h3 data-i18n="sensor_title">Distance sensor</h3>
+  <p data-i18n="sensor_info">An ultrasonic distance sensor is planned. None is connected, so Astha does not report measured distances. Distances it mentions are rough estimates from the image.</p>
+  <h3 data-i18n="screen_control_title">Other apps and screen control</h3>
+  <p data-i18n="screen_control_info">This version can read a screen you explicitly share. Controlling other apps is not connected yet. Camera permission does not enable it.</p>
+  <div id="screen-access" hidden>
+    <p data-i18n="screen_access_explain">In the Android app you can let Astha read other apps aloud. When you ask, it reads the text on the screen and can go back or home. It does not watch in the background, never reads password fields, and cannot tap, type or send anything for you. Android shows its own warning before it is turned on, and you can turn it off here at any time.</p>
+    <button class="btn" type="button" id="screen-access-toggle" aria-pressed="false" data-i18n="screen_access_on">Let Astha read other apps</button>
+    <p id="screen-access-status" class="help" role="status" aria-live="polite" data-i18n="screen_status_off">Reading other apps is off.</p>
+    <h3 data-i18n="messages_title">Messages</h3>
+    <p id="messages-web" class="help" data-i18n="messages_web">Reading and answering messages from apps such as Messenger works in the ASTHA Android app.</p>
+    <div id="messages-access" hidden>
+      <p data-i18n="messages_explain">Astha can tell you when a message arrives in an app such as Messenger or WhatsApp, read it to you, and send the reply you dictate or one she suggests. Nothing is sent until you say yes, and messages are never saved. Android asks you to allow notification access first.</p>
+      <button class="btn" type="button" id="messages-toggle" aria-pressed="false" data-i18n="messages_on">Let Astha read and answer my messages</button>
+      <p id="messages-status" class="help" role="status" aria-live="polite" data-i18n="messages_status_off">Message help is off.</p>
+      <div id="messages-background-area" hidden>
+        <label><input type="checkbox" id="messages-background"><span data-i18n="messages_background">Also read messages aloud when the phone is locked</span></label>
+        <p class="help" data-i18n="messages_background_explain">Astha keeps a notification showing while this is on, with a Turn off button. She listens only for a few seconds right after reading a message or asking a question, and waits while you are on a call.</p>
+      </div>
+    </div>
+    <p data-i18n="device_actions_info">You can also say “open the WhatsApp app”, or “write a message saying I will be late”. Astha asks before opening anything, and you choose the person and press send yourself.</p>
+  </div>
+</section>

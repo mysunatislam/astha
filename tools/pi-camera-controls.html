@@ -1,0 +1,20 @@
+<details class="panel-disclosure" id="pi-camera-panel">
+  <summary data-i18n="pi_title">Pair a Wi-Fi camera</summary>
+  <form id="pi-camera-form" class="card" aria-describedby="pi-camera-help pi-camera-status" aria-busy="false">
+    <p class="help" id="pi-camera-help" data-i18n="pi_help">Keep the camera and this phone on the same Wi-Fi. Enter the camera's secure address and its private pairing code. The code is kept only until you disconnect or close Astha.</p>
+    <label class="field" for="pi-camera-origin"><span data-i18n="pi_address">Camera HTTPS address</span>
+      <input id="pi-camera-origin" type="url" inputmode="url" placeholder="Example: https://astha-pi.local:8443" data-i18n-placeholder="pi_address_example" autocomplete="off" autocapitalize="none" spellcheck="false" required>
+    </label>
+    <label class="field" for="pi-camera-token"><span data-i18n="pi_pairing">Private pairing code</span>
+      <input id="pi-camera-token" type="password" autocomplete="off" autocapitalize="none" spellcheck="false" minlength="43" maxlength="128" required>
+    </label>
+    <label class="setup-check"><input type="checkbox" id="pi-camera-saver"><span data-i18n="pi_saver">Low-data mode: one image per second</span></label>
+    <div class="utility-row">
+      <button class="btn accent" type="submit" id="pi-camera-connect" data-i18n="pi_connect">Connect camera</button>
+      <button class="btn" type="button" id="pi-camera-stop" disabled data-i18n="pi_stop">Disconnect camera</button>
+    </div>
+    <p class="help" id="pi-camera-status" role="status" aria-live="polite" aria-atomic="true" data-i18n="pi_stopped">Wi-Fi camera disconnected.</p>
+    <p class="help" id="pi-camera-device" hidden></p>
+  </form>
+</details>
+<canvas id="pi-preview" width="640" height="480" role="img" aria-label="Paired Wi-Fi camera view" data-i18n-aria-label="pi_preview" hidden></canvas>

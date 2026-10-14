@@ -10,6 +10,7 @@ import { memoryRouter } from './memory.js';
 import { ragRouter } from './rag.js';
 import { agentRouter } from './agent.js';
 import { createAccountRouter } from './account.js';
+import { preferencesRouter } from './preferences.js';
 import { callCloudAI, hasCloudAI, getCloudProvider } from './gemini.js';
 import { synthesize } from './tts.js';
 import { createSpeechRouter } from './speech.js';
@@ -133,6 +134,7 @@ app.use('/api', authMiddleware, memoryRouter);
 app.use('/api', authMiddleware, ragRouter);
 app.use('/api', authMiddleware, agentRouter);
 app.use('/api', authMiddleware, createAccountRouter(COOKIE_OPTS));
+app.use('/api', authMiddleware, preferencesRouter);
 
 // ---- Configured cloud vision proxy: deployment keys never reach the browser ----
 const VISION_STATUS = Object.freeze({ no_key: 503, bad_key: 502, rate_limit: 429, bad_request: 400, network: 502, upstream: 502, bad_response: 502 });

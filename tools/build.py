@@ -33,12 +33,13 @@ def rep_between(start, end, new):
     html = html[:i] + new + html[j:]
 
 # ---- theme: calm navy by default (no yellow), selector kept ----
-rep('<html lang="en" data-theme="clinical-yellow"', '<html lang="en" data-theme="navy-cyan"')
-rep("localStorage.getItem('astha.clinical_theme') || 'clinical-yellow'", "localStorage.getItem('astha.clinical_theme') || 'navy-cyan'")
+rep('<html lang="en" data-theme="clinical-yellow"', '<html lang="en" data-theme="mulberry-apricot"')
+rep("localStorage.getItem('astha.clinical_theme') || 'clinical-yellow'", "localStorage.getItem('astha.clinical_theme') || 'mulberry-apricot'")
 rep("""        <option value="clinical-yellow">🟡 Yellow on black</option>
         <option value="monochrome">⚪ Monochrome (Inverted White/Black)</option>
         <option value="navy-cyan">🌊 Navy and cyan</option>""",
-    """        <option value="navy-cyan">🌊 Navy and cyan</option>
+    """        <option value="mulberry-apricot" data-i18n="theme_calm">Mulberry &amp; Apricot</option>
+        <option value="navy-cyan">🌊 Navy and cyan</option>
         <option value="monochrome">⚪ Monochrome (white on black)</option>
         <option value="clinical-yellow">🟡 Yellow on black (photophobia)</option>""")
 
@@ -359,7 +360,7 @@ EYE_HTML = r"""    <div class="card" id="eye-card">
         <h2>♥ Astha on your screen</h2>
         <span class="pill" id="eye-pill">Not watching</span>
       </div>
-      <p class="help">The heart is Astha's eye. Share your screen once and Astha watches it: she tells you which app you are in, where a button is, when a pop-up has gone, and opens apps or sites for you when the browser allows. Say “Astha, watch my screen”.</p>
+      <p class="help">Share your screen and Astha tells you what is on it: a message, a slide, a document, a web page, a design or code. Ask her to read it, explain it, or help you with it. Say “Astha, watch my screen”.</p>
       <div class="eye-view">
         <div class="empty" id="eye-empty"><div>Screen not shared yet.</div></div>
         <video id="eye-video" autoplay muted playsinline hidden></video>
@@ -368,10 +369,10 @@ EYE_HTML = r"""    <div class="card" id="eye-card">
           <span class="heart-label" id="eye-heart-label" hidden></span>
         </div>
       </div>
-      <div class="utility-row"><button class="btn accent" id="eye-start" onclick="toggleEye()">Let Astha see my screen</button><button class="btn" onclick="eyeWhatsOnScreen()">What is on my screen?</button><button class="btn" onclick="eyeReadError()">Read the error</button><button class="btn" onclick="eyeOpen('vs code')">Open VS Code</button></div>
-      <label class="field" for="eye-paste">Or paste screen or terminal text<textarea id="eye-paste" placeholder="Paste a terminal error here, then say “Astha, read the error”."></textarea></label>
+      <div class="utility-row"><button class="btn accent" id="eye-start" onclick="toggleEye()">Let Astha see my screen</button><button class="btn" onclick="eyeWhatsOnScreen()">What is on my screen?</button><button class="btn" onclick="eyeExplain()">Explain what is on my screen</button></div>
+      <label class="field" for="eye-paste">Or paste any text from your screen<textarea id="eye-paste" placeholder="Paste text here, then say “Astha, explain this”."></textarea></label>
       <div class="toggle-row"><span>Keyboard guidance: name each control as I Tab to it</span><button class="switch" id="focus-switch" role="switch" aria-checked="false" onclick="toggleFocusNarration()" aria-label="Keyboard guidance"></button></div>
-      <p class="help">Astha opens websites and VS Code herself. Clicking inside other apps needs the small desktop agent from the roadmap; until then she guides your keys and confirms what she sees.</p>
+      <p class="help">Astha can read and explain a shared screen. On an Android phone she can also read other apps and answer your messages; see Devices.</p>
     </div>
   </section>
 """
@@ -388,6 +389,7 @@ rep("  if (/hands.?free|always listen|keep listening|হ্যান্ডস ?�
     "  if (/watch my screen|see my screen|share (my )?screen|look at my screen|স্ক্রিন দেখো|স্ক্রিন শেয়ার/.test(q)) return eyeStart();\n"
     "  if (/stop watching|stop (the )?screen|স্ক্রিন দেখা বন্ধ/.test(q)) return eyeStop();\n"
     "  if (/(^|\\s)(open|launch|start|go to|switch to)\\s|খোলো|খুলো|চালু করো|যাও/.test(q) && appFromText(q)) return eyeOpen(q);\n"
+    "  if (/explain (this|that|it|what|the (slide|page|screen|document|design|chart|message|picture|form))|what does (this|that|it) (mean|say)|help me (understand|with (this|the))|summari[sz]e (this|that|it|the)|এটা বুঝিয়ে|বুঝিয়ে বলো|ব্যাখ্যা করো|সারাংশ/.test(q) && (eye.active || ($('eye-paste') && $('eye-paste').value.trim()))) return eyeExplain(query);\n"
     "  if (/i want to (code|write code|program|work)|let'?s code|help me code|time to code|কোড করব|কোড লিখব|কাজ করব/.test(q)) return eyeSetTask(q);\n"
     "  if (/close (it|this|that|the pop.?up|the dialog|the window)|cancel (it|this|that)|dismiss|পপ.?আপ বন্ধ|বাতিল করো/.test(q)) return eyeCloseDialog();\n"
     "  if (/where('s| is) (the )?[a-z ]+ (button|icon|link|option)|find the [a-z ]+ (button|icon|link)|বোতাম কোথায়/.test(q)) return eyeFind(q);\n"
@@ -438,10 +440,6 @@ rep('        <button class="chip-btn" id="hf-btn" onclick="toggleHandsFree()" ar
     '          <button id="mode-auto" onclick="setMode(\'auto\')" aria-pressed="true">Auto · busy area</button>\n'
     '          <button id="mode-quiet" onclick="setMode(\'quiet\')" aria-pressed="false">Quiet · ask me</button>\n'
     '        </div>\n      </div>')
-rep('      <label class="field" for="speech-rate">Speaking speed',
-    '      <label class="field" for="gemini-key">Personal Gemini key (optional backup)<input id="gemini-key" type="password" autocomplete="off" placeholder="Leave blank -- the Astha server already provides this" onchange="setGeminiKey(this.value)"></label>\n'
-    '      <p class="help">Cloud features require a configured server or your own provider key and your consent. Descriptions can be wrong; verify before acting. A personal key is kept on this browser and should only be used on a device you trust.</p>\n'
-    '      <label class="field" for="speech-rate">Speaking speed')
 rep('        <h2 data-i18n="engine_title">On-device AI engine</h2>\n        <button class="btn small accent" id="load-models-btn" onclick="loadAllModels()" data-i18n="engine_load">Load models</button>',
     '        <h2 data-i18n="engine_title">On-device AI engine</h2>\n        <span class="pill" id="cloud-pill">Checking cloud…</span>\n        <button class="btn small accent" id="load-models-btn" onclick="loadAllModels()" data-i18n="engine_load">Load models</button>')
 rep('    <!-- AI Model Diagnostics -->',
@@ -549,7 +547,7 @@ rep('<a class="skip-link" href="#companion-main">Skip to companion</a>\n',
 
 # ---- client scripts: config (deployment overrides) + backend (auth gate wiring) ----
 rep('</script>\n</body>\n</html>',
-    '</script>\n<script src="config.js"></script>\n<script src="backend.js"></script>\n</body>\n</html>')
+    '</script>\n<script src="config.js"></script>\n<script src="native-api.js"></script>\n<script src="native-device.js"></script>\n<script src="pi-camera.js"></script>\n<script src="backend.js"></script>\n</body>\n</html>')
 
 
 # ---- Offline companion: no narration while a search is guiding; route the new voice abilities ----
@@ -565,17 +563,28 @@ rep("  if (/computer|code|programming|teach|summar|explain|navigate|guide me|ক
 assert "</script" not in json.dumps(i18n["strings"], ensure_ascii=False).lower()
 i18n_data = "const I18N_EXTRA = " + json.dumps(i18n["strings"], ensure_ascii=False, separators=(",", ":")) + ";\n"
 rep("  renderSeen(); renderMemory(); renderLog();\n}\n", "  applyStaticI18n();\n  renderSeen(); renderMemory(); renderLog();\n}\n")
-rep("\n(function boot() {", i18n_data + i18n_js.rstrip("\n") + "\n" + module.rstrip("\n") + "\n" + eye_js.rstrip("\n") + "\n" + cloud_js.rstrip("\n") + "\n" + agent_js.rstrip("\n") + "\n" + perceive_js.rstrip("\n") + "\n" + offline_js.rstrip("\n") + "\n" + account_js.rstrip("\n") + "\n\n(function boot() {")
+experience_js = (HERE / "experience.js").read_text(encoding="utf-8")
+pi_ui_js = (HERE / "pi-camera-ui.js").read_text(encoding="utf-8")
+braille_js = (HERE / "braille.js").read_text(encoding="utf-8")
+screen_js = (HERE / "screen-access.js").read_text(encoding="utf-8")
+messages_js = (HERE / "messages.js").read_text(encoding="utf-8")
+sensors_js = (HERE / "sensors.js").read_text(encoding="utf-8")
+rep("\n(function boot() {", i18n_data + i18n_js.rstrip("\n") + "\n" + module.rstrip("\n") + "\n" + eye_js.rstrip("\n") + "\n" + cloud_js.rstrip("\n") + "\n" + agent_js.rstrip("\n") + "\n" + perceive_js.rstrip("\n") + "\n" + offline_js.rstrip("\n") + "\n" + account_js.rstrip("\n") + "\n" + experience_js.rstrip("\n") + "\n" + pi_ui_js.rstrip("\n") + "\n" + braille_js.rstrip("\n") + "\n" + sensors_js.rstrip("\n") + "\n" + screen_js.rstrip("\n") + "\n" + messages_js.rstrip("\n") + "\n\n(function boot() {")
 rep("  renderSpatialLayout();\n  enhancementBoot();\n})();", "  renderSpatialLayout();\n  enhancementBoot();\n  companionBoot();\n  eyeBoot();\n  cloudBoot();\n})();")
 
 # ---- boot(): expose it instead of self-invoking, so backend.js can run it after sign-in ----
 rep('(function boot() {', 'window.__asthaBoot = function boot() {')
 rep('  companionBoot();\n  eyeBoot();\n  cloudBoot();\n})();',
-    '  companionBoot();\n  eyeBoot();\n  cloudBoot();\n  offlineBoot();\n  refreshMemory();\n  refreshRooms();\n'
+    '  companionBoot();\n  eyeBoot();\n  cloudBoot();\n  offlineBoot();\n  AsthaExperience.boot();\n  AsthaPiCamera.boot();\n  AsthaBraille.boot();\n  AsthaScreenAccess.boot();\n  AsthaMessages.boot();\n  refreshMemory();\n  refreshRooms();\n'
     '  // Warm the on-device detector while the page settles (cached weights + WebGL shader compile),\n'
     '  // so the first "describe" or camera start does not begin with a silent wait. Skipped on data-saver.\n'
     "  setTimeout(() => { if (typeof loadCoco === 'function' && engine.coco.status === 'idle' && !(navigator.connection && navigator.connection.saveData)) loadCoco().catch(() => {}); }, 1200);\n"
     '};')
+# Page navigation, the personal setup assessment and the connected-devices page.
+assessment_html = (HERE / "assessment.html").read_text(encoding="utf-8").replace('<div id="pi-connection-slot"></div>', '<div id="pi-connection-slot">' + (HERE / "pi-camera-controls.html").read_text(encoding="utf-8") + '</div>')
+rep('<main', assessment_html + '\n<main')
+rep('function handleQuery(query) {\n  if (privacyTransition) return;',
+    'function handleQuery(query) {\n  if (privacyTransition) return;\n  if (AsthaExperience.route(query)) return;')
 # ---- translation hooks: tag each listed element, verifying it still shows its English string ----
 def add_i18n_hooks():
     global html
@@ -614,7 +623,7 @@ shell_hash = hashlib.sha256(html.encode("utf-8"))
 # Bootstrap/config-only changes must invalidate cache-first resources, too. Normalize the
 # stamp itself to avoid a circular hash and keep successive builds byte-for-byte identical.
 shell_hash.update(re.sub(r"const CACHE = 'astha-shell-[^']*';", "const CACHE = 'astha-shell-STAMP';", sw).encode("utf-8"))
-for asset in ("config.js", "backend.js", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png"):
+for asset in ("config.js", "native-api.js", "native-device.js", "pi-camera.js", "backend.js", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png"):
     shell_hash.update(asset.encode("utf-8"))
     shell_hash.update((DST.parent / asset).read_bytes())
 stamp = shell_hash.hexdigest()[:10]

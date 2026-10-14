@@ -71,10 +71,10 @@ test('no implicit demo credential or embedded Maira project credential remains',
   assert.equal(h.run('cloudReady()'), false);
 });
 
-test('explicit stored personal key remains available without fabricating a key', () => {
+test('retired stored personal key cannot activate online reasoning', () => {
   const h = harness({ 'astha.gemini': 'user-supplied-test-key' });
-  assert.equal(h.run('getEffectiveKey()'), 'user-supplied-test-key');
-  assert.equal(h.run('cloudReady()'), true);
+  assert.equal(h.run('getEffectiveKey()'), '');
+  assert.equal(h.run('cloudReady()'), false);
   h.storage.set('astha.ai_mode', 'offline');
   assert.equal(h.run('cloudReady()'), false);
 });
@@ -96,46 +96,24 @@ test('remote processing requires explicit session consent and never prompts on b
   assert.equal(h.run('remoteProcessingAllowed()'), false);
 });
 
-test('fresh profiles select on-device mode without a client-side entitlement', () => {
+test('fresh profiles offer the online assistant without asking or an entitlement; on-device stays a choice', () => {
   const h = harness({}, false);
   h.storage.delete('astha.ai_mode');
   h.run('Subscription.init()');
+  assert.equal(h.run('Subscription.getMode()'), 'gemini');
+  assert.equal(h.calls.confirmations, undefined, 'consent is asked before the first request, not at start');
+  h.storage.set('astha.ai_mode', 'offline');
   assert.equal(h.run('Subscription.getMode()'), 'offline');
-  assert.equal(h.calls.confirmations, undefined);
   assert(!cloudSource.includes('TRIAL_DAYS'));
 });
 
-test('documented stable Gemini default and bounded explicit runtime model list', () => {
-  const h = harness();
-  assert.equal(h.run('cloud.model'), 'gemini-3.6-flash');
-  assert.deepEqual(Array.from(h.run('configuredClientModels()')), ['gemini-3.6-flash']);
-  h.context.window.ASTHA_GEMINI_MODELS = ['explicit-first', 'explicit-second'];
-  assert.deepEqual(Array.from(h.run('configuredClientModels()')), ['explicit-first', 'explicit-second']);
-  for (const invalid of [['one', 'two', 'three', 'four'], ['bad/path'], [23], []]) {
-    h.context.window.ASTHA_GEMINI_MODELS = invalid;
-    assert.deepEqual(Array.from(h.run('configuredClientModels()')), ['gemini-3.6-flash']);
-  }
-});
-
-test('personal Gemini falls back only for a mocked 404 on explicitly configured models', async () => {
-  const h = harness({ 'astha.gemini': 'user-supplied-test-key' });
-  h.context.window.ASTHA_GEMINI_MODELS = ['explicit-first', 'explicit-second'];
-  h.context.ASTHA_SYSTEM = 'test-system';
-  h.context.fetch = async (url, options) => {
-    h.calls.fetch.push([url, options]);
-    return h.calls.fetch.length === 1 ? { status:404, ok:false } : { status:200, ok:true, json:async () => ({candidates:[{content:{parts:[{text:'{"en":"fixture response","bn":"পরীক্ষা"}'}]}}]}) };
-  };
-  h.run(gemini + section(cloudSource, 'function parseJsonLoose(', 'function cloudFail('));
-  const result = await h.run("gemini('describe', null)");
-  assert.equal(result.en, 'fixture response');
-  assert.equal(h.calls.fetch.length, 2);
-  assert(h.calls.fetch[0][0].includes('explicit-first:'));
-  assert(h.calls.fetch[1][0].includes('explicit-second:'));
-  assert.equal(h.run('cloud.model'), 'explicit-second');
-  h.calls.fetch = [];
-  h.context.fetch = async (url, options) => { h.calls.fetch.push([url,options]); return {status:500,ok:false}; };
-  await assert.rejects(h.run("gemini('describe', null)"), /Gemini 500/);
-  assert.equal(h.calls.fetch.length, 1);
+test('online reasoning never contacts a provider directly or consumes a stored personal key', async () => {
+  const h = harness({ 'astha.gemini': 'retired-key' });
+  h.run(gemini);
+  await assert.rejects(h.run("gemini('describe', null)"), /no cloud reasoning/);
+  assert.equal(h.calls.fetch.length, 0);
+  assert(!cloudSource.includes('generativelanguage.googleapis.com'));
+  assert(!cloudSource.includes('api.recommender.gigalogy.com'));
 });
 
 test('cloud entry point refuses privacy/offline processing before capture or fetch', async () => {
@@ -146,7 +124,7 @@ test('cloud entry point refuses privacy/offline processing before capture or fet
     if (mode === 'transition') h.context.privacyTransition = true;
     if (mode === 'offline') h.storage.set('astha.ai_mode', 'offline');
     if (mode === 'network') h.context.navigator.onLine = false;
-    await assert.rejects(h.run("gemini('describe', null)"), /remote processing disabled/);
+    await assert.rejects(h.run("gemini('describe', null)"), /Remote request cancelled/);
     assert.equal(h.calls.fetch.length, 0);
   }
 });
@@ -209,13 +187,29 @@ test('account switch while waiting for health cannot upload an earlier account n
   assert.equal(h.calls.fetch.length, 0);
 });
 
-test('a personal Maira key without an explicit project cannot advertise cloud readiness', () => {
+test('a provider key left in the browser can never advertise or supply cloud readiness', () => {
   const h = harness({ 'astha.gemini': 'gAAAAA-test-key' });
-  assert.equal(h.run('cloudReady()'), false);
   h.context.window.ASTHA_MAIRA_PROJECT_KEY = 'explicit-test-project';
-  assert.equal(h.run('cloudReady()'), false);
   h.context.window.ASTHA_ACCOUNT_ID = 'verified-owner';
-  assert.equal(h.run('cloudReady()'), true);
+  // Personal keys are retired: only the configured ASTHA server can make cloud features ready.
+  assert.equal(h.run('getEffectiveKey()'), '');
+  assert.equal(h.run('cloudReady()'), false);
+});
+
+test('a host that answers the consent dialog instantly is asked again on the page; a person who declines is not', () => {
+  const h = harness({}, false); let now = 50000, onPage = 0;
+  h.context.Date = class extends Date { static now() { return now; } };
+  h.context.askRemoteConsentOnPage = () => { onPage++; };
+  // The stand-in dialog returns at once, as a host that suppresses dialogs does.
+  assert.equal(h.run('requestRemoteConsent()'), false); assert.equal(onPage, 1);
+  assert.equal(h.run('remoteProcessingAllowed()'), false, 'being asked again is not consent');
+  h.context.window.confirm = () => { now += 2500; return false; };
+  assert.equal(h.run('requestRemoteConsent()'), false); assert.equal(onPage, 1, 'someone who read the dialog and declined is left alone');
+  h.context.privacyMode = true; h.context.window.confirm = () => { throw new Error('no prompt in privacy mode'); };
+  assert.equal(h.run('requestRemoteConsent()'), false); assert.equal(onPage, 1);
+  h.context.privacyMode = false; h.context.window.confirm = () => { now += 2500; return true; };
+  assert.equal(h.run('requestRemoteConsent()'), true); assert.equal(onPage, 1);
+  assert.match(h.run('REMOTE_CONSENT.en'), /Spoken text may be sent to Microsoft/); assert.match(h.run('REMOTE_CONSENT.bn'), /Microsoft/);
 });
 
 test('request deadline preserves caller cancellation, including older mobile fallback', () => {
@@ -283,6 +277,69 @@ test('personal data never syncs from an unknown local profile or privacy mode', 
   h.context.privacyMode = true;
   await assert.rejects(h.run("apiGet('/api/rooms')"), /backend_unreachable/);
   assert.equal(h.calls.fetch.length, 0);
+});
+
+test('personal setup GET and PUT require verified identity, session consent and online nonprivate mode', async () => {
+  for (const boundary of ['identity', 'consent', 'offline', 'private', 'transition', 'network']) {
+    const h = harness({}, boundary !== 'consent'); h.run(api);
+    h.context.window.ASTHA_ACCOUNT_ID = 'synthetic-preference-owner';
+    if (boundary === 'identity') h.context.window.ASTHA_ACCOUNT_ID = '';
+    if (boundary === 'offline') h.storage.set('astha.ai_mode', 'offline');
+    if (boundary === 'private') h.context.privacyMode = true;
+    if (boundary === 'transition') h.context.privacyTransition = true;
+    if (boundary === 'network') h.context.navigator.onLine = false;
+    await assert.rejects(h.run("apiSend('PUT', '/api/preferences', {preferences:{vision:'none'}})"), /backend_unreachable/, boundary);
+    await assert.rejects(h.run("apiGet('/api/preferences')"), /backend_unreachable/, boundary);
+    assert.equal(h.calls.fetch.length, 0, boundary);
+  }
+});
+
+test('pending server health cannot upload an earlier account setup after identity changes', async () => {
+  const h = harness(); h.run(api);
+  h.context.window.ASTHA_ACCOUNT_ID = 'synthetic-preference-a';
+  h.run('serverCloud.ready = new Promise(resolve => { window.resolvePreferenceHealth = resolve; });');
+  const pending = h.run("apiSend('PUT', '/api/preferences', {preferences:{vision:'none'}})");
+  h.context.window.ASTHA_ACCOUNT_ID = 'synthetic-preference-b';
+  h.context.window.resolvePreferenceHealth();
+  await assert.rejects(pending, /backend_unreachable/);
+  assert.equal(h.calls.fetch.length, 0);
+});
+
+test('actual Online consent refreshes session and health before retrying setup; denial never retries', async () => {
+  for (const accepted of [false, true]) {
+    const h = harness({}, false), order = [];
+    h.context.window.confirm = () => accepted;
+    h.context.window.ASTHA_REFRESH_SESSION = async () => { order.push('session'); };
+    h.context.fetch = async () => { order.push('health'); return { ok: true, json: async () => ({ cloud: true, cloudProvider: 'maira' }) }; };
+    h.context.AsthaExperience = { loadAccountPreferences: async () => { order.push('preferences'); } };
+    h.run("Subscription.setMode('gemini', true)");
+    await new Promise(resolve => setImmediate(resolve));
+    assert.deepEqual(order, accepted ? ['session', 'health', 'preferences'] : []);
+    assert.equal(h.run('remoteProcessingAllowed()'), accepted);
+  }
+});
+
+test('actual Offline selection invalidates pending setup without clearing its local copy', () => {
+  const h = harness(); let revoked = 0;
+  h.storage.set('astha.accessibility.v2', 'synthetic-unsynced-record');
+  h.context.AsthaExperience = { invalidatePreferences: () => { revoked++; } };
+  h.run("Subscription.setMode('offline', true)");
+  assert.equal(revoked, 1); assert.equal(h.storage.get('astha.accessibility.v2'), 'synthetic-unsynced-record');
+  assert.equal(h.run('remoteProcessingAllowed()'), false);
+});
+
+test('entering actual Privacy mode invalidates pending setup and revokes remote permission', async () => {
+  const h = harness(); let revoked = 0;
+  h.context.AsthaExperience = { invalidatePreferences: () => { revoked++; } };
+  h.context.SiriVoice = { enabled: true, stop() {} };
+  h.context.clearPrivateSession = () => {};
+  h.context.refreshMemory = async () => {}; h.context.refreshRooms = async () => {};
+  h.run(section(moduleSource, 'async function togglePrivateMode()', '\n}\n') + '\n}');
+  await h.run('togglePrivateMode()');
+  assert.equal(revoked, 1); assert.equal(h.context.privacyMode, true);
+  assert.equal(h.run('remoteProcessingAllowed()'), false);
+  await h.run('togglePrivateMode()');
+  assert.equal(revoked, 1, 'leaving privacy cannot revive pending work');
 });
 
 test('Bangla is the default UI while UI and voice preferences stay independent', () => {

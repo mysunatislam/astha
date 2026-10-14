@@ -5,6 +5,7 @@ apply plugin: 'com.android.application'
 def releaseEnvironment = System.getenv()
 def releaseVersionCode = releaseEnvironment['ASTHA_VERSION_CODE']
 def releaseVersionName = releaseEnvironment['ASTHA_VERSION_NAME']
+def releaseApiOrigin = releaseEnvironment['ASTHA_MOBILE_API_ORIGIN']?.trim()?.replaceAll('/$', '')
 if (releaseVersionCode != null && !(releaseVersionCode ==~ /[1-9][0-9]{0,9}/)) {
     throw new GradleException('ASTHA_VERSION_CODE must be a positive integer.')
 }
@@ -18,7 +19,8 @@ def releaseKeystorePath = releaseEnvironment['ASTHA_ANDROID_KEYSTORE_PATH']
 def releaseKeystore = releaseKeystorePath ? file(releaseKeystorePath) : null
 def requiredReleaseVariables = [
     'ASTHA_VERSION_CODE', 'ASTHA_VERSION_NAME', 'ASTHA_ANDROID_KEYSTORE_PATH',
-    'ASTHA_ANDROID_KEYSTORE_PASSWORD', 'ASTHA_ANDROID_KEY_ALIAS', 'ASTHA_ANDROID_KEY_PASSWORD'
+    'ASTHA_ANDROID_KEYSTORE_PASSWORD', 'ASTHA_ANDROID_KEY_ALIAS', 'ASTHA_ANDROID_KEY_PASSWORD',
+    'ASTHA_MOBILE_API_ORIGIN'
 ]
 
 android {
@@ -62,6 +64,12 @@ def validateReleaseInputs = tasks.register('validateReleaseInputs') {
         }
         if (!releaseKeystore.isFile()) {
             throw new GradleException('ASTHA_ANDROID_KEYSTORE_PATH must point to an existing upload keystore.')
+        }
+        def backendConfig = file('src/main/assets/public/config.js')
+        def expectedConfig = 'window.ASTHA_API_BASE = ' + groovy.json.JsonOutput.toJson(releaseApiOrigin) + ';'
+        if (!backendConfig.isFile() || !backendConfig.text.contains(expectedConfig) ||
+            !file('src/main/assets/public/native-api.js').isFile()) {
+            throw new GradleException('Sync Android with the selected ASTHA_MOBILE_API_ORIGIN before building release artifacts.')
         }
     }
 }

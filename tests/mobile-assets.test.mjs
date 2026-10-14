@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
-import { pruneMobileDownload } from '../tools/prune-mobile-assets.mjs';
+import { pruneMobileDownload, configureAndroidBackend, normalizeMobileApiOrigin } from '../tools/prune-mobile-assets.mjs';
 
 function fixture(t) {
   const tempRoot = fs.realpathSync(os.tmpdir());
@@ -42,4 +42,19 @@ test('missing or unsupported native destinations fail without removing source co
   const root = fixture(t);
   assert.throws(() => pruneMobileDownload(root, 'other'), /Unsupported native platform/);
   assert.throws(() => pruneMobileDownload(root, 'android'), /have not been copied/);
+});
+
+test('Android backend configuration changes only copied assets and rejects unsafe origins', t => {
+  const root = fixture(t);
+  const native = path.join(root, 'android/app/src/main/assets/public');
+  fs.mkdirSync(native, { recursive: true });
+  fs.mkdirSync(path.join(root, 'web'));
+  fs.writeFileSync(path.join(root, 'web/config.js'), "window.ASTHA_API_BASE = '';\n");
+  fs.writeFileSync(path.join(native, 'config.js'), "window.ASTHA_API_BASE = '';\n");
+  assert.equal(configureAndroidBackend(root, 'https://astha.example/'), 'https://astha.example');
+  assert.match(fs.readFileSync(path.join(native, 'config.js'), 'utf8'), /window\.ASTHA_API_BASE = "https:\/\/astha\.example";/);
+  assert.equal(fs.readFileSync(path.join(root, 'web/config.js'), 'utf8'), "window.ASTHA_API_BASE = '';\n");
+  for (const value of ['', 'http://astha.example', 'https://key@astha.example', 'https://astha.example/api', 'https://astha.example?key=x', 'https://astha.example#x', 'https://localhost', 'https://127.0.0.1']) {
+    assert.throws(() => normalizeMobileApiOrigin(value), /HTTPS backend origin/);
+  }
 });

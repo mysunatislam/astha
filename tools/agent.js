@@ -53,7 +53,7 @@ const ClientRAG = {
       const hoursAgo = Math.max(0, (now - new Date(m.time).getTime()) / (1000 * 3600));
       if (score > 0 && hoursAgo < 2) score += 2;
       else if (score > 0 && hoursAgo < 24) score += 1;
-      return { type: 'memory', title: m.item, location: m.location, time: m.time, score };
+      return { type: 'memory', title: m.item, location: m.location, source: m.source, time: m.time, score };
     }).filter(m => m.score > 0).sort((a, b) => b.score - a.score);
 
     // 2. Associative 2-hop RAG expansion from top memories to room landmarks
@@ -87,14 +87,18 @@ const ClientRAG = {
   },
 
   formatContextBlock(ragResult) {
-    const lines = [];
+    const lines = ['Historical saved records do not confirm current object locations.'];
     if (ragResult.rooms && ragResult.rooms.length) {
-      lines.push('Calibrated Rooms:');
+      lines.push('Saved Room Notes (not a verified map):');
       ragResult.rooms.forEach(r => lines.push(`- ${r.title}: ${r.notes}`));
     }
     if (ragResult.memories && ragResult.memories.length) {
       lines.push('Past Item Memories:');
-      ragResult.memories.forEach(m => lines.push(`- ${m.title} at ${m.location}`));
+      ragResult.memories.forEach(m => {
+        const recorded = m.time === null || m.time === undefined || m.time === '' ? NaN : new Date(m.time).getTime();
+        const timestamp = Number.isFinite(recorded) ? new Date(recorded).toISOString() : 'unknown';
+        lines.push(`- ${m.title}: ${m.location ?? m.content} (Saved: ${timestamp}; Source: ${m.source || 'unknown'})`);
+      });
     }
     return lines.join('\n');
   }
@@ -124,10 +128,12 @@ AsthaToolRegistry.register('tool_rag_retrieve', 'Retrieves relevant memories and
     try {
       const srv = await apiSend('POST', '/api/rag/query', { query: q, limit: 5 });
       if (srv) {
+        const memories = Array.isArray(srv.memories) ? srv.memories.map(m => ({ ...m, location: m.location ?? m.content })) : local.memories;
+        const rooms = Array.isArray(srv.rooms) ? srv.rooms : local.rooms;
         return {
-          found: true,
-          memories: srv.memories || local.memories,
-          rooms: srv.rooms || local.rooms,
+          found: memories.length > 0 || rooms.length > 0,
+          memories,
+          rooms,
           summary: srv.contextBlock || ClientRAG.formatContextBlock(local)
         };
       }
@@ -544,8 +550,16 @@ const AsthaAgent = {
       }
     } else if (ragObs && ragObs.output && ragObs.output.memories.length) {
       const topMem = ragObs.output.memories[0];
-      en = `I do not see it in front of the camera right now, but your memory records state it was left at ${topMem.location}.`;
-      bn = `ক্যামেরার সামনে এখন দেখতে পাচ্ছি না, তবে আপনার স্মৃতিতে সংরক্ষিত আছে এটি ${topMem.location}-এ রাখা হয়েছিল।`;
+      const source = String(topMem.source || '').trim();
+      const photo = /photo|uploaded/i.test(source);
+      const note = /^(your note|manual|voice placement|approved agent note|voice note|user-confirmed)/i.test(source);
+      const camera = !photo && !note && /camera|observation|identified|ocr|visual/i.test(source);
+      const provenance = photo ? ['Photo observation', 'ছবির পর্যবেক্ষণ'] : note ? ['Your note', 'আপনার নোট'] :
+        camera ? ['Camera observation', 'ক্যামেরার পর্যবেক্ষণ'] : ['Saved record', 'সংরক্ষিত তথ্য'];
+      const recorded = topMem.time === null || topMem.time === undefined || topMem.time === '' ? NaN : new Date(topMem.time).getTime();
+      const when = Number.isFinite(recorded) && recorded <= Date.now() + 60000 ? new Date(recorded) : null;
+      en = `${provenance[0]} for ${topMem.title}, saved ${when ? when.toLocaleString('en-GB') : 'at an unknown time'}, reports: ${topMem.location ?? topMem.content}. Its current location is not confirmed.`;
+      bn = `${topMem.title}-এর ${provenance[1]}, সংরক্ষিত ${when ? when.toLocaleString('bn-BD') : 'সময় জানা নেই'}, বলছে: ${topMem.location ?? topMem.content}। বর্তমান অবস্থান নিশ্চিত নয়।`;
     } else {
       en = `I completed the scan for ${goal}. It does not appear to be within this camera view. Try turning slowly or pointing at a different surface.`;
       bn = `${goal}-এর জন্য স্ক্যান শেষ করেছি। এই দৃশ্যে দেখতে পাইনি। ক্যামেরাটি অন্য দিকে ঘুরিয়ে চেষ্টা করুন।`;

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Window content is read only on an explicit request from the user inside ASTHA.
+     No gestures, no key filtering, and no interactive-window or touch-exploration flags. -->
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:description="@string/astha_accessibility_description"
+    android:summary="@string/astha_accessibility_summary"
+    android:accessibilityEventTypes="typeWindowStateChanged"
+    android:accessibilityFeedbackType="feedbackSpoken"
+    android:accessibilityFlags="flagDefault"
+    android:notificationTimeout="500"
+    android:canRetrieveWindowContent="true"
+    android:isAccessibilityTool="true" />
