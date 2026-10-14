@@ -55,11 +55,12 @@ public class AsthaMessageAssistant extends Service {
     private static volatile AsthaMessageAssistant instance;
 
     private static final class Pending {
-        final String key, app, sender, text;
+        final String key, conversation, app, sender, text;
         final boolean canReply;
 
-        Pending(String key, String app, String sender, String text, boolean canReply) {
+        Pending(String key, String conversation, String app, String sender, String text, boolean canReply) {
             this.key = key;
+            this.conversation = conversation;
             this.app = app;
             this.sender = sender;
             this.text = text;
@@ -85,6 +86,25 @@ public class AsthaMessageAssistant extends Service {
 
     static AsthaMessageAssistant running() {
         return instance;
+    }
+
+    /** Returning to ASTHA hands ownership back to the foreground page immediately. */
+    static void pauseForForeground() {
+        appVisible = true;
+        AsthaMessageAssistant assistant = instance;
+        if (assistant != null) assistant.main.post(assistant::dropPending);
+    }
+
+    private void dropPending() {
+        ++turn;
+        main.removeCallbacks(nextMessage);
+        stopListening();
+        queue.clear();
+        current = null;
+        stage = null;
+        draft = "";
+        if (voice != null) voice.stop();
+        releaseAudio();
     }
 
     static void start(Context context, String language) {
@@ -182,23 +202,31 @@ public class AsthaMessageAssistant extends Service {
 
             @Override
             public void onDone(String id) {
-                main.post(() -> spoken(id));
+                main.post(() -> spoken(id, true));
             }
 
             @Override
             public void onError(String id) {
-                main.post(() -> spoken(id));
+                main.post(() -> spoken(id, false));
             }
         });
     }
 
     /** Called by the notification listener when a message arrives and ASTHA is not in front. */
-    void offer(String key, String app, String sender, String text, boolean canReply) {
+    void offer(String key, String conversation, String app, String sender, String text, boolean canReply) {
         main.post(() -> {
+            if (appVisible) return;
             // An edited or repeated notification for the same conversation replaces the one waiting.
-            for (Pending waiting : new ArrayList<>(queue)) if (waiting.key.equals(key)) queue.remove(waiting);
+            for (Pending waiting : new ArrayList<>(queue)) if (waiting.conversation.equals(conversation)) queue.remove(waiting);
+            if (current != null && current.conversation.equals(conversation) && !current.key.equals(key)) {
+                // A new notification revision cancels the old spoken confirmation.
+                ++turn;
+                stopListening();
+                if (voice != null) voice.stop();
+                current = null; stage = null; draft = "";
+            }
             while (queue.size() >= QUEUE_LIMIT) queue.pollFirst();
-            queue.add(new Pending(key, app, sender, text, canReply));
+            queue.add(new Pending(key, conversation, app, sender, text, canReply));
             if (current == null) next();
         });
     }
@@ -230,6 +258,7 @@ public class AsthaMessageAssistant extends Service {
     }
 
     private void next() {
+        if (appVisible) { dropPending(); return; }
         main.removeCallbacks(nextMessage);
         stopListening();
         current = null;
@@ -254,16 +283,20 @@ public class AsthaMessageAssistant extends Service {
     // Each utterance carries whether the microphone should open once it has been spoken.
     private void say(String words, boolean thenListen) {
         String id = (++turn) + (thenListen ? ":listen" : ":next");
-        if (voice.speak(words, TextToSpeech.QUEUE_FLUSH, null, id) != TextToSpeech.SUCCESS) spoken(id);
+        if (voice.speak(words, TextToSpeech.QUEUE_FLUSH, null, id) != TextToSpeech.SUCCESS) spoken(id, false);
     }
 
-    private void spoken(String id) {
+    private void spoken(String id, boolean completed) {
+        if (appVisible) { dropPending(); return; }
         if (id == null || !id.startsWith(turn + ":")) return;   // an older sentence finishing late
-        if (id.endsWith(":listen") && current != null) listen();
+        // A failed or interrupted read-back cannot authorize opening the microphone
+        // for confirmation. next() drops the current draft and stops any recognizer.
+        if (MessageCommands.shouldListen(id, turn, current != null, completed)) listen();
         else next();
     }
 
     private void listen() {
+        if (appVisible) { dropPending(); return; }
         if (!SpeechRecognizer.isRecognitionAvailable(this)) {
             say(MessageCommands.notSent(bangla), false);
             return;
@@ -326,7 +359,7 @@ public class AsthaMessageAssistant extends Service {
     }
 
     private void answered(int heardFor, String heard) {
-        if (heardFor != turn || current == null) return;
+        if (!MessageCommands.mayAnswer(appVisible, heardFor, turn, current != null)) return;
         stopListening();
         MessageCommands.Command command = MessageCommands.parse(heard, stage);
         switch (command.kind) {
@@ -369,6 +402,7 @@ public class AsthaMessageAssistant extends Service {
     }
 
     private void send() {
+        if (appVisible || !MessageCommands.CONFIRM.equals(stage) || current == null) { dropPending(); return; }
         AsthaNotificationListener listener = AsthaNotificationListener.running();
         boolean delivered = listener != null && listener.reply(current.key, draft);
         say(delivered ? MessageCommands.sent(bangla, current.sender) : MessageCommands.failed(bangla), false);

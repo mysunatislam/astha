@@ -31,7 +31,7 @@ final class MessageCommands {
     private static final String END = "(?=$|[\\s,.!?।])";
     private static final int FLAGS = Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE;
     private static final Pattern WAKE = Pattern.compile("^(?:hey\\s+)?astha[,!\\s]*|^আস্থা[,।\\s]*", FLAGS);
-    private static final Pattern YES = Pattern.compile("^(?:yes|yeah|yep|sure|ok|okay|send|send it|go ahead|হ্যাঁ|হুম|জি|জ্বি|পাঠাও|পাঠিয়ে দাও|ঠিক আছে)" + END, FLAGS);
+    private static final Pattern YES = Pattern.compile("^(?:(?:yes|yeah|yep|sure|ok|okay)(?:[,\\s]+send it)?|send|send it|go ahead|do it|হ্যাঁ(?:[,\\s]+(?:পাঠাও|পাঠিয়ে দাও))?|হুম|জি|জ্বি|পাঠাও|পাঠিয়ে দাও|ঠিক আছে)$", FLAGS);
     private static final Pattern CHANGE = Pattern.compile("^(?:change|change it|edit|বদলাও)" + END, FLAGS);
     private static final Pattern CANCEL = Pattern.compile("^(?:cancel|never mind|forget it|ignore|skip|stop|no|nope|leave it|dismiss|বাতিল|থাক|বাদ দাও|থামো|না)" + END, FLAGS);
     private static final Pattern REPEAT = Pattern.compile("^(?:repeat|read it again|read that again|say that again|again|আবার পড়ো|আবার বলো|আবার)" + END, FLAGS);
@@ -39,6 +39,14 @@ final class MessageCommands {
     private static final Pattern REPLY_BN = Pattern.compile("^(?:উত্তর দাও|রিপ্লাই দাও|উত্তর|রিপ্লাই|বলো)[:,]?\\s*(.*)$", FLAGS);
 
     private MessageCommands() {}
+
+    static boolean shouldListen(String utterance, int turn, boolean hasCurrent, boolean completed) {
+        return completed && hasCurrent && (turn + ":listen").equals(utterance);
+    }
+
+    static boolean mayAnswer(boolean appVisible, int heardFor, int turn, boolean hasCurrent) {
+        return !appVisible && heardFor == turn && hasCurrent;
+    }
 
     private static String bounded(String text) {
         String clean = text.replaceAll("[\\p{Cntrl}]", " ").replaceAll("\\s+", " ").trim();
@@ -52,7 +60,7 @@ final class MessageCommands {
         String q = said.toLowerCase(Locale.ROOT).replaceAll("[.!?।\\s]+$", "");
         if (q.isEmpty()) return new Command(Kind.NOTHING, "");
         if (CONFIRM.equals(stage)) {
-            if (YES.matcher(q).find()) return new Command(Kind.YES, "");
+            if (YES.matcher(q).matches()) return new Command(Kind.YES, "");
             if (CHANGE.matcher(q).find()) return new Command(Kind.CHANGE, "");
             return new Command(Kind.NO, "");
         }

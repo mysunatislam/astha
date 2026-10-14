@@ -921,8 +921,8 @@
    "অ্যাকাউন্টে রাখা হয়েছে।"
   ],
   "setup_saved_device": [
-   "Saved on this device. It will be copied to your account when Astha can reach the server.",
-   "এই ডিভাইসে রাখা হয়েছে। সার্ভারে সংযোগ পেলে অ্যাকাউন্টে তোলা হবে।"
+   "Saved on this device. It will be copied to your account when you allow online processing and Astha can reach the server.",
+   "এই ডিভাইসে রাখা হয়েছে। অনলাইন প্রসেসিংয়ের অনুমতি দিলে এবং সার্ভারে সংযোগ পেলে অ্যাকাউন্টে তোলা হবে।"
   ],
   "devices_intro": [
    "Astha works with the phone camera alone. A paired Wi-Fi camera and a Braille controller are optional.",

@@ -21,6 +21,7 @@ const Subscription = {
     if (mode !== 'gemini') mode = 'offline';
     if (mode === 'gemini' && !requestRemoteConsent()) return;
     if (mode === 'offline') {
+      if (typeof AsthaExperience !== 'undefined') AsthaExperience.invalidatePreferences();
       remoteProcessingConsent = false;
       if (typeof SiriVoice !== 'undefined') { SiriVoice.enabled = false; SiriVoice.stop(true); }
       if (typeof stopAllSpeech === 'function') stopAllSpeech();
@@ -29,7 +30,10 @@ const Subscription = {
     updateCloudBadge(); this.renderButtons();
     if (mode === 'gemini') {
       const session = typeof window.ASTHA_REFRESH_SESSION === 'function' ? window.ASTHA_REFRESH_SESSION() : Promise.resolve();
-      Promise.resolve(session).then(() => refreshCloudStatus()).catch(() => updateCloudBadge());
+      Promise.resolve(session).then(async () => {
+        await refreshCloudStatus();
+        if (typeof AsthaExperience !== 'undefined') await AsthaExperience.loadAccountPreferences();
+      }).catch(() => updateCloudBadge());
     }
     if (!silent) announce(mode === 'gemini'
       ? 'Online processing is permitted for this session. Requests use the configured ASTHA server; unavailable services fall back to this phone.'

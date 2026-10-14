@@ -103,7 +103,7 @@ public class AsthaNativePlugin extends Plugin {
 
     @Override
     protected void handleOnResume() {
-        AsthaMessageAssistant.appVisible = true;
+        AsthaMessageAssistant.pauseForForeground();
     }
 
     @Override

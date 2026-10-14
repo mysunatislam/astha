@@ -6,7 +6,9 @@ const AsthaMessages = (() => {
   const STATUS_KEYS = { off: 'messages_status_off', waiting: 'messages_status_waiting', on: 'messages_status_on' };
   const KEEP_FOR = 120000;         // a message can be answered for two minutes after it is read out
   const CANCEL = /^(?:cancel|never mind|forget it|ignore|skip|stop|no|nope|বাতিল|থাক|বাদ দাও|থামো|না)(?![A-Za-z0-9_ঀ-৿])/;
-  const YES = /^(?:yes|yeah|yep|sure|ok|okay|send|send it|go ahead|do it|হ্যাঁ|হুম|জি|জ্বি|পাঠাও|পাঠিয়ে দাও|ঠিক আছে)(?![A-Za-z0-9_ঀ-৿])/;
+  // Confirm the complete answer. An affirmative prefix followed by a refusal,
+  // qualification or unrelated speech must never authorize sending a message.
+  const YES = /^(?:(?:yes|yeah|yep|sure|ok|okay)(?:[,\s]+send it)?|send|send it|go ahead|do it|হ্যাঁ(?:[,\s]+(?:পাঠাও|পাঠিয়ে দাও))?|হুম|জি|জ্বি|পাঠাও|পাঠিয়ে দাও|ঠিক আছে)$/;
   let status = 'off', background = false, backgroundLang = null, current = null, stage = null, draft = '', waiting = [], timer = null;
   const native = () => typeof window !== 'undefined' && window.AsthaNative ? window.AsthaNative.messages : null;
   const speechLang = () => (typeof voiceLang !== 'undefined' ? voiceLang : typeof uiLang !== 'undefined' ? uiLang : 'en') === 'bn' ? 'bn' : 'en';
@@ -72,6 +74,7 @@ const AsthaMessages = (() => {
   // A message is a requested update: it waits for the user and for the current answer.
   function announceNext() {
     clearTimeout(timer); timer = null;
+    if (document.hidden) { waiting = []; forget(); return; }
     if (!waiting.length || stage) return;
     if (typeof AsthaExperience !== 'undefined' && !AsthaExperience.admit('medium', null)) { timer = setTimeout(announceNext, 3000); return; }
     current = { ...waiting.shift(), at: Date.now() }; stage = null; draft = '';
@@ -82,11 +85,15 @@ const AsthaMessages = (() => {
     if (waiting.length) timer = setTimeout(announceNext, 15000);
   }
   function receive(raw) {
-    if (status !== 'on' || !raw) return;
-    const message = { key: clean(raw.key, 300), app: clean(raw.app, 60), sender: clean(raw.sender, 80), text: clean(raw.text, 500), canReply: raw.canReply === true };
+    if (status !== 'on' || !raw || document.hidden) return;
+    const message = { key: clean(raw.key, 300), conversation: clean(raw.conversation || raw.key, 300), app: clean(raw.app, 60), sender: clean(raw.sender, 80), text: clean(raw.text, 500), canReply: raw.canReply === true };
     if (!message.key || !message.sender || !message.text) return;
     // An edited or repeated notification for the same conversation replaces the one waiting.
-    waiting = waiting.filter(item => item.key !== message.key).concat(message).slice(-5);
+    if (current && current.conversation === message.conversation && current.key !== message.key) {
+      forget();
+      say('The conversation changed. Nothing was sent. Listen to the new message before replying.', 'কথোপকথন বদলেছে। কিছু পাঠানো হয়নি। উত্তর দেওয়ার আগে নতুন বার্তাটি শুনুন।');
+    }
+    waiting = waiting.filter(item => item.conversation !== message.conversation).concat(message).slice(-5);
     if (!timer) announceNext();
   }
 
@@ -127,8 +134,8 @@ const AsthaMessages = (() => {
   }
   // Returns true when the request belongs to a message being answered.
   function route(query) {
-    if (!native() || status !== 'on') return false;
-    const said = clean(query, 600).replace(/^(?:hey\s+)?astha[,!\s]*|^আস্থা[,।\s]*/i, '');
+    if (!native() || status !== 'on' || document.hidden) return false;
+    const said = clean(query, 600).normalize('NFC').replace(/^(?:hey\s+)?astha[,!\s]*|^আস্থা[,।\s]*/i, '');
     const q = said.toLowerCase().replace(/[.!?।\s]+$/, '');
     if (stage && !alive()) { forget(); return false; }
     if (stage === 'confirm') {
@@ -162,7 +169,10 @@ const AsthaMessages = (() => {
     element('messages-toggle')?.addEventListener('click', toggle);
     element('messages-background')?.addEventListener('change', event => setBackground(event.target.checked));
     native().onMessage(receive);
-    document.addEventListener('visibilitychange', () => { if (!document.hidden) refresh(); });
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden) refresh();
+      else { clearTimeout(timer); timer = null; waiting = []; forget(); }
+    });
     refresh().then(() => { if (background) backgroundLang = speechLang(); });
   }
   return { boot, toggle, refresh, route, receive, setBackground, refreshLabels, get status() { return status; }, get background() { return background; }, get stage() { return stage; }, get pending() { return waiting.length; } };

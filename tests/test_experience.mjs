@@ -25,7 +25,7 @@ function harness() {
   const storage = new Map(), applied = [];
   const context = {
     window: { ASTHA_ACCOUNT_ID: 'experience-account-a', ASTHA_LOCAL_ACCOUNT_ID: 'experience-account-a' },
-    privacyTransition: false,
+    privacyMode: false, privacyTransition: false, remoteProcessingAllowed: () => true,
     uiLang: 'en', voiceLang: 'en', state: { audio: false, source: 'camera', busy: false, listening: false, shield: false },
     I18N: { en: new Proxy({}, { get: (_, key) => key }), bn: new Proxy({}, { get: (_, key) => key }) },
     toggleAudio() { context.state.audio = !context.state.audio; }, savePreferences() {},
@@ -194,6 +194,90 @@ test('saved setup goes to the account, stays on the device when the server is un
   await h.experience.loadAccountPreferences();
   assert.deepEqual([sent.at(-1).method, sent.at(-1).path], ['PUT', '/api/preferences']); assert.equal(JSON.parse(h.storage.get(KEY)).synced, true);
   h.experience.accountCleared(); assert.equal(h.storage.has(KEY), false);
+});
+
+test('private setup Save, settings adoption and loading neither persist nor request personal preferences', async () => {
+  for (const transition of [false, true]) {
+    const h = harness(), sent = [], KEY = 'astha.accessibility.v2'; h.experience.boot();
+    const saved = JSON.stringify({ owner: 'experience-account-a', values: { vision: 'low', textSize: 'large' }, synced: false });
+    h.storage.set(KEY, saved);
+    h.context.apiSend = async (...args) => { sent.push(args); return { preferences: { vision: 'none' } }; };
+    h.context.privacyMode = !transition; h.context.privacyTransition = transition;
+    const applied = h.applied.length;
+    await h.elements.get('assessment-form').listeners.submit({ preventDefault() {} });
+    h.experience.adopt('textSize', 'xlarge');
+    await h.experience.loadAccountPreferences();
+    assert.equal(h.storage.get(KEY), saved); assert.equal(sent.length, 0); assert.equal(h.applied.length, applied);
+    assert.match(h.announcements.at(-1).en, /not saved/);
+  }
+});
+
+test('boot and setup saved without remote consent stay local until an explicit permitted retry', async () => {
+  const h = harness(), sent = [], KEY = 'astha.accessibility.v2';
+  h.context.remoteProcessingAllowed = () => false;
+  h.context.apiSend = async (method, path, body) => { sent.push({ method, path, body }); return { ok: true, updated_at: 6000 }; };
+  h.experience.boot();
+  await h.elements.get('assessment-form').listeners.submit({ preventDefault() {} });
+  await h.experience.loadAccountPreferences();
+  assert.equal(sent.length, 0); assert.equal(JSON.parse(h.storage.get(KEY)).synced, false);
+  assert.match(h.announcements.at(-1).en, /when you allow online processing/);
+  assert.match(h.announcements.at(-1).bn, /অনলাইন প্রসেসিংয়ের অনুমতি দিলে/);
+  // The Online consent flow calls this retry only after permission and session verification.
+  h.context.remoteProcessingAllowed = () => true;
+  await h.experience.loadAccountPreferences();
+  assert.deepEqual(sent.map(call => [call.method, call.path]), [['PUT', '/api/preferences']]);
+  assert.equal(JSON.parse(h.storage.get(KEY)).synced, true);
+});
+
+test('late account preferences cannot persist or apply after privacy, revoked consent or account clearing', async () => {
+  for (const boundary of ['private', 'transition', 'consent', 'account']) {
+    const h = harness(), hold = deferred(), KEY = 'astha.accessibility.v2';
+    h.context.apiSend = () => hold.promise;
+    const pending = h.experience.loadAccountPreferences(), applied = h.applied.length;
+    if (boundary === 'private') h.context.privacyMode = true;
+    if (boundary === 'transition') h.context.privacyTransition = true;
+    if (boundary === 'consent') h.context.remoteProcessingAllowed = () => false;
+    if (boundary === 'account') h.experience.accountCleared();
+    hold.resolve({ preferences: { vision: 'none', textSize: 'xlarge' }, updated_at: 7000 }); await pending;
+    assert.equal(h.storage.has(KEY), false, boundary); assert.equal(h.applied.length, applied, boundary);
+    assert.equal(h.experience.preferences.vision, 'unspecified', boundary);
+  }
+});
+
+test('an in-flight setup write is not marked saved or announced after privacy is enabled', async () => {
+  const h = harness(), hold = deferred(), KEY = 'astha.accessibility.v2'; h.experience.boot();
+  h.context.apiSend = () => hold.promise;
+  const pending = h.elements.get('assessment-form').listeners.submit({ preventDefault() {} });
+  assert.equal(JSON.parse(h.storage.get(KEY)).synced, false);
+  h.context.privacyMode = true;
+  hold.resolve({ ok: true, updated_at: 8000 }); await pending;
+  assert.equal(JSON.parse(h.storage.get(KEY)).synced, false);
+  assert(!h.announcements.some(value => /setup is saved/.test(value.en)));
+  assert.notEqual(h.elements.get('assessment-status').textContent, 'setup_saved_account');
+});
+
+test('an older preference read cannot replace a newer same-account result', async () => {
+  const h = harness(), older = deferred(), KEY = 'astha.accessibility.v2'; let calls = 0;
+  h.context.apiSend = () => ++calls === 1 ? older.promise : Promise.resolve({ preferences: { vision: 'low' }, updated_at: 9000 });
+  const pending = h.experience.loadAccountPreferences();
+  await h.experience.loadAccountPreferences();
+  older.resolve({ preferences: { vision: 'none' }, updated_at: 8000 }); await pending;
+  assert.equal(h.experience.preferences.vision, 'low');
+  assert.equal(JSON.parse(h.storage.get(KEY)).values.vision, 'low');
+});
+
+test('revoking and renewing privacy or offline permission cannot revive an earlier preference result', async () => {
+  const h = harness(), hold = deferred(), KEY = 'astha.accessibility.v2';
+  h.context.apiSend = () => hold.promise;
+  const pending = h.experience.loadAccountPreferences();
+  h.context.privacyMode = true; h.experience.invalidatePreferences();
+  h.context.privacyMode = false; h.context.remoteProcessingAllowed = () => true;
+  hold.resolve({ preferences: { vision: 'none' }, updated_at: 10000 }); await pending;
+  assert.equal(h.storage.has(KEY), false); assert.equal(h.experience.preferences.vision, 'unspecified');
+  const local = JSON.stringify({ owner: 'experience-account-a', values: { vision: 'low' }, synced: false });
+  h.storage.set(KEY, local);
+  h.experience.invalidatePreferences();
+  assert.equal(h.storage.get(KEY), local, 'revocation must preserve an unsynced device record');
 });
 
 test('guided setup asks one question at a time, takes spoken answers in either language, and saves once', async () => {

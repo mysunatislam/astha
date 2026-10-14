@@ -279,6 +279,69 @@ test('personal data never syncs from an unknown local profile or privacy mode', 
   assert.equal(h.calls.fetch.length, 0);
 });
 
+test('personal setup GET and PUT require verified identity, session consent and online nonprivate mode', async () => {
+  for (const boundary of ['identity', 'consent', 'offline', 'private', 'transition', 'network']) {
+    const h = harness({}, boundary !== 'consent'); h.run(api);
+    h.context.window.ASTHA_ACCOUNT_ID = 'synthetic-preference-owner';
+    if (boundary === 'identity') h.context.window.ASTHA_ACCOUNT_ID = '';
+    if (boundary === 'offline') h.storage.set('astha.ai_mode', 'offline');
+    if (boundary === 'private') h.context.privacyMode = true;
+    if (boundary === 'transition') h.context.privacyTransition = true;
+    if (boundary === 'network') h.context.navigator.onLine = false;
+    await assert.rejects(h.run("apiSend('PUT', '/api/preferences', {preferences:{vision:'none'}})"), /backend_unreachable/, boundary);
+    await assert.rejects(h.run("apiGet('/api/preferences')"), /backend_unreachable/, boundary);
+    assert.equal(h.calls.fetch.length, 0, boundary);
+  }
+});
+
+test('pending server health cannot upload an earlier account setup after identity changes', async () => {
+  const h = harness(); h.run(api);
+  h.context.window.ASTHA_ACCOUNT_ID = 'synthetic-preference-a';
+  h.run('serverCloud.ready = new Promise(resolve => { window.resolvePreferenceHealth = resolve; });');
+  const pending = h.run("apiSend('PUT', '/api/preferences', {preferences:{vision:'none'}})");
+  h.context.window.ASTHA_ACCOUNT_ID = 'synthetic-preference-b';
+  h.context.window.resolvePreferenceHealth();
+  await assert.rejects(pending, /backend_unreachable/);
+  assert.equal(h.calls.fetch.length, 0);
+});
+
+test('actual Online consent refreshes session and health before retrying setup; denial never retries', async () => {
+  for (const accepted of [false, true]) {
+    const h = harness({}, false), order = [];
+    h.context.window.confirm = () => accepted;
+    h.context.window.ASTHA_REFRESH_SESSION = async () => { order.push('session'); };
+    h.context.fetch = async () => { order.push('health'); return { ok: true, json: async () => ({ cloud: true, cloudProvider: 'maira' }) }; };
+    h.context.AsthaExperience = { loadAccountPreferences: async () => { order.push('preferences'); } };
+    h.run("Subscription.setMode('gemini', true)");
+    await new Promise(resolve => setImmediate(resolve));
+    assert.deepEqual(order, accepted ? ['session', 'health', 'preferences'] : []);
+    assert.equal(h.run('remoteProcessingAllowed()'), accepted);
+  }
+});
+
+test('actual Offline selection invalidates pending setup without clearing its local copy', () => {
+  const h = harness(); let revoked = 0;
+  h.storage.set('astha.accessibility.v2', 'synthetic-unsynced-record');
+  h.context.AsthaExperience = { invalidatePreferences: () => { revoked++; } };
+  h.run("Subscription.setMode('offline', true)");
+  assert.equal(revoked, 1); assert.equal(h.storage.get('astha.accessibility.v2'), 'synthetic-unsynced-record');
+  assert.equal(h.run('remoteProcessingAllowed()'), false);
+});
+
+test('entering actual Privacy mode invalidates pending setup and revokes remote permission', async () => {
+  const h = harness(); let revoked = 0;
+  h.context.AsthaExperience = { invalidatePreferences: () => { revoked++; } };
+  h.context.SiriVoice = { enabled: true, stop() {} };
+  h.context.clearPrivateSession = () => {};
+  h.context.refreshMemory = async () => {}; h.context.refreshRooms = async () => {};
+  h.run(section(moduleSource, 'async function togglePrivateMode()', '\n}\n') + '\n}');
+  await h.run('togglePrivateMode()');
+  assert.equal(revoked, 1); assert.equal(h.context.privacyMode, true);
+  assert.equal(h.run('remoteProcessingAllowed()'), false);
+  await h.run('togglePrivateMode()');
+  assert.equal(revoked, 1, 'leaving privacy cannot revive pending work');
+});
+
 test('Bangla is the default UI while UI and voice preferences stay independent', () => {
   const h = harness({ 'astha.voice_lang': 'en' });
   delete h.context.voiceLang;

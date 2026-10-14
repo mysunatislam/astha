@@ -15,11 +15,29 @@ public class MessageCommandsTest {
     }
 
     @Test
+    public void failedReadBackNeverOpensConfirmationMicrophone() {
+        assertTrue(MessageCommands.shouldListen("7:listen", 7, true, true));
+        assertFalse(MessageCommands.shouldListen("7:listen", 7, true, false));
+        assertFalse(MessageCommands.shouldListen("6:listen", 7, true, true));
+        assertFalse(MessageCommands.shouldListen("7:listen", 7, false, true));
+        assertFalse(MessageCommands.shouldListen("7:next", 7, true, true));
+    }
+
+    @Test
+    public void foregroundHandoffRejectsLateBackgroundRecognition() {
+        assertTrue(MessageCommands.mayAnswer(false, 7, 7, true));
+        assertFalse(MessageCommands.mayAnswer(true, 7, 7, true));
+        assertFalse(MessageCommands.mayAnswer(false, 6, 7, true));
+        assertFalse(MessageCommands.mayAnswer(false, 7, 7, false));
+    }
+
+    @Test
     public void onlyAClearYesSendsAtTheConfirmStep() {
         for (String yes : new String[] { "yes", "Yes.", "yeah send it", "okay", "Astha, yes", "হ্যাঁ", "হ্যাঁ।", "পাঠাও", "ঠিক আছে" }) {
             assertEquals(yes, MessageCommands.Kind.YES, kind(yes, MessageCommands.CONFIRM));
         }
-        for (String other : new String[] { "", "   ", "no", "না", "yesterday was fine", "what", "noise", "cancel", "maybe" }) {
+        for (String other : new String[] { "", "   ", "no", "না", "yesterday was fine", "what", "noise", "cancel", "maybe",
+                "yes, don't send it", "yes no", "okay cancel", "sure but wait", "send it later", "go ahead no", "হ্যাঁ না পাঠিও না", "ঠিক আছে বাতিল", "পাঠাও না" }) {
             MessageCommands.Kind result = kind(other, MessageCommands.CONFIRM);
             assertTrue(other, result == MessageCommands.Kind.NO || result == MessageCommands.Kind.NOTHING);
         }

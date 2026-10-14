@@ -12,8 +12,6 @@ import android.service.notification.StatusBarNotification;
 
 import com.getcapacitor.JSObject;
 
-import java.util.LinkedHashMap;
-
 /**
  * Lets ASTHA announce an incoming message and send the reply its user dictates.
  *
@@ -37,7 +35,17 @@ public class AsthaNotificationListener extends NotificationListenerService {
     private static volatile AsthaNotificationListener instance;
     private static volatile Receiver receiver;
     // Held in memory only, so a reply can reach the conversation it answers.
-    private final LinkedHashMap<String, StatusBarNotification> recent = new LinkedHashMap<>();
+    private final MessageTargets<ReplyTarget> recent = new MessageTargets<>(KEPT);
+
+    private static final class ReplyTarget {
+        final StatusBarNotification posted;
+        final Notification.Action action;
+        final String sender, text;
+
+        ReplyTarget(StatusBarNotification posted, Notification.Action action, String sender, String text) {
+            this.posted = posted; this.action = action; this.sender = sender; this.text = text;
+        }
+    }
 
     static AsthaNotificationListener running() {
         return instance;
@@ -56,9 +64,7 @@ public class AsthaNotificationListener extends NotificationListenerService {
     }
 
     private void forget() {
-        synchronized (recent) {
-            recent.clear();
-        }
+        recent.clear();
     }
 
     @Override
@@ -111,7 +117,7 @@ public class AsthaNotificationListener extends NotificationListenerService {
     public void onNotificationPosted(StatusBarNotification posted) {
         // While ASTHA is on screen its page answers; otherwise the assistant does, if it is on.
         AsthaMessageAssistant assistant = AsthaMessageAssistant.appVisible ? null : AsthaMessageAssistant.running();
-        Receiver target = assistant == null ? receiver : null;
+        Receiver target = assistant == null && AsthaMessageAssistant.appVisible ? receiver : null;
         if ((assistant == null && target == null) || posted == null) return;
         Notification notification = posted.getNotification();
         if (notification == null || posted.isOngoing() || getPackageName().equals(posted.getPackageName())) return;
@@ -125,18 +131,15 @@ public class AsthaNotificationListener extends NotificationListenerService {
         String text = clip(extras.getCharSequence(Notification.EXTRA_TEXT), MAX_TEXT);
         if (sender.isEmpty() || text.isEmpty()) return;
         String key = posted.getKey();
-        synchronized (recent) {
-            recent.remove(key);
-            recent.put(key, posted);
-            while (recent.size() > KEPT) recent.remove(recent.keySet().iterator().next());
-        }
+        MessageTargets.Target<ReplyTarget> targetRevision = recent.put(key, new ReplyTarget(posted, reply, sender, text));
         String app = appName(posted.getPackageName());
         if (assistant != null) {
-            assistant.offer(key, app, sender, text, reply != null);
+            assistant.offer(targetRevision.token, key, app, sender, text, reply != null);
             return;
         }
         JSObject message = new JSObject();
-        message.put("key", key);
+        message.put("key", targetRevision.token);
+        message.put("conversation", key);
         message.put("app", app);
         message.put("sender", sender);
         message.put("text", text);
@@ -147,20 +150,36 @@ public class AsthaNotificationListener extends NotificationListenerService {
     @Override
     public void onNotificationRemoved(StatusBarNotification removed) {
         if (removed == null) return;
-        synchronized (recent) {
-            recent.remove(removed.getKey());
-        }
+        recent.remove(removed.getKey());
     }
 
     /** Sends the words through the conversation's own reply action. False when it is gone. */
-    boolean reply(String key, String words) {
-        StatusBarNotification target;
-        synchronized (recent) {
-            target = recent.get(key);
-        }
+    boolean reply(String revisionToken, String words) {
+        ReplyTarget target = recent.take(revisionToken);
         if (target == null) return false;
-        Notification.Action action = replyAction(target.getNotification());
+        Notification.Action action = target.action;
         if (action == null || action.actionIntent == null) return false;
+        // The system may already have a newer revision before its listener callback
+        // reaches us. Recheck publisher, profile, text and the exact reply action.
+        boolean unchanged = false;
+        try {
+            for (StatusBarNotification active : getActiveNotifications()) {
+                if (!active.getKey().equals(target.posted.getKey())) continue;
+                Notification notification = active.getNotification();
+                Notification.Action currentAction = replyAction(notification);
+                Bundle extras = notification.extras;
+                unchanged = active.getPostTime() == target.posted.getPostTime()
+                    && active.getUser().equals(target.posted.getUser())
+                    && active.getPackageName().equals(target.posted.getPackageName())
+                    && extras != null && target.sender.equals(clip(extras.getCharSequence(Notification.EXTRA_TITLE), MAX_SENDER))
+                    && target.text.equals(clip(extras.getCharSequence(Notification.EXTRA_TEXT), MAX_TEXT))
+                    && currentAction != null && action.actionIntent.equals(currentAction.actionIntent)
+                    && action.actionIntent.getCreatorUid() == currentAction.actionIntent.getCreatorUid()
+                    && sameInputs(action.getRemoteInputs(), currentAction.getRemoteInputs());
+                break;
+            }
+        } catch (RuntimeException unavailable) { return false; }
+        if (!unchanged) return false;
         Bundle results = new Bundle();
         for (RemoteInput input : action.getRemoteInputs()) results.putCharSequence(input.getResultKey(), words);
         Intent filled = new Intent();
@@ -171,5 +190,14 @@ public class AsthaNotificationListener extends NotificationListenerService {
         } catch (PendingIntent.CanceledException cancelled) {
             return false;
         }
+    }
+
+    private static boolean sameInputs(RemoteInput[] before, RemoteInput[] now) {
+        if (before == null || now == null || before.length != now.length) return false;
+        for (int index = 0; index < before.length; index++) {
+            if (!before[index].getResultKey().equals(now[index].getResultKey())
+                || before[index].getAllowFreeFormInput() != now[index].getAllowFreeFormInput()) return false;
+        }
+        return true;
     }
 }

@@ -42,7 +42,7 @@ function harness({ native = true, consent = true, enabled = true, background = f
   vm.runInContext(source + '\nglobalThis.AsthaMessages = AsthaMessages;', context);
   const settle = async () => { for (let i = 0; i < 10; i++) await Promise.resolve(); };
   return {
-    messages: context.AsthaMessages, context, said, replies, backgrounds, timers, element, settle, status,
+    messages: context.AsthaMessages, context, said, replies, backgrounds, timers, element, settle, status, listeners,
     deliver: message => handler(message),
     advance: ms => { clock += ms; },
   };
@@ -85,12 +85,34 @@ test('a dictated reply is read back and sent only after yes', async () => {
 });
 
 test('anything but a clear yes at the confirm step sends nothing', async () => {
-  for (const answer of ['maybe', 'no', 'yesterday', 'what did you say']) {
+  for (const answer of ['maybe', 'no', 'yesterday', 'what did you say', "yes, don't send it", 'yes no', 'okay cancel', 'sure but wait', 'send it later', 'go ahead no', 'হ্যাঁ না পাঠিও না', 'ঠিক আছে বাতিল', 'পাঠাও না']) {
     const h = await ready();
     h.deliver(MESSAGE); h.messages.route('reply see you soon');
     assert.equal(h.messages.route(answer), true, answer); await h.settle();
     assert.deepEqual(h.replies, [], answer); assert.equal(h.said.at(-1).en, 'Okay, nothing was sent.');
   }
+});
+test('a changed notification revision cancels an old confirmation and requires a new reply', async () => {
+  const h = await ready();
+  h.deliver({ ...MESSAGE, key: 'immutable-revision-1', conversation: 'same-notification' });
+  h.messages.route('reply on my way');
+  assert.equal(h.messages.stage, 'confirm');
+  h.deliver({ ...MESSAGE, key: 'immutable-revision-2', conversation: 'same-notification', sender: 'Different person', text: 'Different conversation' });
+  h.messages.route('yes'); await h.settle();
+  assert.deepEqual(h.replies, []);
+  h.messages.route('reply please call me');
+  h.messages.route('yes'); await h.settle();
+  assert.deepEqual(h.replies, [['immutable-revision-2', 'please call me']]);
+});
+test('a hidden page drops message drafts and never speaks or sends a reply', async () => {
+  const h = await ready();
+  h.deliver(MESSAGE); h.messages.route('reply on my way');
+  const announced = h.said.length;
+  h.context.document.hidden = true; h.listeners.visibilitychange();
+  h.deliver({ ...MESSAGE, key: 'hidden-message' });
+  assert.equal(h.messages.route('yes'), false); await h.settle();
+  assert.equal(h.messages.stage, null); assert.equal(h.messages.pending, 0);
+  assert.equal(h.said.length, announced); assert.deepEqual(h.replies, []);
 });
 
 test('reply without words asks for them, and cancel while composing sends nothing', async () => {

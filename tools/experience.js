@@ -202,6 +202,17 @@ const AsthaExperience = (() => {
   const SETS = { devices: ['phone_camera', 'smart_glasses', 'clip_camera', 'braille_controller'], modes: ['ask', 'road'] };
   const DEFAULTS = Object.freeze({ vision: 'unspecified', feedback: 'detailed', textSize: 'normal', theme: 'mulberry-apricot', speechRate: '1', devices: [], modes: ['ask', 'road'], haptics: true });
   let preferences = { ...DEFAULTS };
+  let preferenceGeneration = 0;
+  // Revoke pending results without discarding setup saved locally before going offline.
+  function invalidatePreferences() { preferenceGeneration++; }
+  const preferenceStorageAllowed = () => !(typeof privacyMode !== 'undefined' && privacyMode) &&
+    !(typeof privacyTransition !== 'undefined' && privacyTransition);
+  const preferenceSyncAllowed = () => preferenceStorageAllowed() && typeof apiSend === 'function' &&
+    Boolean(window.ASTHA_ACCOUNT_ID) && typeof remoteProcessingAllowed === 'function' && remoteProcessingAllowed();
+  const preferenceContext = () => ({ generation: preferenceGeneration, account: window.ASTHA_ACCOUNT_ID, owner: owner() });
+  const preferenceContextCurrent = (context, remote = false) => preferenceStorageAllowed() &&
+    context.generation === preferenceGeneration && context.account === window.ASTHA_ACCOUNT_ID && context.owner === owner() &&
+    (!remote || preferenceSyncAllowed());
 
   // Anything outside the known choices is dropped, whether it came from storage or the server.
   function sanitize(input) {
@@ -222,7 +233,10 @@ const AsthaExperience = (() => {
       return saved && typeof saved === 'object' && saved.owner === owner() ? saved : null;
     } catch { return null; }
   }
-  function writeLocal(record) { try { localStorage.setItem(PREF_KEY, JSON.stringify({ ...record, owner: owner() })); } catch {} }
+  function writeLocal(record) {
+    if (!preferenceStorageAllowed()) return;
+    try { localStorage.setItem(PREF_KEY, JSON.stringify({ ...record, owner: owner() })); } catch {}
+  }
   const field = name => document.querySelector('#assessment-form [name="' + name + '"]:checked');
   const boxes = name => [...document.querySelectorAll('#assessment-form [name="' + name + '"]')];
   function readForm() {
@@ -260,12 +274,11 @@ const AsthaExperience = (() => {
     if (mode === 'road' && !values.modes.includes('road')) setContext('ask', true);
   }
   function setupStatus(key) { const status = $('assessment-status'); if (status) status.textContent = key ? t(key) : ''; }
-  async function syncPreferences(record) {
-    if (typeof apiSend !== 'function' || !window.ASTHA_ACCOUNT_ID) return false;
-    const account = window.ASTHA_ACCOUNT_ID;
+  async function syncPreferences(record, context = preferenceContext()) {
+    if (!preferenceContextCurrent(context, true)) return false;
     try {
       const saved = await apiSend('PUT', '/api/preferences', { preferences: record.values });
-      if (account !== window.ASTHA_ACCOUNT_ID) return false;
+      if (!preferenceContextCurrent(context, true)) return false;
       writeLocal({ values: record.values, updated_at: saved.updated_at, synced: true });
       return true;
     } catch { return false; }
@@ -275,35 +288,47 @@ const AsthaExperience = (() => {
     await commit(readForm());
   }
   async function commit(values) {
+    if (!preferenceStorageAllowed()) {
+      say('Privacy mode is on. Your setup was not saved. Turn it off to save your choices.',
+        'গোপনীয়তা মোড চালু। আপনার পছন্দ সংরক্ষণ হয়নি। পছন্দ সংরক্ষণ করতে এটি বন্ধ করুন।');
+      return;
+    }
+    preferenceGeneration++;
+    const context = preferenceContext();
     fillForm(values);
     const record = { values, updated_at: Date.now(), synced: false };
     writeLocal(record);
     applyPreferences(values, { explicit: true });
     setupStatus('setup_saving');
-    const synced = await syncPreferences(record);
+    const synced = await syncPreferences(record, context);
+    if (!preferenceContextCurrent(context)) return;
     setupStatus(synced ? 'setup_saved_account' : 'setup_saved_device');
     showPage('home', { speakTitle: false });
-    say(synced ? 'Your setup is saved to your account.' : 'Your setup is saved on this device. It will be copied to your account when ASTHA can reach the server.',
-      synced ? 'আপনার পছন্দ অ্যাকাউন্টে রাখা হয়েছে।' : 'আপনার পছন্দ এই ডিভাইসে রাখা হয়েছে। সার্ভারে সংযোগ পেলে অ্যাকাউন্টে তোলা হবে।');
+    say(synced ? 'Your setup is saved to your account.' : 'Your setup is saved on this device. It will be copied to your account when you allow online processing and ASTHA can reach the server.',
+      synced ? 'আপনার পছন্দ অ্যাকাউন্টে রাখা হয়েছে।' : 'আপনার পছন্দ এই ডিভাইসে রাখা হয়েছে। অনলাইন প্রসেসিংয়ের অনুমতি দিলে এবং সার্ভারে সংযোগ পেলে অ্যাকাউন্টে তোলা হবে।');
   }
   // A setting changed elsewhere in the app (header menus, Settings) replaces the saved
   // setup answer, so the two never disagree on the next start.
   function adopt(key, value) {
+    if (!preferenceStorageAllowed()) return;
     const local = readLocal();
     if (!local?.values || local.values[key] === value || !CHOICES[key]?.includes(value)) return;
+    preferenceGeneration++;
     const record = { values: sanitize({ ...local.values, [key]: value }), updated_at: Date.now(), synced: false };
     preferences = record.values; writeLocal(record); fillForm(record.values); syncPreferences(record);
   }
   // After sign-in the account's saved setup wins; an unsynced local setup is uploaded instead.
   async function loadAccountPreferences() {
+    if (!preferenceStorageAllowed()) return;
+    preferenceGeneration++;
+    const context = preferenceContext();
     const local = readLocal();
     if (local?.values) { fillForm(sanitize(local.values)); applyPreferences(sanitize(local.values)); }
-    if (typeof apiSend !== 'function' || !window.ASTHA_ACCOUNT_ID) return;
-    const account = window.ASTHA_ACCOUNT_ID;
-    if (local?.values && local.synced === false) { await syncPreferences(local); return; }
+    if (!preferenceContextCurrent(context, true)) return;
+    if (local?.values && local.synced === false) { await syncPreferences(local, context); return; }
     try {
       const saved = await apiSend('GET', '/api/preferences');
-      if (account !== window.ASTHA_ACCOUNT_ID || !saved?.preferences) return;
+      if (!preferenceContextCurrent(context, true) || !saved?.preferences) return;
       const values = sanitize(saved.preferences);
       writeLocal({ values, updated_at: saved.updated_at, synced: true });
       fillForm(values); applyPreferences(values);
@@ -311,6 +336,7 @@ const AsthaExperience = (() => {
   }
   // A shared phone must not keep the previous person's vision and device answers.
   function accountCleared() {
+    invalidatePreferences();
     try { localStorage.removeItem(PREF_KEY); localStorage.removeItem('astha.accessibility.v1'); } catch {}
     preferences = { ...DEFAULTS }; fillForm(preferences); setupStatus('');
   }
@@ -458,7 +484,7 @@ const AsthaExperience = (() => {
     if (typeof setInterval === 'function') setInterval(renderPresence, 200);
   }
   return { route, visualTask, allows, admit, acceptHazard, hazardPriority, cancelPending, setContext, showPage, boot,
-    refreshLabels, accountCleared, loadAccountPreferences, sanitize, adopt, startGuide,
+    refreshLabels, accountCleared, loadAccountPreferences, invalidatePreferences, sanitize, adopt, startGuide,
     get guiding() { return Boolean(guide); },
     routineAllowed: () => allows('low'),
     invalidate() { visualGeneration++; },

@@ -41,7 +41,7 @@ function remoteProcessingAllowed() {
 function personalDataSyncAllowed() {
   return typeof window.ASTHA_ACCOUNT_ID === 'string' && Boolean(window.ASTHA_ACCOUNT_ID) && remoteProcessingAllowed();
 }
-function isPersonalDataPath(path) { return /^\/api\/(memories|rooms|log)(\/|$)/.test(path); }
+function isPersonalDataPath(path) { return /^\/api\/(memories|rooms|log|preferences)(\/|$)/.test(path); }
 function deadlineSignal(timeoutMs, callerSignal) {
   let timeoutSignal;
   if (typeof AbortSignal !== 'undefined' && typeof AbortSignal.timeout === 'function') timeoutSignal = AbortSignal.timeout(timeoutMs);
@@ -2533,6 +2533,7 @@ async function togglePrivateMode() {
     stopAllSpeech();
     privacyMode = entering;
     if (privacyMode) {
+      if (typeof AsthaExperience !== 'undefined') AsthaExperience.invalidatePreferences();
       remoteProcessingConsent = false;
       SiriVoice.enabled = false; SiriVoice.stop(true);
       clearPrivateSession();

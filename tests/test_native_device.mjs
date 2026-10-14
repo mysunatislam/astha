@@ -303,12 +303,22 @@ test('Android guardrails: messages need consent, and the locked-phone assistant 
   // A notification goes to the page while ASTHA is in front, else to the assistant, else nowhere.
   const posted = between(listener, 'public void onNotificationPosted', '\n    }\n');
   assert.match(posted, /AsthaMessageAssistant\.appVisible \? null : AsthaMessageAssistant\.running\(\)/);
+  assert.match(posted, /assistant == null && AsthaMessageAssistant\.appVisible \? receiver : null/);
   assert.match(posted, /if \(\(assistant == null && target == null\) \|\| posted == null\) return;/);
   // The assistant shows it is running, can be turned off from the notification, and sends only
   // in the confirm step after a yes. Its microphone closes on a timer and it waits during calls.
   assert.match(assistant, /\.addAction\(0, getString\(R\.string\.astha_messages_turn_off\), turnOff\)/);
   assert.match(assistant, /return START_NOT_STICKY;/); assert.match(assistant, /main\.postDelayed\(listenLimit, LISTEN_LIMIT_MS\)/);
   assert.match(assistant, /if \(inCall\(\)\)/);
+  assert.match(between(plugin, 'protected void handleOnResume()', '\n    }'), /AsthaMessageAssistant\.pauseForForeground\(\)/);
+  const drop = between(assistant, 'private void dropPending()', '\n    }');
+  for (const required of ['++turn', 'stopListening()', 'queue.clear()', 'current = null', 'draft = ""', 'voice.stop()', 'releaseAudio()']) assert.ok(drop.includes(required), required);
+  assert.match(between(assistant, 'private void answered(int heardFor, String heard)', '\n    }'), /MessageCommands\.mayAnswer\(appVisible, heardFor, turn, current != null\)/);
+  assert.match(between(assistant, 'private void send()', '\n    }'), /if \(appVisible/);
+  assert.match(between(assistant, 'public void onError(String id)', '\n            }'), /spoken\(id, false\)/);
+  assert.match(between(assistant, 'private void spoken(String id, boolean completed)', '\n    }'), /MessageCommands\.shouldListen\(id, turn, current != null, completed\)/);
+  assert.match(listener, /recent\.take\(revisionToken\)/);
+  assert.match(listener, /sameInputs\(action\.getRemoteInputs\(\), currentAction\.getRemoteInputs\(\)\)/);
   assert.equal(assistant.match(/listener\.reply\(/g).length, 1); assert.equal(assistant.match(/\bsend\(\);/g).length, 1);
   assert.match(between(assistant, 'case YES:', 'break;'), /if \(MessageCommands\.CONFIRM\.equals\(stage\)\) \{\s*send\(\);/);
   assert.match(between(commands, 'if (CONFIRM.equals(stage)) {', '\n        }\n'), /return new Command\(Kind\.NO, ""\);/, 'anything but yes or change is a no');

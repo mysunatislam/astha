@@ -1,10 +1,9 @@
 name: Deploy frontend to GitHub Pages
 
-# GitHub Pages only serves static files -- it cannot run the Express server, hold the Gemini
-# key, check passcodes, or write to the database. This publishes web/ (the built PWA shell) to
-# a permanent mysunatislam.github.io/astha/ URL, and it talks to whatever API is configured in
-# web/config.js. Point that at a real always-on backend (Render, Fly, a VPS) for a fully
-# independent deployment; until then it can point at a temporary tunnel.
+# Render serves the production preview and its API from the same HTTPS origin.
+# Static Pages publishing is optional: enable Pages in repository settings and set
+# ASTHA_ENABLE_PAGES=true only after configuring web/config.js with a compatible HTTPS API.
+# The main CI workflow always checks the source independently of this publishing opt-in.
 
 on:
   push:
@@ -30,6 +29,7 @@ concurrency:
 
 jobs:
   deploy:
+    if: ${{ vars.ASTHA_ENABLE_PAGES == 'true' && github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-24.04
     environment:
       name: github-pages
