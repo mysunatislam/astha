@@ -108,10 +108,13 @@ supplies both through a small local Capacitor plugin, `AsthaNative`
 | Device voice | `TextToSpeech` | none | Fallback when the server voice is unreachable, and the immediate voice for hazard alerts. Accepts Bangla as Bangladesh, India or plain `bn`, whichever is installed. When the phone has none, ASTHA speaks English and says why; installing a Bangla voice in Android's text-to-speech settings, or allowing online processing, restores Bangla. |
 | Speech recognition | `SpeechRecognizer`, one request at a time | `RECORD_AUDIO`, asked at first use | The recognizer may send audio to its provider (usually Google). It is therefore blocked in Privacy mode, like the browser recognizer. Hands-free wake-word listening is not implemented. |
 | Reading other apps | `AccessibilityService` | The user enables it in Android settings | Described below. |
+| Announcing and answering messages | `NotificationListenerService`, the notification's own `RemoteInput` reply action | The user enables notification access in Android settings | Described below and in the [release review](voice-first-release-review.md#messages-the-personal-agent-android). |
+| Messages with the phone locked | Foreground service, type `microphone`; `TextToSpeech`; `SpeechRecognizer` | `FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_MICROPHONE`; `RECORD_AUDIO` and, on Android 13+, `POST_NOTIFICATIONS`, asked when the user turns it on | Off by default. Started only while ASTHA is on screen, always with a notification and a Turn off button; `START_NOT_STICKY`, no boot receiver. |
 | Opening an app, sharing text | `getLaunchIntentForPackage`, `ACTION_SEND` through the system chooser | none | Each request is confirmed aloud first. The app is found by its launcher name, on the phone; the list of installed apps is not sent anywhere. Messages go to Android's share menu, where the user picks the app and the person and presses send. There is no SMS, call or contacts permission, and a test fails if `ACTION_SENDTO`, `SmsManager` or a fixed target package appears. |
 
-The recognizer is stopped whenever the app leaves the foreground: ASTHA does not listen
-in the background.
+The page's recognizer is stopped whenever the app leaves the foreground. The only thing
+that listens while ASTHA is not on screen is the locked-phone message assistant, when the
+user has turned it on, and only for a few seconds right after it has asked a question.
 
 ### Reading other apps: what it can and cannot do
 
@@ -131,8 +134,26 @@ in the background.
 Text read from another app is spoken on the phone. If the user then asks the online AI
 about it, the normal online-processing consent applies.
 
-Composing or sending messages and operating other apps are **not implemented**. They would
-need a confirmation step before every consequential action and their own review.
+### Messages: what it can and cannot do
+
+- Off by default; in-app consent first, then Android's notification access settings.
+- Only conversation notifications are considered (category message, or a reply action
+  that accepts free text). ASTHA's own notifications, ongoing ones and group summaries are
+  ignored. Up to 20 are held in memory so a reply can reach its conversation; withdrawing
+  consent clears them.
+- A reply is sent through that notification's own reply action, after the words have been
+  read back and the user said yes. The spoken rules live in `MessageCommands.java` and are
+  unit tested: at the confirm step anything but a clear yes means "do not send".
+- It cannot start a conversation, pick a recipient, read the message history, mark as read,
+  delete, call or text. `tests/test_native_device.mjs` fails if logging, file output,
+  network calls, SMS APIs, a sticky restart or a boot receiver appear in this code.
+
+Operating other apps (tapping, typing) is **not implemented**. It would need a confirmation
+step before every consequential action and its own review.
+
+**Google Play.** The microphone foreground service needs Play's foreground-service
+declaration (with a short video of the feature), and notification access is reviewed for
+a core purpose. Both are the owner's to complete at submission.
 
 **Google Play.** An app that declares an AccessibilityService must complete Play's
 accessibility declaration and show a prominent in-app disclosure before enabling it. The

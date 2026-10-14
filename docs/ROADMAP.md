@@ -15,11 +15,15 @@ solid before adding scope. What is built, and what comes next.
 - Advisory-only obstacle and stair warnings -- explicitly never presented as a replacement for a
   cane or mobility training.
 - Astha's eye on a shared computer screen: names the foreground app, finds a button's position,
-  confirms when a pop-up has closed, reads what is written, and can open a site or VS Code.
+  confirms when a pop-up has closed, reads what is written, and explains what is on screen:
+  slides, documents, designs, web pages or code.
+- Continuous reading of any text in view (a board, a page, a slide, a tablet or a screen).
+- On Android: announcing new messages and sending the reply the user confirms, also with the
+  phone locked (see the [release review](voice-first-release-review.md)).
 
 ## Next
 
-- Classroom descriptions, board and diagram explanation, full book reading and tutoring.
+- Diagram explanation, full book reading and tutoring.
 - Approved familiar-person alerts ("Your mother has entered") -- opt-in per person, on-device
   matching only.
 - Home-layout and daily-routine memory beyond single object events.

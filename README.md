@@ -7,8 +7,12 @@ one URL to deploy and one process to run.
 Round 1 scope: read a board or book aloud with a concise explanation, remember approved object
 events ("glasses seen on the bedside table at 10:05") and answer with location, time and
 confidence, short safety-conscious Bangla voice interaction, and advisory-only obstacle warnings.
-Astha's eye can also watch a shared computer screen and narrate it. See `docs/ROADMAP.md` for
-what is intentionally out of scope for now.
+Reading covers any text in view (a page, a board, a slide or a screen), and can keep reading as
+it changes. Astha's eye can also watch a shared computer screen and explain it: slides,
+documents, designs or code. In the Android app, with the user's consent, Astha announces new
+messages from apps such as Messenger and sends the reply the user dictates after a spoken yes,
+also with the phone locked. Online answers come from Maira (Gemini by default). See
+`docs/ROADMAP.md` for what is intentionally out of scope for now.
 
 ## How it fits together
 
