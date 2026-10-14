@@ -280,6 +280,72 @@ finally:
     if real_picamera2 is None: sys.modules.pop('picamera2', None)
     else: sys.modules['picamera2'] = real_picamera2
 
+# ESP32 telemetry: only well-formed samples pass, field by field.
+good = {'type': 'sample', 'v': 1, 'seq': 5, 'ms': 900, 'distance_cm': 85.2, 'distance_status': 'ok',
+        'imu': {'ax': 0.01, 'ay': -0.02, 'az': 0.99, 'gx': 0.4, 'gy': -0.1, 'gz': 0.0, 'temp_c': 29.1}, 'imu_status': 'ok'}
+parsed = m.telemetry_sample(json.dumps(dict(good, extra='dropped')).encode())
+assert parsed == {'seq': 5, 'distance_cm': 85.2, 'distance_status': 'ok', 'imu': good['imu'], 'imu_status': 'ok'}
+no_imu = dict(good, imu=None, imu_status='not_found', distance_cm=None, distance_status='out_of_range')
+assert m.telemetry_sample(json.dumps(no_imu))['imu'] is None
+for bad in [dict(good, type='hello'), dict(good, v=2), dict(good, seq=-1), dict(good, seq=True), dict(good, distance_cm=-3),
+            dict(good, distance_cm=900), dict(good, distance_cm='85'), dict(good, distance_status='ok', distance_cm=None),
+            dict(good, distance_status='out_of_range'), dict(good, distance_status='made_up'),
+            dict(good, imu=dict(good['imu'], ax=float('nan'))), dict(good, imu=dict(good['imu'], gz=9999)),
+            dict(good, imu={'ax': 1}), dict(good, imu_status='not_found'), dict(good, imu_status='broken')]:
+    assert m.telemetry_sample(json.dumps(bad)) is None, bad
+for noise in [b'', b'ets Jul 29 2019 12:21:46', b'{', b'[1,2]', b'\xff\xfe', b'{"type":"sample"' + b' ' * 2000 + b'}']:
+    assert m.telemetry_sample(noise) is None
+
+# /telemetry has the same gates as pictures, and refuses a reading older than a second.
+telemetry = m.Telemetry()
+server = m.CameraServer(('127.0.0.1', 0), m.make_handler(m.Frames(), token, {origin}, {'model': 'Fixture'}, telemetry))
+thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
+try:
+    assert request({'Origin': origin}, '/telemetry')[0] == 401
+    assert request({'Authorization': 'Bearer ' + token}, '/telemetry')[0] == 403
+    headers = {'Origin': origin, 'Authorization': 'Bearer ' + token}
+    assert request(headers, '/telemetry')[0] == 503
+    telemetry.put(parsed)
+    status, result_headers, body = request(headers, '/telemetry')
+    reading = json.loads(body)
+    assert status == 200 and reading['distance_cm'] == 85.2 and reading['imu']['az'] == 0.99 and 0 <= reading['age_ms'] < 1000
+    assert result_headers['Cache-Control'] == 'no-store'
+    assert request(headers, '/telemetry?x=1')[0] == 400
+    telemetry.at = time.monotonic() - 2
+    assert request(headers, '/telemetry')[0] == 503
+    preflight = {'Origin': origin, 'Access-Control-Request-Method': 'GET', 'Access-Control-Request-Headers': 'authorization'}
+    assert request(preflight, '/telemetry', method='OPTIONS')[0] == 204
+finally:
+    server.shutdown(); server.server_close(); thread.join(timeout=2)
+# Without --telemetry the path does not exist.
+plain = m.CameraServer(('127.0.0.1', 0), m.make_handler(m.Frames(), token, {origin}, {'model': 'Fixture'}))
+thread = threading.Thread(target=plain.serve_forever, daemon=True); thread.start(); server = plain
+try:
+    assert request({'Origin': origin, 'Authorization': 'Bearer ' + token}, '/telemetry')[0] == 400
+    assert request({'Origin': origin, 'Access-Control-Request-Method': 'GET'}, '/telemetry', method='OPTIONS')[0] == 403
+finally:
+    plain.shutdown(); plain.server_close(); thread.join(timeout=2)
+
+# The serial reader skips boot noise and split lines, and reopens a port that fails.
+class FakePort:
+    def __init__(self, chunks): self.chunks = list(chunks); self.closed = False
+    in_waiting = 0
+    def read(self, size):
+        if size == 0: return b''
+        if not self.chunks: raise OSError('unplugged')
+        return self.chunks.pop(0)
+    def close(self): self.closed = True
+line = json.dumps(good).encode()
+ports = [FakePort([b'rst:0x1 boot\r\n' + line[:20], line[20:] + b'\r\n', b'']), FakePort([json.dumps(dict(good, seq=6)).encode() + b'\n'])]
+opened, latest, stopped = [], m.Telemetry(), threading.Event()
+def opener():
+    if not ports: stopped.set(); raise OSError('gone')
+    opened.append(ports.pop(0)); return opened[-1]
+worker = threading.Thread(target=m.telemetry_loop, args=(opener, latest, stopped), daemon=True); worker.start()
+worker.join(timeout=10)
+assert not worker.is_alive() and latest.received == 2 and latest.sample['seq'] == 6
+assert all(port.closed for port in opened)
+
 # The capture loop keeps only the newest picture and survives a failing camera.
 class Source:
     def __init__(self): self.calls = 0

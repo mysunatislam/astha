@@ -46,6 +46,11 @@ server refuses to start rather than guess.
   written to disk.
 - `GET /status` returns the board, OS, capture method and resolution for the phone's
   status line. It carries no credentials.
+- `GET /telemetry` (only with `--telemetry <serial port>`) returns the newest reading from
+  an ESP32 running [`firmware/esp32-telemetry`](../firmware/esp32-telemetry/README.md):
+  ultrasonic distance and, when the MPU6050 is found, acceleration and rotation, with its
+  age. Each line from the board is checked field by field; anything else is ignored.
+  Readings older than one second are refused (503). Same token, origin and TLS rules.
 - Connections are kept alive so an older Pi does not pay for a TLS handshake per picture.
 
 Create the pairing token on the Pi. It is never printed:
@@ -164,8 +169,13 @@ name-constrained to private IPv4 ranges and `.local` names, so even if its key l
 could not vouch for a public site. Its public certificate is what a debug build of the app
 needs installed on the phone.
 
-Not yet verified: the app pairing with the camera, a phone trusting the CA, delay from
-picture to spoken answer, battery life and NoIR colour.
+Sensors on the same Pi (ESP32 on USB, `--telemetry`): HC-SR04 readings at 10.0 per second
+with no gaps; through `/telemetry` over TLS every reading arrived, median age 50 ms and at
+most 100 ms. The MPU6050 was not detected on GPIO21/22, so motion readings are untested,
+and ultrasonic accuracy at known distances has not been measured.
+
+Not yet verified: the app pairing with the camera or reading `/telemetry`, a phone
+trusting the CA, delay from picture to spoken answer, battery life and NoIR colour.
 
 ## 5. Hardware checklist
 

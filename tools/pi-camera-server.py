@@ -66,6 +66,112 @@ class Frames:
             return self.jpeg, self.sequence, max(0, age)
 
 
+TELEMETRY_MAX_AGE_MS = 1000
+TELEMETRY_LINE_LIMIT = 1024
+DISTANCE_STATUSES = ('ok', 'out_of_range', 'no_echo_start', 'error')
+IMU_STATUSES = ('ok', 'not_found', 'read_error')
+IMU_LIMITS = {'ax': 20.0, 'ay': 20.0, 'az': 20.0, 'gx': 2500.0, 'gy': 2500.0, 'gz': 2500.0, 'temp_c': 125.0}
+
+
+def number(value, limit):
+    return isinstance(value, (int, float)) and not isinstance(value, bool) and value == value and abs(value) <= limit
+
+
+def telemetry_sample(line):
+    """A sample from firmware/esp32-telemetry, checked field by field, or None. Unknown fields are dropped."""
+    if len(line) > TELEMETRY_LINE_LIMIT:
+        return None
+    try:
+        value = json.loads(line.decode('utf-8') if isinstance(line, bytes) else line)
+    except (ValueError, UnicodeError):
+        return None
+    if not isinstance(value, dict) or value.get('type') != 'sample' or value.get('v') != 1:
+        return None
+    seq, distance, status = value.get('seq'), value.get('distance_cm'), value.get('distance_status')
+    imu, imu_status = value.get('imu'), value.get('imu_status')
+    if not (isinstance(seq, int) and not isinstance(seq, bool) and 0 <= seq <= MAX_SEQUENCE):
+        return None
+    if status not in DISTANCE_STATUSES or imu_status not in IMU_STATUSES:
+        return None
+    if (status == 'ok' and not (number(distance, 500) and distance >= 0)) or (status != 'ok' and distance is not None):
+        return None
+    sample = {'seq': seq, 'distance_cm': distance, 'distance_status': status, 'imu': None, 'imu_status': imu_status}
+    if imu_status == 'ok':
+        if not isinstance(imu, dict) or not all(number(imu.get(key), limit) for key, limit in IMU_LIMITS.items()):
+            return None
+        sample['imu'] = {key: imu[key] for key in IMU_LIMITS}
+    elif imu is not None:
+        return None
+    return sample
+
+
+class Telemetry:
+    """The newest sample from the ESP32 on a USB serial port. Nothing is stored or logged."""
+
+    def __init__(self):
+        self.lock = threading.Lock()
+        self.sample = None
+        self.at = 0
+        self.received = 0
+
+    def put(self, sample):
+        with self.lock:
+            self.sample, self.at = sample, time.monotonic()
+            self.received += 1
+
+    def latest(self):
+        with self.lock:
+            age = int((time.monotonic() - self.at) * 1000)
+            if not self.sample or age > TELEMETRY_MAX_AGE_MS:
+                return None
+            return dict(self.sample, age_ms=max(0, age))
+
+
+def telemetry_loop(open_port, telemetry, stopped):
+    """Read lines for as long as the server runs, reopening the port if the board is unplugged."""
+    while not stopped.is_set():
+        try:
+            port = open_port()
+        except Exception:
+            stopped.wait(2)
+            continue
+        try:
+            pending = b''
+            while not stopped.is_set():
+                # Wait for one byte, then take whatever else has arrived: waiting for a full
+                # buffer would hold readings back by a third of a second.
+                chunk = port.read(1)
+                if not chunk:
+                    continue
+                pending += chunk + port.read(min(4096, getattr(port, 'in_waiting', 0) or 0))
+                *lines, pending = pending.split(b'\n')
+                if len(pending) > TELEMETRY_LINE_LIMIT:
+                    pending = b''   # a line that never ends is noise, not telemetry
+                for line in lines:
+                    sample = telemetry_sample(line.strip())
+                    if sample:
+                        telemetry.put(sample)
+        except Exception:
+            stopped.wait(1)
+        finally:
+            try:
+                port.close()
+            except Exception:
+                pass
+
+
+def serial_opener(path):
+    def open_port():
+        import serial   # pyserial, only needed with --telemetry
+        port = serial.Serial()
+        port.port, port.baudrate, port.timeout = path, 115200, 0.5
+        port.dtr = False   # DTR and RTS asserted hold many ESP32 boards in reset
+        port.rts = False
+        port.open()
+        return port
+    return open_port
+
+
 def read_text(path, limit=4096):
     try:
         with open(path, 'rb') as handle:
@@ -215,8 +321,9 @@ def open_source(backend, width, height, quality, settle_ms, tuning=None):
     return CommandSource(backend, width, height, quality, settle_ms, tuning)
 
 
-def make_handler(frames, token, origins, info=None):
+def make_handler(frames, token, origins, info=None, telemetry=None):
     info = dict(info or {})
+    paths = ('/frame', '/status', '/telemetry') if telemetry else ('/frame', '/status')
     run = str(info.pop('run', '') or secrets.token_urlsafe(8))
     status_body = json.dumps(info, sort_keys=True).encode('utf-8')
 
@@ -252,7 +359,7 @@ def make_handler(frames, token, origins, info=None):
                 self.wfile.write(body)
 
         def do_OPTIONS(self):
-            if self.headers.get('Origin') not in origins or urlsplit(self.path).path not in ('/frame', '/status'):
+            if self.headers.get('Origin') not in origins or urlsplit(self.path).path not in paths:
                 self.reply(403)
                 return
             requested = {v.strip().lower() for v in self.headers.get('Access-Control-Request-Headers', '').split(',') if v.strip()}
@@ -275,6 +382,13 @@ def make_handler(frames, token, origins, info=None):
             parsed = urlsplit(self.path)
             if parsed.path == '/status' and not parsed.query and not parsed.fragment:
                 self.reply(200, status_body, {'Content-Type': 'application/json'})
+                return
+            if telemetry and parsed.path == '/telemetry' and not parsed.query and not parsed.fragment:
+                sample = telemetry.latest()
+                if not sample:
+                    self.reply(503)   # nothing from the sensors within the last second
+                    return
+                self.reply(200, json.dumps(sample, sort_keys=True).encode('utf-8'), {'Content-Type': 'application/json'})
                 return
             query = parse_qs(parsed.query, keep_blank_values=True)
             if parsed.path != '/frame' or parsed.fragment or set(query) - {'after'} or ('after' in query and (len(query['after']) != 1 or not re.fullmatch(r'[0-9]{1,16}', query['after'][0]))):
@@ -369,6 +483,7 @@ def main():
     parser.add_argument('--quality', type=int, default=70, help='JPEG quality 20 to 95.')
     parser.add_argument('--settle-ms', type=int, default=300, help='Exposure settling time for the command and legacy backends.')
     parser.add_argument('--tuning', help='libcamera tuning file name, for example imx219_noir.json for a NoIR camera. --probe lists the NoIR files installed.')
+    parser.add_argument('--telemetry', type=Path, help='USB serial port of an ESP32 running firmware/esp32-telemetry; serves its newest reading at /telemetry. Needs pyserial.')
     args = parser.parse_args()
     if args.probe:
         probe(args.backend)
@@ -409,6 +524,8 @@ def main():
         tuning = tuning_path(args.tuning)
         if not tuning or backend in ('picamera', 'raspistill'):
             parser.error('Give the name of an installed libcamera tuning file (see --probe); the legacy camera stack has none.')
+    if args.telemetry and importlib.util.find_spec('serial') is None:
+        parser.error('--telemetry needs pyserial: sudo apt install python3-serial')
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     context.minimum_version = ssl.TLSVersion.TLSv1_2
     context.load_cert_chain(str(args.cert), str(args.key))
@@ -417,13 +534,17 @@ def main():
     info = {'model': board['model'], 'os': board['os'], 'backend': source.name, 'width': args.width, 'height': args.height, 'fps': args.fps}
     if tuning:
         info['tuning'] = args.tuning
+    telemetry = Telemetry() if args.telemetry else None
+    info['telemetry'] = bool(telemetry)
     frames = Frames()
     stopped = threading.Event()
     source.start()
-    server = CameraServer((str(address), args.port), make_handler(frames, token, origins, info))
+    server = CameraServer((str(address), args.port), make_handler(frames, token, origins, info, telemetry))
     server.socket = context.wrap_socket(server.socket, server_side=True, do_handshake_on_connect=False)
     worker = threading.Thread(target=capture_loop, args=(source, frames, stopped, args.fps), daemon=True)
     worker.start()
+    if telemetry:
+        threading.Thread(target=telemetry_loop, args=(serial_opener(str(args.telemetry)), telemetry, stopped), daemon=True).start()
     print('Paired HTTPS camera listening on the configured local interface using ' + source.name + '.')
     try:
         server.serve_forever(poll_interval=0.25)
