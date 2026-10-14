@@ -169,6 +169,12 @@ name-constrained to private IPv4 ranges and `.local` names, so even if its key l
 could not vouch for a public site. Its public certificate is what a debug build of the app
 needs installed on the phone.
 
+In the app, a paired camera whose `/status` reports `telemetry: true` is also asked for
+`/telemetry` five times a second (only while the app is in front, same token), and each
+fresh distance goes to `AsthaSensors`; the device line then says "distance sensor". See
+[the distance sensor interface](braille-controller.md#distance-sensor-interface) for how a
+measurement reaches what ASTHA says.
+
 Sensors on the same Pi (ESP32 on USB, `--telemetry`): HC-SR04 readings at 10.0 per second
 with no gaps; through `/telemetry` over TLS every reading arrived, median age 50 ms and at
 most 100 ms. The MPU6050 was not detected on GPIO21/22, so motion readings are untested,

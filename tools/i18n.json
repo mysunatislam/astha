@@ -1283,6 +1283,10 @@
   "messages_web": [
    "Reading and answering messages from apps such as Messenger works in the ASTHA Android app.",
    "মেসেঞ্জারের মতো অ্যাপের বার্তা পড়া ও উত্তর দেওয়া আস্থার অ্যান্ড্রয়েড অ্যাপে কাজ করে।"
+  ],
+  "pi_distance_sensor": [
+   "distance sensor",
+   "দূরত্ব সেন্সর"
   ]
  },
  "hooks": [

@@ -1,18 +1,19 @@
 # Six-key Braille controller and distance sensor: software design
 
-**No controller and no sensor have been built.** This describes the software that is in
-place so the hardware can be added without rewriting the app, and exactly which parts
-have and have not been exercised.
+**No Braille controller has been built.** A distance sensor now exists: an HC-SR04 on an
+ESP32 beside the Pi camera (see [firmware/esp32-telemetry](../firmware/esp32-telemetry/README.md)).
+This describes the software that is in place and exactly which parts have and have not been
+exercised.
 
 | Part | State |
 | --- | --- |
 | Chord decoding, command map, letter entry (`tools/braille.js`) | Tested in `tests/test_braille.mjs` |
 | Keyboard practice transport | Tested, and usable in a browser from **Devices** |
 | Bluetooth transport | Written against the planned firmware contract; has only met a stand-in device |
-| ESP32 firmware | Not written |
+| ESP32 firmware for the Braille keys | Not written (the sensor firmware is a separate script) |
 | Android Bluetooth transport | Not written. The Android WebView has no Web Bluetooth, so the app needs a native transport |
 | Bangla Braille table | Not written. It must be reviewed by a Braille reader first |
-| Range-sensor interface (`tools/sensors.js`) | Tested as an interface; nothing reports to it |
+| Range-sensor interface (`tools/sensors.js`) | Fed by the Pi camera link's `/telemetry` readings; tested with stand-ins, not yet on a phone |
 
 ## Layers
 
@@ -86,7 +87,15 @@ Readings outside 0.02–8 m are rejected and a reading older than one second is 
 `AsthaSensors.fuse(estimate, channel)` returns the measurement when there is a fresh one,
 and otherwise the vision pipeline's guess **marked as an estimate**.
 
-Nothing calls `report` today and no spoken distance goes through `fuse` yet, so ASTHA's
-distances remain rough image estimates. A single camera cannot measure distance; any
-future spatial feature must keep measured and estimated values distinguishable in what is
-spoken.
+The paired Pi camera link calls `report('front', metres, 'ultrasonic')` for each fresh
+HC-SR04 reading, dated by the reading's own age, and clears the readings when the camera
+disconnects. Perception (`tools/perceive.js`) then gives the measurement to the object in
+the middle of a Pi-camera picture, but only if that object's own size estimate roughly
+agrees (half to double); otherwise the echo is treated as "something straight ahead". A
+measured distance is spoken as a number and called measured ("measured at 85 centimetres",
+"সেন্সরে মাপা ৮৫ সেন্টিমিটার দূরে"); estimates stay "about". The phone's own camera never
+uses the sensor, because it does not share its point of view.
+
+This assumes the sensor is mounted beside the Pi camera and points the same way. Its beam
+(about 15°) is taken to be the middle fifth of the picture across and the middle third down;
+a different mount needs `ULTRASONIC_BEAM` changed.

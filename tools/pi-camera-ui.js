@@ -30,6 +30,8 @@ const AsthaPiCamera = (() => {
     const owned = currentStatus === 'connecting' || typeof state !== 'undefined' && state.source === 'pi';
     generation++;
     if (typeof PiCamera !== 'undefined') PiCamera.stop();
+    // A distance from a camera that is no longer connected says nothing about now.
+    if (typeof AsthaSensors !== 'undefined') AsthaSensors.clear();
     const token = element('pi-camera-token'); if (token) token.value = '';
     const preview = element('pi-preview');
     if (preview) { preview.getContext('2d')?.clearRect(0, 0, preview.width, preview.height); preview.hidden = true; }
@@ -78,13 +80,19 @@ const AsthaPiCamera = (() => {
             }).catch(() => { if (mine === generation) setStatus('models'); });
           }
         },
+        // The ultrasonic sensor beside the Pi camera. Its reading is dated by its own age.
+        onTelemetry(reading) {
+          if (mine !== generation || typeof AsthaSensors === 'undefined' || reading?.distanceM == null) return;
+          AsthaSensors.report('front', reading.distanceM, 'ultrasonic', Date.now() - reading.ageMs);
+        },
         onStatus(status) {
           if (mine !== generation) return;
           if (status.state === 'connected') {
             setStatus('connected'); speakStatus(wasLost ? 'reconnected' : 'connected', true); wasLost = false;
             if (!deviceLine && typeof PiCamera.describe === 'function') PiCamera.describe().then(info => {
               if (mine !== generation || !info) return;
-              deviceLine = [info.model, info.backend, info.width && info.height ? info.width + '×' + info.height : ''].filter(Boolean).join(' · ');
+              deviceLine = [info.model, info.backend, info.width && info.height ? info.width + '×' + info.height : '',
+                info.telemetry ? t('pi_distance_sensor') : ''].filter(Boolean).join(' · ');
               refreshLabels();
             });
           } else if (status.state === 'reconnecting') {
