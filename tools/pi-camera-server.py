@@ -34,6 +34,11 @@ MAX_WIDTH, MAX_HEIGHT = 1280, 720
 LIBRARIES = ('picamera2', 'picamera')
 COMMANDS = ('rpicam-still', 'libcamera-still', 'raspistill')
 BACKENDS = LIBRARIES + COMMANDS
+# libcamera colour tuning. A NoIR camera needs its own file (imx219_noir.json for the v2 NoIR);
+# picamera2 ignores the environment variable unless the file is passed to it.
+TUNING_NAME = re.compile(r'[A-Za-z0-9_-][A-Za-z0-9_.-]{0,63}\.json')
+TUNING_DIRS = ('/usr/share/libcamera/ipa/rpi/vc4', '/usr/share/libcamera/ipa/rpi/pisp',
+               '/usr/local/share/libcamera/ipa/rpi/vc4', '/usr/local/share/libcamera/ipa/rpi/pisp')
 
 
 class Frames:
@@ -110,13 +115,34 @@ def choose_backend(requested, available):
     return available[0] if available else None
 
 
+def tuning_path(name, directories=TUNING_DIRS):
+    """The installed libcamera tuning file with this plain name, or None. Never a path."""
+    if not name or not TUNING_NAME.fullmatch(name):
+        return None
+    for directory in directories:
+        path = os.path.join(directory, name)
+        if os.path.isfile(path):
+            return path
+    return None
+
+
+def noir_tunings(directories=TUNING_DIRS):
+    found = set()
+    for directory in directories:
+        try:
+            found.update(name for name in os.listdir(directory) if name.endswith('_noir.json'))
+        except OSError:
+            pass
+    return sorted(found)
+
+
 class Picamera2Source:
     """libcamera stack: Raspberry Pi OS Bullseye and later."""
     name = 'picamera2'
 
-    def __init__(self, width, height, quality, settle_ms):
+    def __init__(self, width, height, quality, settle_ms, tuning=None):
         from picamera2 import Picamera2
-        self.camera = Picamera2()
+        self.camera = Picamera2(tuning=tuning) if tuning else Picamera2()
         self.camera.configure(self.camera.create_video_configuration(main={'size': (width, height), 'format': 'RGB888'}))
         try:
             self.camera.options['quality'] = quality
@@ -161,13 +187,14 @@ class LegacyPicameraSource:
 class CommandSource:
     """One still per call through the installed camera command. Slow, but needs no library."""
 
-    def __init__(self, tool, width, height, quality, settle_ms):
+    def __init__(self, tool, width, height, quality, settle_ms, tuning=None):
         self.name = tool
         settle = str(max(1, int(settle_ms)))
         if tool == 'raspistill':
             self.command = [tool, '-n', '-t', settle, '-w', str(width), '-h', str(height), '-q', str(quality), '-o', '-']
         else:
-            self.command = [tool, '-n', '-t', settle, '--width', str(width), '--height', str(height), '-q', str(quality), '-o', '-']
+            self.command = [tool, '-n', '-t', settle, '--width', str(width), '--height', str(height), '-q', str(quality)]
+            self.command += (['--tuning-file', tuning] if tuning else []) + ['-o', '-']
 
     def start(self):
         pass
@@ -180,12 +207,12 @@ class CommandSource:
         pass
 
 
-def open_source(backend, width, height, quality, settle_ms):
+def open_source(backend, width, height, quality, settle_ms, tuning=None):
     if backend == 'picamera2':
-        return Picamera2Source(width, height, quality, settle_ms)
+        return Picamera2Source(width, height, quality, settle_ms, tuning)
     if backend == 'picamera':
         return LegacyPicameraSource(width, height, quality, settle_ms)
-    return CommandSource(backend, width, height, quality, settle_ms)
+    return CommandSource(backend, width, height, quality, settle_ms, tuning)
 
 
 def make_handler(frames, token, origins, info=None):
@@ -309,7 +336,7 @@ def capture_loop(source, frames, stopped, fps):
 def probe(requested):
     board = describe_board()
     available = available_backends()
-    report = dict(board, installed=available, selected=choose_backend(requested, available))
+    report = dict(board, installed=available, selected=choose_backend(requested, available), noir_tuning=noir_tunings())
     vcgencmd = shutil.which('vcgencmd')
     if vcgencmd:
         try:
@@ -341,6 +368,7 @@ def main():
     parser.add_argument('--fps', type=float, default=4.0, help='Pictures per second to offer (0.2 to 15). Lower saves bandwidth and battery.')
     parser.add_argument('--quality', type=int, default=70, help='JPEG quality 20 to 95.')
     parser.add_argument('--settle-ms', type=int, default=300, help='Exposure settling time for the command and legacy backends.')
+    parser.add_argument('--tuning', help='libcamera tuning file name, for example imx219_noir.json for a NoIR camera. --probe lists the NoIR files installed.')
     args = parser.parse_args()
     if args.probe:
         probe(args.backend)
@@ -376,12 +404,19 @@ def main():
     backend = choose_backend(args.backend, available_backends())
     if not backend:
         parser.error('The requested camera stack is not installed. Run with --probe to see what this Pi provides.')
+    tuning = None
+    if args.tuning:
+        tuning = tuning_path(args.tuning)
+        if not tuning or backend in ('picamera', 'raspistill'):
+            parser.error('Give the name of an installed libcamera tuning file (see --probe); the legacy camera stack has none.')
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     context.minimum_version = ssl.TLSVersion.TLSv1_2
     context.load_cert_chain(str(args.cert), str(args.key))
-    source = open_source(backend, args.width, args.height, args.quality, args.settle_ms)
+    source = open_source(backend, args.width, args.height, args.quality, args.settle_ms, tuning)
     board = describe_board()
     info = {'model': board['model'], 'os': board['os'], 'backend': source.name, 'width': args.width, 'height': args.height, 'fps': args.fps}
+    if tuning:
+        info['tuning'] = args.tuning
     frames = Frames()
     stopped = threading.Event()
     source.start()

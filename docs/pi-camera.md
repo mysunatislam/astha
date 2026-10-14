@@ -4,10 +4,11 @@ The clip-on prototype is a Raspberry Pi with a NoIR camera module and a power ba
 only captures pictures and serves the newest one over the local Wi-Fi. Recognition runs on
 the phone or the ASTHA server; an original Model B cannot run a modern vision model.
 
-**Status.** The phone side and the Pi's HTTP handler are covered by automated tests using
-stand-ins. Nothing in this document has been run on a Raspberry Pi. The board revision,
-operating system, camera stack, certificate trust on the phone, frame rate, battery life
-and NoIR image quality are all unverified until someone completes the checklist at the end.
+**Status (15 October 2026).** The server has run on a real Pi and served pictures over
+Wi-Fi to a test client on a PC (see [Verified on hardware](#verified-on-hardware)). The
+phone side is still covered only by automated tests: pairing from the app, certificate
+trust on a phone, picture-to-answer delay, battery life and NoIR colour are unverified
+until someone completes the checklist at the end.
 
 ## 1. Find out what the Pi actually is
 
@@ -60,8 +61,16 @@ python3 pi-camera-server.py --bind 192.168.1.50 --port 8443 \
   --cert /home/pi/tls/camera-fullchain.pem --key /home/pi/tls/camera-key.pem \
   --token-file /home/pi/astha-camera.token \
   --allow-origin https://localhost \
+  --tuning imx219_noir.json \
   --width 640 --height 480 --fps 4 --quality 70
 ```
+
+**NoIR cameras need `--tuning`.** libcamera otherwise applies the colour tuning for the
+ordinary module, and picamera2 ignores the `LIBCAMERA_RPI_TUNING_FILE` environment
+variable unless the file is passed to it. `--tuning` takes the plain name of an installed
+tuning file (`imx219_noir.json` for the v2 NoIR, `imx477_noir.json` for the HQ NoIR);
+`--probe` lists the NoIR files present. It works with picamera2 and the `rpicam-still` /
+`libcamera-still` commands; the legacy stack has no tuning files and is refused.
 
 `https://localhost` is the Android app's origin. Add the web preview's exact origin with a
 second `--allow-origin` if you test in a browser. Lower `--fps`, `--quality` or the
@@ -135,14 +144,37 @@ WantedBy=multi-user.target
 The address must be stable (a DHCP reservation), because the server refuses to bind
 anything but the address it is given.
 
-## 5. Hardware checklist (all pending)
+## Verified on hardware
+
+15 October 2026, over a phone hotspot, from a Windows PC acting as the client.
+
+| Item | Result |
+| --- | --- |
+| Board | Raspberry Pi 4 Model B Rev 1.4, 2 GB (`b03114`) |
+| OS | Debian GNU/Linux 13 (trixie), kernel 6.18.34+rpt-rpi-v8, aarch64, Python 3.13.5 |
+| Camera | imx219 (v2 sensor, NoIR module), libcamera 0.7.1, picamera2; `--probe` selected picamera2 |
+| Tuning | `imx219_noir.json` loaded with `--tuning`; without it the standard `imx219.json` was used |
+| Power and heat | `get_throttled=0x0`, 44–45 °C idle |
+| TLS | TLS 1.3 (`TLS_AES_256_GCM_SHA384`). The certificate is accepted only with the private CA; a client without it is refused |
+| Refusals | No token 401, wrong token 401, wrong origin 403, no origin 403 |
+| Pictures | 640×480 JPEG, quality 70, about 11 KB each; 4.04–4.09 pictures per second over one kept-alive connection for 10–15 s, no errors, pictures fresh when served |
+
+The certificate came from a private CA made on the Pi for this test. The CA is
+name-constrained to private IPv4 ranges and `.local` names, so even if its key leaked it
+could not vouch for a public site. Its public certificate is what a debug build of the app
+needs installed on the phone.
+
+Not yet verified: the app pairing with the camera, a phone trusting the CA, delay from
+picture to spoken answer, battery life and NoIR colour.
+
+## 5. Hardware checklist
 
 Record the `--probe` output, the phone model and Android version, and the app build hash.
 
-- [ ] `--probe` output saved; the chosen capture method produces a picture.
+- [x] `--probe` output saved; the chosen capture method produces a picture. (Pi 4, 15 October 2026)
 - [ ] Certificate route chosen and trusted by the test phone; a wrong certificate is refused.
 - [ ] Correct pairing connects and is spoken; a wrong code is rejected and explained.
-- [ ] Measured pictures per second and picture-to-answer delay at the chosen settings.
+- [ ] Measured pictures per second (done: 4.0 per second at 640×480 to a PC over Wi-Fi) and picture-to-answer delay at the chosen settings (pending).
 - [ ] Wi-Fi with no internet still works for on-device recognition.
 - [ ] Pi unplugged, Wi-Fi dropped for 5 s, 20 s and 60 s: retry, recovery and give-up are spoken.
 - [ ] Phone screen off and on: pictures stop and resume without re-entering the code.

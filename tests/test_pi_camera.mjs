@@ -253,6 +253,33 @@ assert legacy == ['raspistill', '-n', '-t', '300', '-w', '640', '-h', '480', '-q
 modern = m.CommandSource('rpicam-still', 320, 240, 60, 1).command
 assert modern == ['rpicam-still', '-n', '-t', '1', '--width', '320', '--height', '240', '-q', '60', '-o', '-']
 
+# A NoIR camera needs its own colour tuning; only a plain installed file name is accepted.
+import os, sys, tempfile, types
+with tempfile.TemporaryDirectory() as folder:
+    open(os.path.join(folder, 'imx219_noir.json'), 'w').close()
+    assert m.tuning_path('imx219_noir.json', [folder]) == os.path.join(folder, 'imx219_noir.json')
+    assert m.noir_tunings([folder, os.path.join(folder, 'missing')]) == ['imx219_noir.json']
+    for name in ('../imx219_noir.json', '/tmp/imx219_noir.json', 'sub/imx219_noir.json', '.json', 'imx219_noir.txt', '', None):
+        assert m.tuning_path(name, [folder]) is None, name
+    assert m.tuning_path('imx477_noir.json', [folder]) is None
+tuned = m.CommandSource('rpicam-still', 320, 240, 60, 1, '/usr/share/libcamera/ipa/rpi/vc4/imx219_noir.json').command
+assert tuned[-4:] == ['--tuning-file', '/usr/share/libcamera/ipa/rpi/vc4/imx219_noir.json', '-o', '-']
+seen = {}
+class FakeCamera:
+    def __init__(self, **kwargs): seen.clear(); seen.update(kwargs); self.options = {}
+    def create_video_configuration(self, **kwargs): return kwargs
+    def configure(self, config): pass
+real_picamera2 = sys.modules.get('picamera2')
+sys.modules['picamera2'] = types.SimpleNamespace(Picamera2=FakeCamera)
+try:
+    m.Picamera2Source(640, 480, 70, 300, '/x/imx219_noir.json')
+    assert seen == {'tuning': '/x/imx219_noir.json'}
+    m.Picamera2Source(640, 480, 70, 300)
+    assert seen == {}, 'without --tuning picamera2 keeps its default tuning'
+finally:
+    if real_picamera2 is None: sys.modules.pop('picamera2', None)
+    else: sys.modules['picamera2'] = real_picamera2
+
 # The capture loop keeps only the newest picture and survives a failing camera.
 class Source:
     def __init__(self): self.calls = 0
