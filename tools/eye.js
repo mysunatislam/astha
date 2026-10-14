@@ -271,6 +271,28 @@ function eyeReadError() {
   eyeSay(`The error says: “${errLine}”.` + (hint ? ' ' + hint.en(m) : ''), `ভুলটি বলছে: “${errLine}”।` + (hint ? ' ' + hint.bn(m) : ''));
   playEarcon('confirm'); logEvent('Screen: read error');
 }
+// Explain whatever is on the shared screen or pasted in: a slide, a document, a chat, a
+// design, a form or code. Online it is understood as a whole; offline the text is read.
+async function eyeExplain(query) {
+  const pasted = ($('eye-paste') && $('eye-paste').value || '').trim();
+  const frame = eye.active ? eyeFrame(1280) : null;
+  if (!frame && !pasted && !eye.text) return eyeSay('Share your screen first, or paste the text into the box, and I will explain it.', 'আগে স্ক্রিন শেয়ার করুন, অথবা লেখাটি বাক্সে পেস্ট করুন, আমি বুঝিয়ে বলব।');
+  if (typeof cloudReady === 'function' && cloudReady()) {
+    try {
+      const ask = String(query || '').trim().slice(0, 300);
+      const r = await gemini('The user is blind and wants help with what is on their screen' + (ask ? '. They said: "' + ask + '"' : '') + '. ' +
+        (pasted ? 'Text they pasted:\n' + pasted.slice(0, 6000) + '\n' : '') +
+        'Say what kind of thing it is (a slide, a document, a message, a web page, a design, a form, a spreadsheet, code or something else), explain its main content plainly, and say what they could do next. Use only what is visible or pasted; do not invent anything. Return JSON {"en": string, "bn": string}.',
+        frame, { maxW: 1280, maxTokens: 900 });
+      if (r && (r.en || r.bn)) { eyeSay(r.en || r.bn, r.bn || r.en); playEarcon('confirm'); logEvent('Screen: explained'); return; }
+    } catch (e) { if (typeof cloudFail === 'function') cloudFail(e); }
+  }
+  // Without online processing there is no explanation to give, only the words themselves.
+  const text = pasted || eye.text;
+  if (!text) return eyeSay('I can see the screen, but I need online processing to explain it.', 'পর্দা দেখতে পাচ্ছি, কিন্তু বুঝিয়ে বলতে অনলাইন প্রসেসিং দরকার।');
+  eyeSay('I need online processing to explain it, so I will read it to you instead.', 'বুঝিয়ে বলতে অনলাইন প্রসেসিং দরকার, তাই লেখাটি পড়ে শোনাচ্ছি।');
+  startReader(text);
+}
 function appFromText(q) {
   const s = (q || '').toLowerCase();
   const keys = Object.keys(APP_ALIASES).sort((a, b) => b.length - a.length);

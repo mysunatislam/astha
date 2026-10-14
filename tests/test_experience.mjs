@@ -20,7 +20,7 @@ function harness() {
       setAttribute(key, value) { this.attributes[key] = value; }, focus() {}, addEventListener(name, fn) { this.listeners[name] = fn; } });
     return elements.get(id);
   };
-  const contextButtons = ['ask', 'road', 'classroom'].map(name => Object.assign(element('context-' + name), { dataset: { asthaContext: name } }));
+  const contextButtons = ['ask', 'road', 'reading'].map(name => Object.assign(element('context-' + name), { dataset: { asthaContext: name } }));
   const pageButtons = ['home', 'tools', 'memory', 'devices', 'assessment', 'settings'].map(name => Object.assign(element('page-' + name), { dataset: { asthaPage: name } }));
   const storage = new Map(), applied = [];
   const context = {
@@ -53,14 +53,14 @@ function harness() {
   vm.createContext(context); vm.runInContext(source + '\nglobalThis.experience = AsthaExperience;', context);
   async function tick() {
     const entry = timers.entries().next().value;
-    assert(entry, 'a classroom poll must be scheduled');
+    assert(entry, 'a reading poll must be scheduled');
     timers.delete(entry[0]); return entry[1].fn();
   }
   return { context, experience: context.experience, timers, events, announcements, questions, requests, frames, modes, elements, tick, storage, applied,
     advance: milliseconds => { now += milliseconds; } };
 }
 
-test('boot selects ask mode without starting a camera or classroom requests', () => {
+test('boot selects ask mode without starting a camera or reading requests', () => {
   const h = harness();
   h.experience.setContext('road', true);
   h.experience.boot();
@@ -99,7 +99,7 @@ test('a nearby person or furniture never interrupts an answer, and repeats are b
 
 test('a credible hazard interrupts an answer, but only while ASTHA has been asked to watch', () => {
   const h = harness();
-  for (const mode of ['ask', 'classroom']) {
+  for (const mode of ['ask', 'reading']) {
     h.experience.setContext(mode, true);
     for (const id of ['stairs', 'drop_off', 'vehicle_collision']) assert.equal(h.experience.acceptHazard(id), null, mode + ' ' + id);
   }
@@ -129,7 +129,7 @@ test('Stop holds back routine updates for a while, never a hazard alert, and kee
 
 test('routine observations exist only in surroundings mode; requested updates work in any mode when idle', () => {
   const h = harness();
-  for (const [mode, low] of [['ask', false], ['classroom', false], ['road', true]]) {
+  for (const [mode, low] of [['ask', false], ['reading', false], ['road', true]]) {
     h.experience.setContext(mode, true);
     assert.equal(h.experience.allows('low'), low, mode); assert.equal(h.experience.allows('medium'), true, mode);
     h.context.state.listening = true;
@@ -138,13 +138,13 @@ test('routine observations exist only in surroundings mode; requested updates wo
   }
 });
 
-test('a classroom board change found during the quiet period after Stop is read afterwards, not dropped', async () => {
+test('a text change found during the quiet period after Stop is read afterwards, not dropped', async () => {
   const h = harness(), readings = ['Homework: page 12', 'Homework: page 12'];
   h.context.gemini = async () => ({ text: readings.shift() });
-  h.experience.setContext('classroom', true); h.experience.route('stop');
+  h.experience.setContext('reading', true); h.experience.route('stop');
   await h.tick(); assert.equal(h.announcements.length, 0);
   h.advance(10001); await h.tick();
-  assert.equal(h.announcements.length, 1); assert.equal(h.announcements[0].en, 'The board now reads: Homework: page 12');
+  assert.equal(h.announcements.length, 1); assert.equal(h.announcements[0].en, 'It now reads: Homework: page 12');
 });
 
 test('voice navigation opens each page and says nothing while the voice is off', () => {
@@ -171,9 +171,9 @@ test('a question that merely mentions a page name is still answered as a questio
 test('setup answers outside the known choices are dropped and answering when asked cannot be removed', () => {
   const h = harness();
   const clean = h.experience.sanitize({ vision: 'legally-blind', language: 'fr', feedback: 'brief', textSize: 'xlarge', theme: 'x', speechRate: 3,
-    devices: ['clip_camera', 'toaster', 'braille_controller'], modes: ['classroom'], haptics: 'yes', diagnosis: 'private' });
+    devices: ['clip_camera', 'toaster', 'braille_controller'], modes: ['classroom', 'road'], haptics: 'yes', diagnosis: 'private' });
   assert.deepEqual(JSON.parse(JSON.stringify(clean)), { vision: 'unspecified', feedback: 'brief', textSize: 'xlarge', theme: 'mulberry-apricot', speechRate: '1',
-    devices: ['clip_camera', 'braille_controller'], modes: ['ask', 'classroom'], haptics: true });
+    devices: ['clip_camera', 'braille_controller'], modes: ['ask', 'road'], haptics: true });
 });
 
 test('saved setup goes to the account, stays on the device when the server is unreachable, and is cleared on sign-out', async () => {
@@ -204,11 +204,11 @@ test('guided setup asks one question at a time, takes spoken answers in either l
   const settle = async () => { for (let i = 0; i < 10; i++) await Promise.resolve(); };
   assert.equal(h.experience.route('Astha, start guided setup.'), true); await settle();
   assert.equal(h.experience.guiding, true); assert.equal(h.experience.page, 'assessment'); assert.equal(h.context.state.audio, true);
-  assert.match(h.context.captions.at(-1)[1], /five short questions.*How much do you rely on vision/);
+  assert.match(h.context.captions.at(-1)[1], /four short questions.*How much do you rely on vision/);
   assert.equal(listens.length, 1, 'ASTHA listens for the answer without another tap');
   // Requests are answers while the guide runs: nothing else is triggered.
   for (const [answer, expected] of [['three', /Which language/], ['what is in front of me', /did not catch that.*Which language/], ['repeat', /^Which language/],
-    ['ইংরেজি', /How should I answer/], ['back', /^Which language/], ['English', /How should I answer/], ['skip', /surroundings updates/], ['না', /whiteboard focus/]]) {
+    ['ইংরেজি', /How should I answer/], ['back', /^Which language/], ['English', /How should I answer/], ['skip', /surroundings updates/]]) {
     assert.equal(h.experience.route(answer), true, answer); await settle();
     assert.match(h.context.captions.at(-1)[1], expected, answer);
   }
@@ -217,7 +217,7 @@ test('guided setup asks one question at a time, takes spoken answers in either l
   assert.equal(h.experience.guiding, false); assert.equal(sent.length, 1);
   const saved = JSON.parse(JSON.stringify(sent[0][1].preferences));
   assert.equal(saved.vision, 'low'); assert.equal(saved.language, 'en'); assert.equal(saved.feedback, 'detailed', 'a skipped question keeps its value');
-  assert.deepEqual(saved.modes, ['ask', 'classroom']); assert.equal(saved.textSize, 'large', 'low vision implies larger text');
+  assert.deepEqual(saved.modes, ['ask', 'road']); assert.equal(saved.textSize, 'large', 'low vision implies larger text');
   assert.equal(h.experience.page, 'home'); assert.match(h.announcements.at(-1).en, /saved to your account/);
   assert.equal(h.experience.route('three'), false, 'after the guide ends, requests are ordinary again');
 });
@@ -249,7 +249,7 @@ test('consent can be given on the page itself: only Allow grants it, and Escape 
   const setup = () => {
     const h = harness(), modes = [];
     Object.assign(h.context, { REMOTE_CONSENT: { en: 'Allow online processing for this session?', bn: 'এই সেশনে অনলাইন প্রসেসিংয়ের অনুমতি দেবেন?' },
-      remoteProcessingConsent: false, Subscription: { setMode: mode => modes.push([mode, h.context.remoteProcessingConsent]) } });
+      remoteProcessingConsent: false, Subscription: { getMode: () => 'gemini', setMode: mode => modes.push([mode, h.context.remoteProcessingConsent]) } });
     h.elements.get('consent-dialog') || h.context.$('consent-dialog'); h.context.$('consent-dialog').hidden = true;
     return { h, modes, dialog: h.context.$('consent-dialog') };
   };
@@ -263,7 +263,7 @@ test('consent can be given on the page itself: only Allow grants it, and Escape 
   assert.equal(allowed.dialog.hidden, true); assert.deepEqual(allowed.modes, [['gemini', true]]);
   for (const decline of [d => d.h.context.$('consent-cancel').onclick(), d => d.h.events.get('keydown')({ key: 'Escape', preventDefault() {} })]) {
     const declined = setup(); declined.h.context.askRemoteConsentOnPage(); decline(declined);
-    assert.equal(declined.dialog.hidden, true); assert.equal(declined.h.context.remoteProcessingConsent, false); assert.deepEqual(declined.modes, []);
+    assert.equal(declined.dialog.hidden, true); assert.equal(declined.h.context.remoteProcessingConsent, false); assert.deepEqual(declined.modes, [['offline', false]]);
     assert.equal(declined.h.events.has('keydown'), false, 'the key handler is removed with the dialog');
   }
 });
@@ -318,12 +318,12 @@ test('a setting changed elsewhere updates the saved setup, and the voice languag
 
 test('the account copy of the setup is applied on sign-in, and a reply for a previous account is ignored', async () => {
   const h = harness(); h.experience.boot();
-  h.context.apiSend = async () => ({ preferences: { textSize: 'xlarge', feedback: 'text', modes: ['classroom'], unknown: 1 }, updated_at: 77 });
+  h.context.apiSend = async () => ({ preferences: { textSize: 'xlarge', feedback: 'text', modes: ['road'], unknown: 1 }, updated_at: 77 });
   h.context.state.audio = true;
   await h.experience.loadAccountPreferences();
   assert.equal(h.experience.preferences.textSize, 'xlarge'); assert.deepEqual(h.applied, [['font', 'xlarge']]);
   assert.equal(h.context.state.audio, false, 'text-only feedback turns the voice off');
-  assert.deepEqual([...h.experience.preferences.modes], ['ask', 'classroom']);
+  assert.deepEqual([...h.experience.preferences.modes], ['ask', 'road']);
   const other = harness(); other.experience.boot();
   other.context.apiSend = async () => { other.context.window.ASTHA_ACCOUNT_ID = 'experience-account-b'; return { preferences: { textSize: 'large' }, updated_at: 78 }; };
   await other.experience.loadAccountPreferences();
@@ -333,7 +333,7 @@ test('the account copy of the setup is applied on sign-in, and a reply for a pre
 test('English and Bangla context commands preserve historical recall and direct visual questions', () => {
   const h = harness();
   assert.equal(h.experience.route('Astha, I am on a busy road'), true); assert.equal(h.experience.mode, 'road');
-  assert.equal(h.experience.route('আস্থা, ক্লাসরুমে আছি'), true); assert.equal(h.experience.mode, 'classroom');
+  assert.equal(h.experience.route('আস্থা, ক্লাসরুমে আছি'), true); assert.equal(h.experience.mode, 'reading');
   assert.equal(h.experience.route('only when I ask'), true); assert.equal(h.experience.mode, 'ask');
   for (const query of ['Where did I leave my keys?', 'আমার চাবি কোথায় রেখেছিলাম?', 'remember my wallet']) assert.equal(h.experience.route(query), false, query);
   assert.equal(h.experience.route('Can you see my pink pen?'), true);
@@ -387,22 +387,22 @@ test('check again reruns the last visual question and retains selected-image wor
   }
 });
 
-test('classroom announces changed legible board text once, ignoring whitespace changes and empty reads', async () => {
+test('continuous reading announces changed legible text once, ignoring whitespace changes and empty reads', async () => {
   const h = harness(), readings = ['Chapter 1\nExample A', 'Chapter 1  Example A', '', 'Chapter 2'];
   h.context.gemini = async (prompt, frame) => { h.requests.push({ prompt, frame }); return { text: readings.shift() }; };
-  h.experience.setContext('classroom', true);
+  h.experience.setContext('reading', true);
   await h.tick(); await h.tick(); await h.tick(); await h.tick();
   assert.equal(h.requests.length, 4); assert.equal(h.announcements.length, 2);
-  assert.equal(h.announcements[0].en, 'The board now reads: Chapter 1\nExample A');
-  assert.equal(h.announcements[1].en, 'The board now reads: Chapter 2');
+  assert.equal(h.announcements[0].en, 'It now reads: Chapter 1\nExample A');
+  assert.equal(h.announcements[1].en, 'It now reads: Chapter 2');
   assert(h.requests.every(request => request.frame.resolution === 1280));
   assert.match(h.requests[0].prompt, /current image.*Do not guess/);
 });
 
-test('a late classroom result cannot interrupt newly active speech or listening', async () => {
+test('a late reading result cannot interrupt newly active speech or listening', async () => {
   for (const activity of ['listening', 'speaking']) {
     const h = harness(), hold = deferred();
-    h.context.gemini = () => hold.promise; h.experience.setContext('classroom', true);
+    h.context.gemini = () => hold.promise; h.experience.setContext('reading', true);
     const pending = h.tick();
     if (activity === 'listening') h.context.state.listening = true; else h.context.speaking = true;
     hold.resolve({ text: 'Old board text' }); await pending;
@@ -410,30 +410,30 @@ test('a late classroom result cannot interrupt newly active speech or listening'
   }
 });
 
-test('a classroom request from a previous context session cannot speak after returning to classroom', async () => {
+test('a reading request from a previous context session cannot speak after returning to reading', async () => {
   const h = harness(), hold = deferred(); h.context.gemini = () => hold.promise;
-  h.experience.setContext('classroom', true); const pending = h.tick();
-  h.experience.setContext('road', true); h.experience.setContext('classroom', true);
+  h.experience.setContext('reading', true); const pending = h.tick();
+  h.experience.setContext('road', true); h.experience.setContext('reading', true);
   hold.resolve({ text: 'Previous classroom frame' }); await pending;
   assert.equal(h.announcements.length, 0);
 });
 
 test('changing the image source while a board read is pending suppresses the old image text', async () => {
   const h = harness(), hold = deferred(); h.context.gemini = () => hold.promise; h.context.state.sourceEpoch = 1;
-  h.experience.setContext('classroom', true); const board = h.tick();
+  h.experience.setContext('reading', true); const board = h.tick();
   h.context.state.source = 'photo'; h.context.state.sourceEpoch++;
   hold.resolve({ text: 'Text from the previous camera image' }); await board;
   assert.equal(h.announcements.length, 0);
   assert.equal(h.timers.size, 1, 'a later poll may inspect the newly selected image');
 });
 
-test('a foreground visual question suppresses an old board result but preserves later classroom polling', async () => {
+test('a foreground visual question suppresses an old board result but preserves later reading polling', async () => {
   const h = harness(), hold = deferred(); h.context.gemini = () => hold.promise;
-  h.experience.setContext('classroom', true); const board = h.tick();
+  h.experience.setContext('reading', true); const board = h.tick();
   await h.experience.visualTask('Can you see my pen?', () => {});
   hold.resolve({ text: 'Board before the question' }); await board;
   assert.equal(h.announcements.length, 0);
-  assert.equal(h.timers.size, 1, 'the selected classroom context must continue checking after the foreground question');
+  assert.equal(h.timers.size, 1, 'continuous reading must continue checking after the foreground question');
 });
 
 test('changing the selected image or account invalidates an in-flight visual answer', async () => {
@@ -450,7 +450,7 @@ test('changing the selected image or account invalidates an in-flight visual ans
 
 test('hiding the app invalidates board results and cannot restart polling until visible', async () => {
   const h = harness(), hold = deferred(); h.experience.boot(); h.context.gemini = () => hold.promise;
-  h.experience.setContext('classroom', true); const pending = h.tick();
+  h.experience.setContext('reading', true); const pending = h.tick();
   h.context.document.hidden = true; h.events.get('visibilitychange')();
   hold.resolve({ text: 'Hidden board result' }); await pending;
   assert.equal(h.announcements.length, 0); assert.equal(h.timers.size, 0);
@@ -458,7 +458,7 @@ test('hiding the app invalidates board results and cannot restart polling until 
 });
 
 test('unavailable cloud OCR produces no fabricated board update or background provider request', async () => {
-  const h = harness(); h.context.cloudReady = () => false; h.experience.setContext('classroom', true);
+  const h = harness(); h.context.cloudReady = () => false; h.experience.setContext('reading', true);
   await h.tick(); assert.equal(h.requests.length, 0); assert.equal(h.announcements.length, 0);
   h.context.cloudReady = () => true; h.context.gemini = async () => { throw new Error('synthetic provider outage'); };
   await h.tick(); assert.equal(h.announcements.length, 0); assert.equal(h.experience.busy, false);

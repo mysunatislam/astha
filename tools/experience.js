@@ -2,10 +2,11 @@
 // stale visual work, page navigation and the personal setup preferences.
 // It records how the user wants ASTHA to behave; it makes no medical classification.
 const AsthaExperience = (() => {
-  const MODES = ['ask', 'road', 'classroom'];
+  const MODES = ['ask', 'road', 'reading'];
   const PAGES = ['home', 'tools', 'memory', 'devices', 'assessment', 'settings'];
   const PAGE_KEYS = { home: 'page_home', tools: 'page_tools', memory: 'page_memory', devices: 'page_devices', assessment: 'page_assessment', settings: 'page_settings' };
-  const MODE_KEYS = { ask: 'mode_desc_ask', road: 'mode_desc_road', classroom: 'mode_desc_classroom' };
+  // Continuous reading is part of reading, not a place: a board, a page, a slide or a screen.
+  const MODE_STATUS = { road: 'status_awareness', reading: 'status_reading' };
   const STATE_KEYS = { idle: 'state_idle', listening: 'state_listening', processing: 'state_processing', speaking: 'state_speaking' };
   const SOURCE_KEYS = { camera: 'device_phone_on', pi: 'device_wifi_on', photo: 'device_image', scene: 'device_image' };
 
@@ -61,8 +62,10 @@ const AsthaExperience = (() => {
   }
 
   function renderMode() {
-    document.querySelectorAll('[data-astha-context]').forEach(button => button.setAttribute('aria-pressed', button.dataset.asthaContext === mode));
-    const status = $('context-status'); if (status) status.textContent = t(MODE_KEYS[mode]);
+    const awareness = $('awareness-toggle'), hint = $('awareness-hint');
+    if (awareness) awareness.setAttribute('aria-pressed', String(mode === 'road'));
+    if (hint) hint.textContent = t(mode === 'road' ? 'ess_awareness_on' : 'ess_awareness_hint');
+    shownDevice = '';   // the status line also names the mode
   }
   function setContext(next, silent = false) {
     if (!MODES.includes(next)) return;
@@ -74,12 +77,12 @@ const AsthaExperience = (() => {
     renderMode();
     if (!silent) say(
       next === 'road' ? 'Surroundings mode. I will mention important changes, and warn about stairs, drop-offs and approaching vehicles when I can detect them. I can miss hazards and cannot judge a safe crossing. Keep using your cane or guide.'
-        : next === 'classroom' ? 'Whiteboard mode. I will read the board when its text changes and stay quiet about other things. I am not watching for obstacles.'
+        : next === 'reading' ? 'I will keep reading. Whenever the text in view changes, on a board, a page, a slide or a screen, I will read it. Say stop reading to end. I am not watching for obstacles.'
         : 'I will answer when you ask and stay quiet otherwise. I am not watching for obstacles.',
       next === 'road' ? 'চারপাশ মোড। গুরুত্বপূর্ণ পরিবর্তন জানাব, আর সিঁড়ি, খাদ বা এগিয়ে আসা গাড়ি শনাক্ত করতে পারলে সতর্ক করব। বিপদ বাদ পড়তে পারে, নিরাপদে রাস্তা পার হওয়া নিশ্চিত করতে পারি না। লাঠি বা সঙ্গীর সাহায্য নিন।'
-        : next === 'classroom' ? 'হোয়াইটবোর্ড মোড। বোর্ডের লেখা বদলালে পড়ে শোনাব, অন্য বিষয়ে চুপ থাকব। বাধার দিকে নজর রাখছি না।'
+        : next === 'reading' ? 'আমি পড়তে থাকব। বোর্ড, পাতা, স্লাইড বা পর্দার লেখা বদলালেই পড়ে শোনাব। থামাতে বলুন পড়া বন্ধ করো। বাধার দিকে নজর রাখছি না।'
         : 'আপনি জিজ্ঞাসা করলে উত্তর দেব, না হলে চুপ থাকব। বাধার দিকে নজর রাখছি না।');
-    if (next === 'classroom' && !document.hidden) boardTimer = setTimeout(checkBoard, 5000);
+    if (next === 'reading' && !document.hidden) boardTimer = setTimeout(checkBoard, 5000);
   }
   async function checkBoard() {
     let started = false;
@@ -88,32 +91,34 @@ const AsthaExperience = (() => {
     const source = state.source, epoch = state.sourceEpoch;
     boardTimer = null;
     try {
-      if (mode !== 'classroom' || document.hidden || busy() || !state.source) return;
+      if (mode !== 'reading' || document.hidden || busy() || !state.source) return;
       const frame = captureFrame(1280); if (!frame) return;
       pending++; started = true;
       let content = '';
       if (cloudReady()) {
-        const result = await gemini('Read only legible text on the whiteboard or classroom board in this current image. Ignore people and ordinary furniture. Do not guess missing characters. Return JSON {"text": string}; use empty text if no board is legible.', frame);
+        const result = await gemini('Read only the legible text in this current image: a board, a page, a slide, a sign or a screen. Ignore people and ordinary furniture. Do not guess missing characters. Return JSON {"text": string}; use empty text if nothing is legible.', frame);
         content = typeof result.text === 'string' ? result.text.trim().slice(0, 3000) : '';
       } else {
         // Local OCR cannot reliably isolate a board from the whole scene automatically.
         return;
       }
-      if (mode !== 'classroom' || generation !== visualGeneration || source !== state.source || epoch !== state.sourceEpoch || document.hidden || foregroundBusy() || pending > 1) return;
+      if (mode !== 'reading' || generation !== visualGeneration || source !== state.source || epoch !== state.sourceEpoch || document.hidden || foregroundBusy() || pending > 1) return;
       const normalized = content.replace(/\s+/g, ' ');
       if (normalized && normalized !== lastBoard) {
         // Leave the text unread while the user has asked for quiet, so it is read afterwards.
         if (Date.now() < quietUntil) return;
         lastBoard = normalized; lastUpdate = Date.now();
-        say('The board now reads: ' + content, 'বোর্ডে এখন লেখা: ' + content);
+        say('It now reads: ' + content, 'এখন লেখা আছে: ' + content);
       }
     } catch { /* An unavailable model never becomes a fabricated board update. */ }
     finally {
       if (started) pending = Math.max(0, pending - 1);
-      if (mode === 'classroom' && session === contextGeneration && !document.hidden && !boardTimer) boardTimer = setTimeout(checkBoard, 12000);
+      if (mode === 'reading' && session === contextGeneration && !document.hidden && !boardTimer) boardTimer = setTimeout(checkBoard, 12000);
     }
   }
+  function markAsked() { document.body?.classList?.add('has-answer'); }
   function route(query) {
+    markAsked();
     const q = String(query || '').toLowerCase().replace(/^(?:hey\s+)?astha[,!\s]*|^আস্থা[,।\s]*/i, '').trim();
     if (guide) { answerGuide(q); return true; }
     if (/^(?:start |begin )?(?:the )?(?:guided|voice|spoken) setup$|^set me up$|গাইডেড সেটআপ|কণ্ঠে সেটআপ|সেটআপ শুরু করো/.test(q.replace(/[.!?।\s]+$/, ''))) { showPage('assessment', { speakTitle: false }); startGuide(); return true; }
@@ -123,11 +128,12 @@ const AsthaExperience = (() => {
       return true;
     }
     if (/busy road|busy street|keep updating|update me everything|walking outside|ব্যস্ত রাস্তা|রাস্তায় আছি|চারপাশ জানাও/.test(q)) { setContext('road'); if (!state.source) withCamera(() => {}); return true; }
-    if (/(?:i am|i'm|we are|we're).*(?:classroom|safe place)|(?:focus on|only|just|keep).*(?:whiteboard|board)|(?:classroom|whiteboard) mode|ক্লাসরুমে আছি|শ্রেণিকক্ষে আছি|নিরাপদ জায়গায় আছি|শুধু.*(?:বোর্ড|হোয়াইটবোর্ড)/.test(q)) {
-      setContext('classroom');
+    if (/(?:i am|i'm|we are|we're).*(?:classroom|safe place)|(?:focus on|only|just|keep).*(?:whiteboard|board)|(?:classroom|whiteboard) mode|keep reading|continuous reading|read (?:it |this |that )?(?:when|whenever|as) it changes|watch the (?:board|screen|slide|page)|পড়তে থাকো|লেখা বদলালে পড়|ক্লাসরুমে আছি|শ্রেণিকক্ষে আছি|নিরাপদ জায়গায় আছি|শুধু.*(?:বোর্ড|হোয়াইটবোর্ড)/.test(q)) {
+      setContext('reading');
       if (!state.source) withCamera(() => {});
       return true;
     }
+    if (mode === 'reading' && /^stop reading|পড়া বন্ধ/.test(q)) { setContext('ask'); return true; }
     if (/stop updates|only when i ask|quiet mode|আপডেট বন্ধ|জিজ্ঞাসা করলে|শান্ত মোড/.test(q)) { setContext('ask'); return true; }
     // Stop silences ASTHA and drops unspoken answers. The chosen mode stays until changed.
     if (/^(?:stop|stop talking|cancel|be quiet|quiet|silence|enough|shut up|halt|থামো|থামুন|বন্ধ করো|চুপ|চুপ কর|চুপ করো|কথা বন্ধ|স্টপ|thamo|chup|bondho koro)[.!।\s]*$/.test(q)) { cancelPending(); stopAllSpeech(); if (typeof AsthaAgent !== 'undefined') AsthaAgent.cancel?.(); return true; }
@@ -191,8 +197,8 @@ const AsthaExperience = (() => {
   const PREF_KEY = 'astha.accessibility.v2';
   const CHOICES = { vision: ['none', 'light', 'low', 'unspecified'], language: ['bn', 'en'], feedback: ['detailed', 'brief', 'text'],
     textSize: ['normal', 'large', 'xlarge'], theme: ['mulberry-apricot', 'navy-cyan', 'monochrome', 'clinical-yellow'], speechRate: ['0.8', '1', '1.2', '1.5'] };
-  const SETS = { devices: ['phone_camera', 'smart_glasses', 'clip_camera', 'braille_controller'], modes: ['ask', 'road', 'classroom'] };
-  const DEFAULTS = Object.freeze({ vision: 'unspecified', feedback: 'detailed', textSize: 'normal', theme: 'mulberry-apricot', speechRate: '1', devices: [], modes: ['ask', 'road', 'classroom'], haptics: true });
+  const SETS = { devices: ['phone_camera', 'smart_glasses', 'clip_camera', 'braille_controller'], modes: ['ask', 'road'] };
+  const DEFAULTS = Object.freeze({ vision: 'unspecified', feedback: 'detailed', textSize: 'normal', theme: 'mulberry-apricot', speechRate: '1', devices: [], modes: ['ask', 'road'], haptics: true });
   let preferences = { ...DEFAULTS };
 
   // Anything outside the known choices is dropped, whether it came from storage or the server.
@@ -248,8 +254,8 @@ const AsthaExperience = (() => {
     if (document.documentElement.getAttribute('data-font-size') !== values.textSize) { applyFontSize(values.textSize); if ($('font-select')) $('font-select').value = values.textSize; }
     if (document.documentElement.getAttribute('data-theme') !== values.theme) { applyClinicalTheme(values.theme); if ($('theme-select')) $('theme-select').value = values.theme; }
     state.haptics = values.haptics;
-    document.querySelectorAll('[data-astha-context]').forEach(button => { button.hidden = !values.modes.includes(button.dataset.asthaContext); });
-    if (!values.modes.includes(mode)) setContext('ask', true);
+    const awareness = $('awareness-toggle'); if (awareness) awareness.hidden = !values.modes.includes('road');
+    if (mode === 'road' && !values.modes.includes('road')) setContext('ask', true);
   }
   function setupStatus(key) { const status = $('assessment-status'); if (status) status.textContent = key ? t(key) : ''; }
   async function syncPreferences(record) {
@@ -320,7 +326,6 @@ const AsthaExperience = (() => {
       bn: 'আমি কীভাবে উত্তর দেব? বিস্তারিত বর্ণনার জন্য বলুন এক। সংক্ষিপ্ত উত্তরের জন্য দুই। কথা না বলে শুধু লেখার জন্য তিন।',
       options: [['detailed', /\b(?:1|one|full|detailed?)\b|এক|১|বিস্তারিত/], ['brief', /\b(?:2|two|short|brief)\b|দুই|২|সংক্ষ/], ['text', /\b(?:3|three|text|silent)\b|তিন|৩|লেখা/]] },
     { key: 'road', en: 'Do you want surroundings updates on your home screen, for when you are walking? Say yes or no.', bn: 'হাঁটার সময়ের জন্য হোম পর্দায় চারপাশের খবর চান? হ্যাঁ বা না বলুন।', options: [[true, YES], [false, NO]] },
-    { key: 'classroom', en: 'Do you want whiteboard focus on your home screen, for classrooms? Say yes or no.', bn: 'শ্রেণিকক্ষের জন্য হোম পর্দায় হোয়াইটবোর্ডে মনোযোগ চান? হ্যাঁ বা না বলুন।', options: [[true, YES], [false, NO]] },
   ];
   let guide = null;
   async function askGuide(prefixEn = '', prefixBn = '') {
@@ -334,7 +339,7 @@ const AsthaExperience = (() => {
   function startGuide() {
     if (!state.audio) toggleAudio();
     guide = { step: 0, asked: -1, values: {} };
-    askGuide('I will ask five short questions. Say repeat, back, skip or cancel at any time. ', 'আমি পাঁচটি ছোট প্রশ্ন করব। যেকোনো সময় বলুন আবার, পেছনে, বাদ দাও বা বাতিল। ');
+    askGuide('I will ask four short questions. Say repeat, back, skip or cancel at any time. ', 'আমি চারটি ছোট প্রশ্ন করব। যেকোনো সময় বলুন আবার, পেছনে, বাদ দাও বা বাতিল। ');
   }
   function endGuide(en, bn) { guide = null; if (en) say(en, bn); }
   async function finishGuide() {
@@ -342,7 +347,7 @@ const AsthaExperience = (() => {
     const values = { ...preferences };
     for (const key of ['vision', 'language', 'feedback']) if (answers[key] !== undefined) values[key] = answers[key];
     const modes = new Set(values.modes);
-    for (const key of ['road', 'classroom']) if (answers[key] !== undefined) { if (answers[key]) modes.add(key); else modes.delete(key); }
+    if (answers.road !== undefined) { if (answers.road) modes.add('road'); else modes.delete('road'); }
     values.modes = [...modes];
     // Larger text is the one display change a low-vision answer implies.
     if (answers.vision === 'low' && values.textSize === 'normal') values.textSize = 'large';
@@ -398,10 +403,11 @@ const AsthaExperience = (() => {
         status.textContent = t(STATE_KEYS[next]);
       }
     }
-    const device = Object.hasOwn(SOURCE_KEYS, state.source) ? SOURCE_KEYS[state.source] : 'device_camera_off';
+    const device = (Object.hasOwn(SOURCE_KEYS, state.source) ? SOURCE_KEYS[state.source] : 'device_camera_off') + '|' + mode;
     if (force || device !== shownDevice) {
       shownDevice = device;
-      const label = $('device-status'); if (label) label.textContent = t(device);
+      const label = $('device-status');
+      if (label) label.textContent = t(device.split('|')[0]) + (Object.hasOwn(MODE_STATUS, mode) ? ' · ' + t(MODE_STATUS[mode]) : '');
     }
   }
   function refreshLabels() {
@@ -425,14 +431,20 @@ const AsthaExperience = (() => {
     reflectHandsFree();
     $('assessment-guided')?.addEventListener('click', startGuide);
     document.querySelectorAll('[data-astha-page]').forEach(button => button.addEventListener('click', () => showPage(button.dataset.asthaPage)));
-    document.querySelectorAll('[data-astha-context]').forEach(button => button.addEventListener('click', () => setContext(button.dataset.asthaContext)));
+    $('awareness-toggle')?.addEventListener('click', () => setContext(mode === 'road' ? 'ask' : 'road'));
+    $('voice-online')?.addEventListener('click', () => Subscription.setMode('gemini'));
+    // Online, hands-free and the older switches live in Settings, not on the home screen.
+    const engine = $('engine-controls');
+    if (engine?.append) document.querySelectorAll('.mic-area > .segmented, .mic-area > #hf-btn').forEach(control => engine.append(control));
+    // The last answer appears under the hero once the person has asked for something.
+    document.querySelectorAll('.essential, #mic').forEach(control => control.addEventListener('click', markAsked));
     $('assessment-form')?.addEventListener('submit', saveAssessment);
     $('assessment-form')?.addEventListener('focusin', speakGroup);
     $('assessment-read')?.addEventListener('click', () => { if (!state.audio) toggleAudio(); readAssessment(); });
     for (const [id, key] of [['font-select', 'textSize'], ['theme-select', 'theme'], ['speech-rate', 'speechRate']]) {
       $(id)?.addEventListener('change', event => adopt(key, event.target.value));
     }
-    document.addEventListener('visibilitychange', () => { if (document.hidden) { visualGeneration++; contextGeneration++; clearTimeout(boardTimer); boardTimer = null; } else if (mode === 'classroom' && !boardTimer) boardTimer = setTimeout(checkBoard, 5000); });
+    document.addEventListener('visibilitychange', () => { if (document.hidden) { visualGeneration++; contextGeneration++; clearTimeout(boardTimer); boardTimer = null; } else if (mode === 'reading' && !boardTimer) boardTimer = setTimeout(checkBoard, 5000); });
     fillForm(preferences);
     showPage('home', { focus: false, speakTitle: false });
     // Consent lasts one session. Someone who chose Online last time is asked again at the
@@ -463,6 +475,7 @@ function askRemoteConsentOnPage() {
     background().forEach(element => element.removeAttribute('inert'));
     opener?.focus?.();
     if (granted) { remoteProcessingConsent = true; Subscription.setMode('gemini'); }
+    else if (Subscription.getMode() === 'gemini') Subscription.setMode('offline', true);
   };
   const onKey = event => {
     if (event.key === 'Escape') { event.preventDefault(); close(false); }

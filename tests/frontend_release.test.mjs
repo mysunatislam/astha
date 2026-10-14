@@ -96,12 +96,14 @@ test('remote processing requires explicit session consent and never prompts on b
   assert.equal(h.run('remoteProcessingAllowed()'), false);
 });
 
-test('fresh profiles select on-device mode without a client-side entitlement', () => {
+test('fresh profiles offer the online assistant without asking or an entitlement; on-device stays a choice', () => {
   const h = harness({}, false);
   h.storage.delete('astha.ai_mode');
   h.run('Subscription.init()');
+  assert.equal(h.run('Subscription.getMode()'), 'gemini');
+  assert.equal(h.calls.confirmations, undefined, 'consent is asked before the first request, not at start');
+  h.storage.set('astha.ai_mode', 'offline');
   assert.equal(h.run('Subscription.getMode()'), 'offline');
-  assert.equal(h.calls.confirmations, undefined);
   assert(!cloudSource.includes('TRIAL_DAYS'));
 });
 

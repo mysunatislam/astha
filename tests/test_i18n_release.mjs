@@ -116,12 +116,12 @@ test('language application translates leading text and attributes in place witho
   vm.runInContext('applyStaticI18n()', context);
   assert.equal(label.firstChild.nodeValue, 'ফোন নম্বর'); assert.deepEqual(label.children, [input]);
   assert.equal(noText.firstChild, input, 'an element without leading text is left alone');
-  assert.equal(attributes.get('placeholder'), table.strings.command_placeholder[1]); assert.equal(attributes.get('aria-label'), 'কথা বলতে চাপুন');
+  assert.equal(attributes.get('placeholder'), table.strings.command_placeholder[1]); assert.equal(attributes.get('aria-label'), table.strings.mic_idle[1], 'the shared table overrides the original dictionary');
   assert.equal(texts.get('hf-label'), table.strings.hf_on[1]); assert.equal(texts.get('private-btn'), table.strings.privacy_on[1]);
   assert.equal(texts.get('eye-start'), table.strings.eye_start[1]); assert.equal(texts.get('reader-progress'), table.strings.reader_ready[1]);
   assert.deepEqual(calls, ['owner', 'source', 'account']);
   vm.runInContext('uiLang = "en"; SiriVoice.active = false; privacyMode = false; eye.active = true; reader.paused = true; applyStaticI18n()', context);
-  assert.equal(label.firstChild.nodeValue, 'Phone number'); assert.equal(attributes.get('aria-label'), 'Tap to speak');
+  assert.equal(label.firstChild.nodeValue, 'Phone number'); assert.equal(attributes.get('aria-label'), table.strings.mic_idle[0]);
   assert.equal(texts.get('hf-label'), 'Hands-free: off'); assert.equal(texts.get('private-btn'), 'Privacy mode: off');
   assert.equal(texts.get('eye-start'), 'Stop watching my screen'); assert.equal(texts.get('reader-progress'), 'Paused');
   assert.equal(vm.runInContext('t("reader_part", { n: 2, total: 5 })', context), 'Part 2 of 5');

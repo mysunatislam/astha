@@ -9,12 +9,9 @@
   </div>
 </div>
 <nav class="app-navigation" aria-label="Astha pages" data-i18n-aria-label="nav_label">
-  <button class="btn" type="button" data-astha-page="home" aria-current="page" data-i18n="page_home">Home</button>
-  <button class="btn" type="button" data-astha-page="tools" aria-current="false" data-i18n="page_tools">Camera and tools</button>
-  <button class="btn" type="button" data-astha-page="memory" aria-current="false" data-i18n="page_memory">Memory</button>
-  <button class="btn" type="button" data-astha-page="devices" aria-current="false" data-i18n="page_devices">Devices</button>
-  <button class="btn" type="button" data-astha-page="assessment" aria-current="false" data-i18n="page_assessment">Personal setup</button>
-  <button class="btn" type="button" data-astha-page="settings" aria-current="false" data-i18n="page_settings">Settings</button>
+  <button class="tab" type="button" data-astha-page="home" aria-current="page"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 11l8-7 8 7M6 10v9h4v-5h4v5h4v-9"/></svg><span data-i18n="page_home">Home</span></button>
+  <button class="tab" type="button" data-astha-page="memory" aria-current="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M4 12a8 8 0 108-8 8 8 0 00-6 2.7M4 4v3.5h3.5M12 8v4l2.5 2"/></svg><span data-i18n="page_memory">Memories</span></button>
+  <button class="tab" type="button" data-astha-page="devices" aria-current="false"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M8 8l8 8-4 4V4l4 4-8 8"/></svg><span data-i18n="page_devices">Devices</span></button>
 </nav>
 <h2 class="page-title" id="page-title" tabindex="-1" data-i18n="page_home">Home</h2>
 <section class="card assessment-page" id="assessment-page" hidden aria-labelledby="page-title">
@@ -46,10 +43,9 @@
       <label><input type="checkbox" name="pref-devices" value="clip_camera"><span data-i18n="device_clip">Clip-on camera</span></label>
       <label><input type="checkbox" name="pref-devices" value="braille_controller"><span data-i18n="device_braille">Six-key Braille controller</span></label>
     </fieldset>
-    <fieldset><legend data-i18n="assessment_modes">Which continuous help do you want on the home screen?</legend>
+    <fieldset><legend data-i18n="assessment_modes">Do you want Awareness on the home screen?</legend>
       <p class="setup-hint" data-i18n="assessment_modes_hint">Answering when you ask is always available.</p>
-      <label><input type="checkbox" name="pref-modes" value="road" checked><span data-i18n="context_road">Surroundings updates</span></label>
-      <label><input type="checkbox" name="pref-modes" value="classroom" checked><span data-i18n="context_board">Whiteboard focus</span></label>
+      <label><input type="checkbox" name="pref-modes" value="road" checked><span data-i18n="context_road">Awareness: updates about what is around me</span></label>
     </fieldset>
     <fieldset><legend data-i18n="assessment_access">Display and feedback</legend>
       <div class="setup-question"><label class="setup-label" for="pref-text-size" data-i18n="pref_text_size">Text size</label>

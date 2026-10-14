@@ -360,7 +360,7 @@ EYE_HTML = r"""    <div class="card" id="eye-card">
         <h2>♥ Astha on your screen</h2>
         <span class="pill" id="eye-pill">Not watching</span>
       </div>
-      <p class="help">The heart is Astha's eye. Share your screen once and Astha watches it: she tells you which app you are in, where a button is, when a pop-up has gone, and opens apps or sites for you when the browser allows. Say “Astha, watch my screen”.</p>
+      <p class="help">Share your screen and Astha tells you what is on it: a message, a slide, a document, a web page, a design or code. Ask her to read it, explain it, or help you with it. Say “Astha, watch my screen”.</p>
       <div class="eye-view">
         <div class="empty" id="eye-empty"><div>Screen not shared yet.</div></div>
         <video id="eye-video" autoplay muted playsinline hidden></video>
@@ -369,10 +369,10 @@ EYE_HTML = r"""    <div class="card" id="eye-card">
           <span class="heart-label" id="eye-heart-label" hidden></span>
         </div>
       </div>
-      <div class="utility-row"><button class="btn accent" id="eye-start" onclick="toggleEye()">Let Astha see my screen</button><button class="btn" onclick="eyeWhatsOnScreen()">What is on my screen?</button><button class="btn" onclick="eyeReadError()">Read the error</button><button class="btn" onclick="eyeOpen('vs code')">Open VS Code</button></div>
-      <label class="field" for="eye-paste">Or paste screen or terminal text<textarea id="eye-paste" placeholder="Paste a terminal error here, then say “Astha, read the error”."></textarea></label>
+      <div class="utility-row"><button class="btn accent" id="eye-start" onclick="toggleEye()">Let Astha see my screen</button><button class="btn" onclick="eyeWhatsOnScreen()">What is on my screen?</button><button class="btn" onclick="eyeExplain()">Explain what is on my screen</button></div>
+      <label class="field" for="eye-paste">Or paste any text from your screen<textarea id="eye-paste" placeholder="Paste text here, then say “Astha, explain this”."></textarea></label>
       <div class="toggle-row"><span>Keyboard guidance: name each control as I Tab to it</span><button class="switch" id="focus-switch" role="switch" aria-checked="false" onclick="toggleFocusNarration()" aria-label="Keyboard guidance"></button></div>
-      <p class="help">Astha opens websites and VS Code herself. Clicking inside other apps needs the small desktop agent from the roadmap; until then she guides your keys and confirms what she sees.</p>
+      <p class="help">Astha can read and explain a shared screen. On an Android phone she can also read other apps and answer your messages; see Devices.</p>
     </div>
   </section>
 """
@@ -389,6 +389,7 @@ rep("  if (/hands.?free|always listen|keep listening|হ্যান্ডস ?�
     "  if (/watch my screen|see my screen|share (my )?screen|look at my screen|স্ক্রিন দেখো|স্ক্রিন শেয়ার/.test(q)) return eyeStart();\n"
     "  if (/stop watching|stop (the )?screen|স্ক্রিন দেখা বন্ধ/.test(q)) return eyeStop();\n"
     "  if (/(^|\\s)(open|launch|start|go to|switch to)\\s|খোলো|খুলো|চালু করো|যাও/.test(q) && appFromText(q)) return eyeOpen(q);\n"
+    "  if (/explain (this|that|it|what|the (slide|page|screen|document|design|chart|message|picture|form))|what does (this|that|it) (mean|say)|help me (understand|with (this|the))|summari[sz]e (this|that|it|the)|এটা বুঝিয়ে|বুঝিয়ে বলো|ব্যাখ্যা করো|সারাংশ/.test(q) && (eye.active || ($('eye-paste') && $('eye-paste').value.trim()))) return eyeExplain(query);\n"
     "  if (/i want to (code|write code|program|work)|let'?s code|help me code|time to code|কোড করব|কোড লিখব|কাজ করব/.test(q)) return eyeSetTask(q);\n"
     "  if (/close (it|this|that|the pop.?up|the dialog|the window)|cancel (it|this|that)|dismiss|পপ.?আপ বন্ধ|বাতিল করো/.test(q)) return eyeCloseDialog();\n"
     "  if (/where('s| is) (the )?[a-z ]+ (button|icon|link|option)|find the [a-z ]+ (button|icon|link)|বোতাম কোথায়/.test(q)) return eyeFind(q);\n"

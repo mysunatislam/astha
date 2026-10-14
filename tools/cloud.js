@@ -7,13 +7,15 @@ const serverCloud = { checked: false, available: false, provider: null };
 const Subscription = {
   MODE_KEY: 'astha.ai_mode',
   init() {
-    try { if (!localStorage.getItem(this.MODE_KEY)) localStorage.setItem(this.MODE_KEY, 'offline'); } catch (e) {}
+    // Online is the default choice so the Bangla voice and the assistant are offered at
+    // first start. Nothing is sent until the person allows it for the session.
+    try { if (!localStorage.getItem(this.MODE_KEY)) localStorage.setItem(this.MODE_KEY, 'gemini'); } catch (e) {}
     this.renderButtons();
     return { mode: this.getMode() };
   },
   getMode() {
-    try { if (localStorage.getItem(this.MODE_KEY) === 'gemini') return 'gemini'; } catch (e) {}
-    return 'offline';
+    try { if (localStorage.getItem(this.MODE_KEY) === 'offline') return 'offline'; } catch (e) {}
+    return 'gemini';
   },
   setMode(mode, silent) {
     if (mode !== 'gemini') mode = 'offline';
@@ -90,7 +92,7 @@ const CLOUD_PROMPTS = {
   read: 'Transcribe ALL readable text exactly as printed, in its original script (Bangla or English), keeping line breaks, into "text". If it is a medicine, a sign, a label, a letter or a page, give a one-sentence explanation in "en" and "bn". If there is no readable text, set "text" to "". Return JSON: {"text": string, "en": string, "bn": string}.',
   read_broad: 'Read and transcribe ALL visible text in the camera view: blackboard, whiteboard, computer screen, classroom board, poster, book, document, paper, medicine packaging or sign. Transcribe the full text into "text". Provide a clear, natural spoken explanation of what is written in "en" and "bn". Set "isBoardOrSign": true if it is a blackboard, whiteboard, screen, or sign. Return JSON: {"text": string, "en": string, "bn": string, "isBoardOrSign": boolean}.',
   stairs_hazard: 'The visually impaired user is moving or pointing the camera. Verify if there are REAL physical stairs, steps, or an elevated drop-off edge ahead in the camera view (NOT a computer keyboard, desk slats, striped pattern, book edges, floor tiles, or shadows). If real stairs/steps exist, report whether they go UP or DOWN, distance, step count visible, and handrail location. Return JSON: {"stairs": boolean, "edge": boolean, "direction": "up"|"down"|"none", "en": string, "bn": string, "hazard": boolean}. If NO stairs or danger, set "stairs": false, "hazard": false, and say that no hazard was confirmed in this image; never declare the route safe.',
-  screen: 'This is a screenshot of the user\'s computer. Return JSON: {"app": name of the foreground app or website, "content": exact transcription of the main editor, document, chat or page text (skip menus, toolbars and sidebars; keep code indentation and line breaks), "dialog": {"present": boolean, "button": text of the safest dismiss button or "", "location": one of "top-left","top","top-right","left","center","right","bottom-left","bottom","bottom-right"}, "error": {"present": boolean, "line": exact error text or "", "fix": one short sentence or ""}, "en": one-sentence spoken summary of where the user is and what is on screen, "bn": the same in Bangla}.',
+  screen: 'This is a screenshot of the user\'s screen: a computer, a tablet or a phone. It may show a document, a slide, a chat, a web page, a design, a form, a spreadsheet or code. Return JSON: {"app": name of the foreground app or website, "content": exact transcription of the main content, whatever kind it is (skip menus, toolbars and sidebars; keep line breaks, and indentation where it matters), "dialog": {"present": boolean, "button": text of the safest dismiss button or "", "location": one of "top-left","top","top-right","left","center","right","bottom-left","bottom","bottom-right"}, "error": {"present": boolean, "line": exact error text or "", "fix": one short sentence or ""}, "en": one-sentence spoken summary of where the user is and what is on screen, "bn": the same in Bangla}.',
   verify: (names) => `The on-device detector thinks it sees: ${names}. Look at the frame: say in one short sentence what is really there that matters to a blind person (hazards first, then people and objects with position). If the detector was wrong, do not repeat its mistake. If nothing notable, set "none" true. Return JSON: {"en": string, "bn": string, "none": boolean, "mirror": boolean}.`,
   mirror: 'Is this image the user\'s own reflection in a mirror (a person holding up a phone toward a mirror)? Return JSON: {"mirror": boolean, "en": one sentence describing what the person is wearing if mirror is true else "", "bn": same in Bangla}.',
   vqa: (query, history) => `The visually impaired user asks: "${query}". Prior conversation context: ${history || 'none'}. The current image is the only evidence of present visibility. Prior context is not proof that an object is still present. Verify the requested colour, object and spatial relation; if any is unclear say so. Never invent a table/laptop relation or a room. Look closely at the image. Directly, accurately and concisely answer the user's specific question (e.g. if they ask if their ID card, pen, phone, powerbank, or medication is visible, check carefully). If visible, state its position (left, ahead, right) and details (text, color, brand, or what surface it is on). If not visible, say clearly that it is not visible. Return JSON: {"en": string, "bn": string, "found": boolean, "item": string, "surface": string, "room_hint": string}.`,

@@ -313,8 +313,8 @@
    "♥ আপনার স্ক্রিনে আস্থা"
   ],
   "eye_help": [
-   "The heart is Astha's eye. Share your screen once and Astha watches it: she tells you which app you are in, where a button is, when a pop-up has gone, and opens apps or sites for you when the browser allows. Say “Astha, watch my screen”.",
-   "হৃদয়-চিহ্নটি আস্থার চোখ। একবার স্ক্রিন শেয়ার করলে আস্থা তা দেখে: আপনি কোন অ্যাপে আছেন, কোন বোতাম কোথায়, পপ-আপ বন্ধ হয়েছে কি না তা জানায়, এবং ব্রাউজার অনুমতি দিলে অ্যাপ বা সাইট খুলে দেয়। বলুন “আস্থা, আমার স্ক্রিন দেখো”।"
+   "Share your screen and Astha tells you what is on it: a message, a slide, a document, a web page, a design or code. Ask her to read it, explain it, or help you with it. Say “Astha, watch my screen”.",
+   "আপনার স্ক্রিন শেয়ার করলে আস্থা বলে দেয় তাতে কী আছে: বার্তা, স্লাইড, নথি, ওয়েব পৃষ্ঠা, নকশা বা কোড। পড়ে শোনাতে, বুঝিয়ে বলতে বা সাহায্য করতে বলুন। বলুন “আস্থা, আমার স্ক্রিন দেখো”।"
   ],
   "eye_empty": [
    "Screen not shared yet.",
@@ -325,20 +325,16 @@
    "আমার স্ক্রিনে কী আছে?"
   ],
   "eye_error": [
-   "Read the error",
-   "ত্রুটিটি পড়ো"
-  ],
-  "eye_vscode": [
-   "Open VS Code",
-   "VS Code খোলো"
+   "Explain what is on my screen",
+   "স্ক্রিনে কী আছে বুঝিয়ে বলো"
   ],
   "eye_paste_label": [
-   "Or paste screen or terminal text",
-   "অথবা স্ক্রিন বা টার্মিনালের লেখা পেস্ট করুন"
+   "Or paste any text from your screen",
+   "অথবা স্ক্রিনের যেকোনো লেখা পেস্ট করুন"
   ],
   "eye_paste_placeholder": [
-   "Paste a terminal error here, then say “Astha, read the error”.",
-   "টার্মিনালের ত্রুটি এখানে পেস্ট করে বলুন “আস্থা, ত্রুটিটি পড়ো”।"
+   "Paste text here, then say “Astha, explain this”.",
+   "লেখা এখানে পেস্ট করে বলুন “আস্থা, এটা বুঝিয়ে বলো”।"
   ],
   "focus_text": [
    "Keyboard guidance: name each control as I Tab to it",
@@ -349,8 +345,8 @@
    "কিবোর্ড নির্দেশনা"
   ],
   "eye_note": [
-   "Astha opens websites and VS Code herself. Clicking inside other apps needs the small desktop agent from the roadmap; until then she guides your keys and confirms what she sees.",
-   "আস্থা নিজেই ওয়েবসাইট ও VS Code খুলতে পারে। অন্য অ্যাপের ভেতরে ক্লিক করার জন্য ভবিষ্যতের ডেস্কটপ এজেন্ট লাগবে; ততদিন সে কিবোর্ডে পথ দেখায় এবং যা দেখে তা নিশ্চিত করে।"
+   "Astha can read and explain a shared screen. On an Android phone she can also read other apps and answer your messages; see Devices.",
+   "আস্থা শেয়ার করা স্ক্রিন পড়তে ও বুঝিয়ে বলতে পারে। অ্যান্ড্রয়েড ফোনে সে অন্য অ্যাপও পড়তে এবং আপনার বার্তার উত্তর দিতে পারে; ডিভাইস পৃষ্ঠা দেখুন।"
   ],
   "prefs_title": [
    "Your preferences",
@@ -689,8 +685,8 @@
    "হার্ডওয়্যার পরীক্ষা"
   ],
   "ui_welcome_title": [
-   "Hello, I’m Astha",
-   "হ্যালো, আমি আস্থা"
+   "I’m here with you.",
+   "আমি আপনার পাশে আছি।"
   ],
   "page_home": [
    "Home",
@@ -752,21 +748,9 @@
    "This version can read a screen you explicitly share. Controlling other apps is not connected yet. Camera permission does not enable it.",
    "আপনি স্পষ্টভাবে শেয়ার করলে এই সংস্করণ স্ক্রিন পড়তে পারে। অন্য অ্যাপ নিয়ন্ত্রণ এখনও যুক্ত হয়নি। ক্যামেরার অনুমতি দিয়ে এটি চালু হয় না।"
   ],
-  "context_label": [
-   "What should Astha focus on?",
-   "আস্থা কীসে মনোযোগ দেবে?"
-  ],
-  "context_ask": [
-   "Answer when asked",
-   "জিজ্ঞাসা করলে উত্তর"
-  ],
   "context_road": [
-   "Surroundings updates",
-   "চারপাশের খবর"
-  ],
-  "context_board": [
-   "Whiteboard focus",
-   "হোয়াইটবোর্ডে মনোযোগ"
+   "Awareness: updates about what is around me",
+   "সচেতনতা: আমার চারপাশের খবর"
   ],
   "nav_label": [
    "Astha pages",
@@ -777,7 +761,7 @@
    "ক্যামেরা ও সরঞ্জাম"
   ],
   "page_memory": [
-   "Memory",
+   "Memories",
    "স্মৃতি"
   ],
   "page_devices": [
@@ -789,8 +773,8 @@
    "সেটিংস"
   ],
   "state_idle": [
-   "Ready. Tap the microphone and ask.",
-   "প্রস্তুত। মাইক্রোফোনে চাপ দিয়ে জিজ্ঞাসা করুন।"
+   "What would you like to know?",
+   "আপনি কী জানতে চান?"
   ],
   "state_listening": [
    "Listening…",
@@ -804,33 +788,21 @@
    "Speaking…",
    "বলছি…"
   ],
-  "mode_desc_ask": [
-   "Quiet until you ask. Not watching for obstacles.",
-   "জিজ্ঞাসা না করলে চুপ থাকব। বাধার দিকে নজর রাখছি না।"
-  ],
-  "mode_desc_road": [
-   "Telling you about important changes around you. This is not a navigation aid.",
-   "চারপাশের গুরুত্বপূর্ণ পরিবর্তন জানাচ্ছি। এটি পথ চলার নির্ভরযোগ্য সহায়ক নয়।"
-  ],
-  "mode_desc_classroom": [
-   "Reading the whiteboard when its text changes.",
-   "হোয়াইটবোর্ডের লেখা বদলালে পড়ে শোনাচ্ছি।"
-  ],
   "device_camera_off": [
-   "Camera off.",
-   "ক্যামেরা বন্ধ।"
+   "No camera is on",
+   "কোনো ক্যামেরা চালু নেই"
   ],
   "device_phone_on": [
-   "Phone camera on.",
-   "ফোনের ক্যামেরা চালু।"
+   "Phone camera is on",
+   "ফোনের ক্যামেরা চালু"
   ],
   "device_wifi_on": [
-   "Wi-Fi camera connected.",
-   "ওয়াই-ফাই ক্যামেরা যুক্ত।"
+   "Your wearable is connected",
+   "আপনার পরিধেয় ক্যামেরা যুক্ত"
   ],
   "device_image": [
-   "Looking at a selected picture, not a live camera.",
-   "বাছাই করা ছবি দেখছি, সরাসরি ক্যামেরা নয়।"
+   "Looking at a picture you chose",
+   "আপনার বাছাই করা ছবি দেখছি"
   ],
   "vision_light": [
    "I can tell light or large shapes, but not detail",
@@ -881,8 +853,8 @@
    "ছয় চাবির ব্রেইল কন্ট্রোলার"
   ],
   "assessment_modes": [
-   "Which continuous help do you want on the home screen?",
-   "হোম পর্দায় কোন ধারাবাহিক সহায়তা চান?"
+   "Do you want Awareness on the home screen?",
+   "হোম পর্দায় সচেতনতা চান?"
   ],
   "assessment_modes_hint": [
    "Answering when you ask is always available.",
@@ -1193,8 +1165,8 @@
    "আপনি বলতে পারেন “হোয়াটসঅ্যাপ অ্যাপ খোলো”, অথবা “বার্তা লেখো, আমার দেরি হবে”। কিছু খোলার আগে আস্থা জিজ্ঞাসা করে, আর ব্যক্তি বাছাই ও পাঠানো আপনি নিজেই করেন।"
   ],
   "voice_no_bangla": [
-   "This device has no Bangla voice, so Astha is speaking English. Turn on Online AI above to hear Bangla.",
-   "এই ডিভাইসে বাংলা কণ্ঠ নেই, তাই আস্থা ইংরেজিতে বলছে। বাংলা শুনতে ওপরের অনলাইন এআই চালু করুন।"
+   "This device has no Bangla voice, so Astha is speaking English.",
+   "এই ডিভাইসে বাংলা কণ্ঠ নেই, তাই আস্থা ইংরেজিতে বলছে।"
   ],
   "consent_title": [
    "Allow online processing?",
@@ -1207,6 +1179,70 @@
   "consent_cancel": [
    "Cancel, keep on this phone",
    "বাতিল, ফোনেই রাখুন"
+  ],
+  "tagline": [
+   "A little more independence, every day.",
+   "প্রতিদিন আরেকটু স্বাধীনতা।"
+  ],
+  "mic_idle": [
+   "Talk to ASTHA",
+   "আস্থার সাথে কথা বলুন"
+  ],
+  "essentials_title": [
+   "Your everyday essentials",
+   "প্রতিদিনের দরকারি কাজ"
+  ],
+  "ess_explore": [
+   "Explore",
+   "চারপাশ"
+  ],
+  "ess_explore_hint": [
+   "Understand your surroundings",
+   "চারপাশ বুঝে নিন"
+  ],
+  "ess_read": [
+   "Read",
+   "পড়া"
+  ],
+  "ess_read_hint": [
+   "Hear any text: a page, a board, a screen",
+   "যেকোনো লেখা শুনুন: পাতা, বোর্ড, পর্দা"
+  ],
+  "ess_remember": [
+   "Remember",
+   "মনে রাখা"
+  ],
+  "ess_remember_hint": [
+   "Find saved information",
+   "রাখা তথ্য খুঁজুন"
+  ],
+  "ess_awareness": [
+   "Awareness",
+   "সচেতনতা"
+  ],
+  "ess_awareness_hint": [
+   "Check nearby obstacles",
+   "কাছের বাধা সম্পর্কে জানুন"
+  ],
+  "ess_awareness_on": [
+   "On. Tap to turn off",
+   "চালু আছে। বন্ধ করতে চাপুন"
+  ],
+  "type_instead": [
+   "Type a request instead",
+   "লিখে অনুরোধ করুন"
+  ],
+  "voice_turn_on": [
+   "Turn on the Bangla voice",
+   "বাংলা কণ্ঠ চালু করুন"
+  ],
+  "status_awareness": [
+   "Awareness on",
+   "সচেতনতা চালু"
+  ],
+  "status_reading": [
+   "Reading as the text changes",
+   "লেখা বদলালে পড়ছি"
   ]
  },
  "hooks": [
@@ -1394,7 +1430,7 @@
    }
   ],
   [
-   "<button class=\"mic\" id=\"mic\" onclick=\"toggleListening()\" aria-label=\"Tap to speak\">",
+   "<button class=\"mic\" id=\"mic\" onclick=\"toggleListening()\" aria-label=\"Talk to ASTHA\">",
    {
     "aria-label": "mic_idle"
    }
@@ -1642,7 +1678,7 @@
    }
   ],
   [
-   "<p class=\"help\">The heart is Astha's eye.",
+   "<p class=\"help\">Share your screen and Astha tells you what is on it",
    {
     "text": "eye_help"
    }
@@ -1660,15 +1696,9 @@
    }
   ],
   [
-   "<button class=\"btn\" onclick=\"eyeReadError()\">",
+   "<button class=\"btn\" onclick=\"eyeExplain()\">",
    {
     "text": "eye_error"
-   }
-  ],
-  [
-   "<button class=\"btn\" onclick=\"eyeOpen('vs code')\">",
-   {
-    "text": "eye_vscode"
    }
   ],
   [
@@ -1678,7 +1708,7 @@
    }
   ],
   [
-   "<textarea id=\"eye-paste\" placeholder=\"Paste a terminal error here, then say “Astha, read the error”.\">",
+   "<textarea id=\"eye-paste\" placeholder=\"Paste text here, then say “Astha, explain this”.\">",
    {
     "placeholder": "eye_paste_placeholder"
    }
@@ -1696,7 +1726,7 @@
    }
   ],
   [
-   "<p class=\"help\">Astha opens websites and VS Code herself.",
+   "<p class=\"help\">Astha can read and explain a shared screen.",
    {
     "text": "eye_note"
    }
