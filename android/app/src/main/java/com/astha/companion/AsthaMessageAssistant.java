@@ -170,8 +170,10 @@ public class AsthaMessageAssistant extends Service {
         bangla = banglaVoice != null;
         Locale chosen = bangla ? banglaVoice : installed(Locale.US, Locale.UK, Locale.ENGLISH);
         if (chosen != null) voice.setLanguage(chosen);
+        // Android 7 has no "assistant" audio usage; accessibility speech is the closest there.
+        int usage = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O ? AudioAttributes.USAGE_ASSISTANT : AudioAttributes.USAGE_ASSISTANCE_ACCESSIBILITY;
         voice.setAudioAttributes(new AudioAttributes.Builder()
-            .setUsage(AudioAttributes.USAGE_ASSISTANT)
+            .setUsage(usage)
             .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
             .build());
         voice.setOnUtteranceProgressListener(new UtteranceProgressListener() {
