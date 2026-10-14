@@ -116,6 +116,7 @@ of sight, and it does not change what ASTHA is able to detect.
 | Android device voice and speech recognition | Simulated | `test_native_device.mjs` against a stand-in plugin. The Java compiles and passes lint; it has not run on a phone. |
 | Reading other apps on Android | Simulated | Same. Opt-in twice (ASTHA, then Android). Read-only; cannot tap, type or send. |
 | Six-key Braille controller | Simulated | `test_braille.mjs`. Keyboard practice works in a browser. No controller exists; the Bluetooth transport has only met a stand-in. Android needs a native Bluetooth transport because the WebView has no Web Bluetooth. |
+| Spatial layout ("what's on each side?") | Simulated | `tools/spatial.js`, `test_spatial_layout.mjs` with synthetic depth maps. Real accuracy, the floor at a downward camera angle, and use on a phone are unmeasured. |
 | Distance sensor | Hardware link verified; app side simulated | HC-SR04 on an ESP32 → Pi `/telemetry` verified on hardware (10 readings a second, at most 100 ms old). The app's use of it (`test_pi_camera.mjs`, `test_measured_distance.mjs`) is tested with stand-ins; not yet run on a phone, and accuracy at known distances is unmeasured. |
 | Hands-free wake word in the Android app | Not available | The WebView has no continuous recognizer. Where that is the case the hands-free button is hidden and asking for it is explained, instead of failing silently. The microphone button works one request at a time. |
 | Opening an app, preparing a message (Android) | Simulated | "Open the WhatsApp app" finds the app by its launcher name and asks before opening. "Write a message saying …" asks, then opens Android's share menu with the text; the user chooses the app and the person and presses send. ASTHA cannot address or send anything. |
@@ -160,6 +161,36 @@ with the screen locked, how phone makers' battery savers treat the service, and 
 messaging app's reply action behaves all need the device checklist below. Google Play
 requires a declaration for the microphone foreground service and reviews notification
 access; those are the owner's to complete at submission.
+
+## Spatial layout: what is on each side
+
+"What's on each side?", "which way should I go?", "where can I walk?", "দুই পাশে কী আছে?" or
+"কোন দিকে ফাঁকা?" takes one fresh picture and says how far the nearest thing is to the left,
+straight ahead and to the right. It runs on the phone in both online and offline modes,
+because the online assistant has neither the depth model nor the Pi's distance sensor.
+
+How the distances are made:
+
+1. The on-device depth model (Depth Anything V2) only knows which parts of the picture are
+   nearer. Its output behaves like *k ÷ distance + c*.
+2. Two or more known distances in the same picture fix *k* and *c*: the Pi's ultrasonic
+   reading (measured, counted four times) and the size-based distance of each recognised
+   object (estimates). The fit is refused when the known distances are all alike, when
+   nearer things would come out farther, or when they disagree by more than about 50 %.
+3. For each direction, the nearest part of a band around eye level (30–70 % of the
+   picture's height) is converted to metres. Straight ahead uses the sensor's reading
+   whenever there is one.
+
+What is said, for example: "To your left: something about 1 metre away, a chair. Straight
+ahead: measured at 1.9 metres, a person. To your right: nothing seen within 4 metres.
+Distances are estimates from the picture, except the measured one. Use your cane to
+confirm." Estimates are rounded to half metres and always say "about". Without a usable
+fit ASTHA says only which side is nearer, and no picture-based number. It never calls a
+direction clear, free or safe; a test fails if those words appear.
+
+Limits: one picture, no memory of what was behind the camera, and no tilt sensor (the
+MPU6050 was deferred), so a camera pointing down can put the floor into the band and make a
+direction look nearer than it is. The directions are relative to where the camera points.
 
 ## Checks run in a desktop browser
 

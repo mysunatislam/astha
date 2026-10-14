@@ -770,6 +770,9 @@ function offlineRoute(query, q) {
   if (typeof cloudReady === 'function' && cloudReady()) {
     if (Seeker.active && /\b(found it|got it|i have it|i got it|i see it|thanks|thank you)\b|পেয়েছি|পেয়ে গেছি|হয়েছে|peyechi/.test(q)) { Seeker.stop('found'); announce('Great.', 'বাহ, ভালো।', 'voice'); return true; }
     if (Seeker.active && /\b(stop (looking|searching|guiding)|cancel|never mind|forget it)\b|খোঁজা বন্ধ|থাক/.test(q)) { Seeker.stop('user'); return true; }
+    // The Pi's distance sensor and the depth model are on this phone; the online assistant cannot use them.
+    if (/\b(which way (should|can|do) i (go|walk|turn)|where can i (walk|go)|what('s| is) on (each|either|both) sides?|how far .* on (each|either|both) sides?|spatial (view|layout|map))\b|কোন দিকে (ফাঁকা|যাব|জায়গা)|চারদিকে কত দূরে|দুই পাশে কী|দুপাশে কী/.test(q)) { answerSpatial(); return true; }
+    if (/how far|কত ?দূরে|koto dure/.test(q) && state.source === 'pi' && typeof AsthaSensors !== 'undefined' && AsthaSensors.measured('front')) { answerHowFar(query); return true; }
     if (/prepare (for |me for )?offline|download (the |all )?models|work offline|go offline|make (it|astha) work without internet|অফলাইন/.test(q)) { OfflinePack.prepare(); return true; }
     if (/\b(am i|are we|are you) (online|offline|connected)\b|is there internet|do (i|we) have internet|ইন্টারনেট আছে|নেট আছে/.test(q)) { announce('Internet is connected. Cloud mode has permission and credentials; a successful model response has not yet been confirmed.', 'ইন্টারনেট সংযোগ আছে। ক্লাউড মোডে অনুমতি ও পরিচয়পত্র আছে; মডেলের সফল উত্তর এখনো নিশ্চিত করা হয়নি।', 'system'); return true; }
     return false;
@@ -781,6 +784,7 @@ function offlineRoute(query, q) {
   const guideBn = q.match(/([ঀ-৿\s]+?)(?:-?এর| এর)?\s*(কাছে নিয়ে (?:চলো|যাও)|পথ দেখাও|দিকে নিয়ে (?:চলো|যাও))/);
   if (guideBn) { Seeker.start(guideBn[1].replace(/আমাকে|আমায়/g, '').trim(), 'guide'); return true; }
   if (/how far|কত ?দূরে|koto dure/.test(q)) { answerHowFar(query); return true; }
+  if (/\b(which way (should|can|do) i (go|walk|turn)|where can i (walk|go)|what('s| is) on (each|either|both) sides?|how far .* on (each|either|both) sides?|spatial (view|layout|map))\b|কোন দিকে (ফাঁকা|যাব|জায়গা)|চারদিকে কত দূরে|দুই পাশে কী|দুপাশে কী/.test(q)) { answerSpatial(); return true; }
   if (/(which|what) room|what kind of (room|place)|what place is this|কোন ঘর|কোন রুম|kon ghor/.test(q)) { answerWhichRoom(); return true; }
   if (/describe (it |everything )?in detail|in detail|full description|বিস্তারিত/.test(q)) { describeScene(undefined, true); return true; }
   if (/what('s| is) (happening|going on)|whats (happening|going on)|what is around me|summari[sz]e|give me a summary|কী হচ্ছে|কি হচ্ছে|সারাংশ|ki hocche|ki hochche/.test(q)) { describeScene(); return true; }
@@ -791,7 +795,7 @@ function offlineRoute(query, q) {
 }
 try {
   INTENTS.unshift(
-    { id: 'seek', run: q => offlineRoute(q, q.toLowerCase()), kw: ['guide me to', 'take me to', 'lead me to', 'navigate to', 'how far', 'which room', 'what room', 'in detail', 'what is happening', "what's happening", 'going on', 'prepare offline', 'work offline', 'পথ দেখাও', 'নিয়ে চলো', 'কত দূরে', 'কোন ঘর', 'বিস্তারিত', 'কী হচ্ছে', 'অফলাইন', 'koto dure', 'kon ghor'] },
+    { id: 'seek', run: q => offlineRoute(q, q.toLowerCase()), kw: ['guide me to', 'take me to', 'lead me to', 'navigate to', 'how far', 'which room', 'what room', 'in detail', 'what is happening', "what's happening", 'going on', 'prepare offline', 'work offline', 'which way', 'each side', 'both sides', 'where can i walk', 'spatial', 'কোন দিকে', 'দুই পাশে', 'দুপাশে', 'পথ দেখাও', 'নিয়ে চলো', 'কত দূরে', 'কোন ঘর', 'বিস্তারিত', 'কী হচ্ছে', 'অফলাইন', 'koto dure', 'kon ghor'] },
   );
 } catch (e) {}
 
