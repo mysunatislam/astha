@@ -251,22 +251,33 @@ test('without browser speech synthesis ASTHA speaks through the device voice and
   assert.equal(fetches.length, 1); assert.equal(spoken.at(-1)[0], 'Warning! Stairs directly ahead!');
 });
 
-test('in the Android app one tap listens through the device recognizer and handles the result', async () => {
-  // The slice ends inside toggleListening, so close it for the test.
+function nativeListeningHarness(listen, cancel) {
+  // The slice ends inside toggleListening, so close it for the native-only fixture.
   const source = between(offlineSource, '// The Android app has no browser speech recognition', '  const SR = window.SpeechRecognition') + '}';
-  const run = listen => {
-    const queries = [], spoken = [], captions = [], stops = [], fallbacks = [], requests = [];
-    const context = vm.createContext({ console, Promise, state: { listening: false }, privacyMode: false, privacyTransition: false,
-      remoteProcessingAllowed: () => true,
-      reader: { active: false }, OfflineEar: { active: false, wanted: () => false, listenAndHandle: reason => fallbacks.push(reason) }, VoiceEngine: { stop() {} }, pauseReader() {}, playEarcon() {}, sttLang: () => 'bn-BD', t: key => key,
-      $: () => ({ setAttribute() {}, classList: { add() {}, remove() {} }, textContent: '' }),
-      setCaption: (...args) => captions.push(args), announce: (en, bn) => spoken.push([en, bn]), handleQuery: text => queries.push(text),
-      window: { AsthaNative: { canListen: true, listen: (...args) => { requests.push(args); return listen(...args); }, stopListening: () => stops.push(true) } } });
-    context.stopListening = () => { context.state.listening = false; };
-    vm.runInContext(source + '\nglobalThis.toggle = toggleListening;', context);
-    return { context, queries, spoken, captions, stops, fallbacks, requests };
-  };
-  const settle = () => new Promise(resolve => setImmediate(resolve));
+  const sharedStop = between(moduleSource, 'function stopListening() {', 'function companionBoot(');
+  const globalStop = between(offlineSource, 'function stopAllSpeech() {', '// ---- "Works without internet"');
+  const queries = [], spoken = [], captions = [], stops = [], fallbacks = [], requests = [];
+  const context = vm.createContext({ console, Promise, clearTimeout, setTimeout, document: { hidden: false },
+    state: { listening: false, source: 'camera', sourceEpoch: 1 }, privacyMode: false, privacyTransition: false,
+    remoteProcessingAllowed: () => true, recognizer: null, listenTimer: null, listenGeneration: 0,
+    reader: { active: false }, OfflineEar: { active: false, wanted: () => false, listenAndHandle: reason => fallbacks.push(reason) }, VoiceEngine: { stop() {} }, stopReader() {}, pauseReader() {}, playEarcon() {}, sttLang: () => 'bn-BD', t: key => key,
+    $: () => ({ setAttribute() {}, classList: { add() {}, remove() {} }, textContent: '' }),
+    setCaption: (...args) => captions.push(args), announce: (en, bn) => spoken.push([en, bn]), handleQuery: text => queries.push(text),
+    window: { ASTHA_ACCOUNT_ID: 'accountA', ASTHA_LOCAL_ACCOUNT_ID: 'accountA',
+      AsthaNative: { canListen: true, listen: (...args) => { requests.push(args); return listen(...args); },
+        stopListening: () => { stops.push(true); return cancel?.(context); } } } });
+  vm.runInContext(source + '\n' + sharedStop + '\n' + globalStop + '\nglobalThis.toggle = toggleListening;', context);
+  return { context, queries, spoken, captions, stops, fallbacks, requests };
+}
+const settleNativeListening = () => new Promise(resolve => setImmediate(resolve));
+function pendingNativeListening() {
+  let resolve, reject;
+  const promise = new Promise((yes, no) => { resolve = yes; reject = no; });
+  return { promise, resolve, reject };
+}
+
+test('in the Android app one tap listens through the device recognizer and handles the result', async () => {
+  const run = nativeListeningHarness, settle = settleNativeListening;
 
   const heard = run(async language => { assert.equal(language, 'bn-BD'); return '  আমার চশমা কোথায়  '; });
   heard.context.toggle(); assert.equal(heard.context.state.listening, true);
@@ -304,6 +315,80 @@ test('in the Android app one tap listens through the device recognizer and handl
   const privacy = run(async () => { throw new Error('the recognizer must not start in privacy mode'); });
   privacy.context.privacyMode = true; privacy.context.toggle(); await settle();
   assert.match(privacy.spoken[0][0], /privacy mode/); assert.equal(privacy.context.state.listening, false);
+});
+
+test('global Stop invalidates native input before bridge cancellation and handles cancellation failures', async () => {
+  for (const cancellation of ['throw', 'reject']) {
+    const pending = pendingNativeListening();
+    const h = nativeListeningHarness(() => pending.promise, context => {
+      assert.equal(vm.runInContext('nativeListeningRequest', context), null, 'identity is invalidated synchronously before native cancellation');
+      if (cancellation === 'throw') throw new Error('synthetic native cancellation failure');
+      return Promise.reject(new Error('synthetic rejected cancellation'));
+    });
+    h.context.toggle(); h.context.stopAllSpeech();
+    assert.deepEqual(h.stops, [true]); assert.equal(h.context.state.listening, false);
+    pending.resolve('late words'); await settleNativeListening();
+    assert.deepEqual(h.queries, []); assert.deepEqual(h.fallbacks, []);
+    h.context.stopAllSpeech(); assert.equal(h.stops.length, 1, 'repeated Stop does not cancel a future native request');
+  }
+});
+
+test('a cancelled native result or failure cannot clear a replacement request or dispatch a fallback', async () => {
+  for (const failure of [false, true]) for (const olderFirst of [false, true]) {
+    const old = pendingNativeListening(), next = pendingNativeListening(); let calls = 0;
+    const h = nativeListeningHarness(() => (++calls === 1 ? old : next).promise);
+    h.context.toggle(); h.context.stopAllSpeech(); h.context.toggle();
+    const captions = h.captions.length;
+    const finishOld = () => failure ? old.reject(coded('on_device_unavailable')) : old.resolve('old words');
+    if (olderFirst) {
+      finishOld(); await settleNativeListening();
+      assert.equal(h.context.state.listening, true, 'old completion cannot clear the current microphone UI');
+      assert.equal(h.captions.length, captions); assert.deepEqual(h.queries, []); assert.deepEqual(h.fallbacks, []);
+    }
+    next.resolve('new words'); await settleNativeListening();
+    if (!olderFirst) { finishOld(); await settleNativeListening(); }
+    assert.deepEqual(h.queries, ['new words']); assert.deepEqual(h.fallbacks, []);
+    assert.equal(h.context.state.listening, false); assert.deepEqual(h.stops, [true]);
+  }
+});
+
+test('native input drops stale success and failure after account, source, consent, privacy or visibility changes', async () => {
+  const changes = {
+    account: context => { context.window.ASTHA_ACCOUNT_ID = 'accountB'; },
+    localAccount: context => { context.window.ASTHA_LOCAL_ACCOUNT_ID = 'accountB'; },
+    source: context => { context.state.source = 'photo'; },
+    sourceEpoch: context => { context.state.sourceEpoch++; },
+    consent: context => { context.remoteProcessingAllowed = () => false; },
+    privacy: context => { context.privacyMode = true; },
+    privacyTransition: context => { context.privacyTransition = true; },
+    hidden: context => { context.document.hidden = true; },
+  };
+  for (const [name, change] of Object.entries(changes)) for (const failure of [false, true]) {
+    const pending = pendingNativeListening(), h = nativeListeningHarness(() => pending.promise);
+    h.context.toggle(); change(h.context);
+    if (failure) pending.reject(coded('on_device_unavailable')); else pending.resolve('stale words');
+    await settleNativeListening();
+    assert.deepEqual(h.queries, [], name); assert.deepEqual(h.fallbacks, [], name); assert.deepEqual(h.spoken, [], name);
+    assert.equal(h.context.state.listening, false, name); assert.deepEqual(h.stops, [true], name);
+  }
+});
+
+test('a hidden page cannot begin native recognition', async () => {
+  const h = nativeListeningHarness(() => { throw new Error('hidden page must not listen'); });
+  h.context.document.hidden = true; h.context.toggle(); await settleNativeListening();
+  assert.deepEqual(h.requests, []); assert.equal(h.context.state.listening, false);
+});
+
+test('native one-tap recognition pauses the active foreground hands-free listener first', async () => {
+  const stopped = [];
+  const h = nativeListeningHarness(async () => {
+    assert.equal(h.context.SiriVoice.active, false);
+    assert.deepEqual(stopped, [true]);
+    return 'one request';
+  });
+  h.context.SiriVoice = { active: true, enabled: false, stop: silent => { stopped.push(silent); h.context.SiriVoice.active = false; } };
+  h.context.toggle(); await settleNativeListening();
+  assert.deepEqual(h.queries, ['one request']); assert.equal(h.requests.length, 1);
 });
 
 test('Android guardrails: screen reading is opt-in, read-only, bound by the system and unable to act for the user', () => {

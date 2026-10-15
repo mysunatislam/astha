@@ -1018,15 +1018,22 @@ const SiriVoice = {
   lastCommandAt: 0,
   lastBargeInAt: 0,
   starting: false,
+  generation: 0,
+
+  _allowed() {
+    return this.active && this.enabled && !state.listening && !(typeof OfflineEar !== 'undefined' && OfflineEar.active) && !document.hidden && remoteProcessingAllowed();
+  },
 
   get on() { return this.active; },
   set on(v) { if (v) this.start(); else this.stop(); },
 
   start() {
-    if (!this.enabled || !remoteProcessingAllowed()) return;
+    if (!this.enabled || state.listening || (typeof OfflineEar !== 'undefined' && OfflineEar.active) || document.hidden || !remoteProcessingAllowed()) return;
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) return;
     if (this.active && this.rec) return;
+    if (!this.active) this.generation++;
+    clearTimeout(this.restartTimer);
     this.active = true;
     this.lastCommandAt = Date.now();
     const btn = $('hf-btn');
@@ -1039,13 +1046,15 @@ const SiriVoice = {
   },
 
   stop(silent) {
+    this.generation++;
     this.active = false;
     clearTimeout(this.restartTimer);
     clearTimeout(this.speechDebounceTimer);
     this.pendingSpeech = '';
-    if (this.rec) {
-      try { this.rec.abort(); } catch (e) {}
-      this.rec = null;
+    const rec = this.rec;
+    this.rec = null;
+    if (rec) {
+      try { rec.abort(); } catch (e) {}
     }
     const btn = $('hf-btn');
     if (btn) btn.setAttribute('aria-pressed', 'false');
@@ -1069,22 +1078,31 @@ const SiriVoice = {
   },
 
   _listen() {
-    if (!this.active || !this.enabled || !remoteProcessingAllowed()) { this.stop(true); return; }
+    if (!this._allowed()) { this.stop(true); return; }
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
     if (!SR) return;
     if (this.rec) {
-      try { this.rec.abort(); } catch (e) {}
+      const previous = this.rec;
       this.rec = null;
+      try { previous.abort(); } catch (e) {}
     }
+
+    const generation = this.generation;
+    const account = window.ASTHA_ACCOUNT_ID, localAccount = window.ASTHA_LOCAL_ACCOUNT_ID;
+    const sessionCurrent = () => generation === this.generation && this._allowed() &&
+      account === window.ASTHA_ACCOUNT_ID && localAccount === window.ASTHA_LOCAL_ACCOUNT_ID;
 
     try {
       const rec = new SR();
+      const current = () => sessionCurrent() && this.rec === rec;
+      this.rec = rec;
       rec.lang = sttLang();
       rec.continuous = true;
       rec.interimResults = true;
       rec.maxAlternatives = 1;
 
       rec.onresult = (e) => {
+        if (!current()) return;
         let interimText = '';
         let finalText = '';
 
@@ -1135,6 +1153,7 @@ const SiriVoice = {
           this.pendingSpeech = ((this.pendingSpeech || '') + ' ' + finalText.trim()).trim();
           clearTimeout(this.speechDebounceTimer);
           this.speechDebounceTimer = setTimeout(() => {
+            if (!sessionCurrent()) return;
             if (this.pendingSpeech) {
               const cmdToSend = this.pendingSpeech;
               this.pendingSpeech = '';
@@ -1145,6 +1164,7 @@ const SiriVoice = {
       };
 
       rec.onerror = (ev) => {
+        if (!current()) return;
         if (ev.error === 'no-speech') return;
         if (ev.error === 'network') {
           // The browser recogniser needs the internet; the one-tap microphone falls back to Whisper on the phone.
@@ -1153,36 +1173,45 @@ const SiriVoice = {
           return;
         }
         if (ev.error === 'not-allowed' || ev.error === 'service-not-allowed') {
-          console.warn('Microphone permission blocked or service not allowed');
           this.stop(true);
+          announce('Hands-free microphone access is blocked. Check your browser microphone permission, then turn Hands-free on again.', 'হ্যান্ডস-ফ্রি মাইক্রোফোনের অনুমতি নেই। ব্রাউজারে মাইক্রোফোনের অনুমতি দেখে আবার হ্যান্ডস-ফ্রি চালু করুন।', 'voice');
+          return;
+        }
+        if (ev.error === 'audio-capture' || ev.error === 'language-not-supported') {
+          this.stop(true);
+          announce('Hands-free listening is unavailable. Check your microphone and recognition language, or type your request.', 'হ্যান্ডস-ফ্রি শোনা যাচ্ছে না। মাইক্রোফোন ও কথার ভাষা পরীক্ষা করুন, অথবা অনুরোধ লিখুন।', 'voice');
           return;
         }
       };
 
       rec.onend = () => {
+        if (!current()) return;
         this.rec = null;
-        if (this.active && this.enabled && !state.listening) {
+        if (sessionCurrent()) {
           clearTimeout(this.restartTimer);
           this.restartTimer = setTimeout(() => {
-            if (this.active && this.enabled && !state.listening) this._listen();
+            if (sessionCurrent() && !this.rec) this._listen();
           }, 300);
         }
       };
 
       rec.start();
-      this.rec = rec;
+      if (!current()) return;
       $('mic')?.classList.add('listening');
       $('mic-label') && ($('mic-label').textContent = 'Listening (Voice active)…');
     } catch (err) {
-      console.warn('SiriVoice start error:', err);
+      const failed = this.rec;
+      this.rec = null;
+      if (failed) { try { failed.abort(); } catch (e) {} }
       clearTimeout(this.restartTimer);
       this.restartTimer = setTimeout(() => {
-        if (this.active && this.enabled && !state.listening) this._listen();
+        if (sessionCurrent() && !this.rec) this._listen();
       }, 1000);
     }
   },
 
   handleVoiceInput(rawText) {
+    if (!this._allowed()) return;
     const q = (rawText || '').trim();
     if (!q) return;
     if (VoiceEchoFilter.isMachineEcho(q)) return;
@@ -1205,7 +1234,7 @@ const SiriVoice = {
       if (/^(sleep|go to sleep|stop listening|hands.?free off|voice off|ঘুমাও|শোনা বন্ধ)/i.test(cmd)) {
         this.enabled = false;
         this.stop();
-        return announce('Astha voice listening paused. Say “Astha” or tap the microphone when you need me.', 'ভয়েস লিসেনিং সাময়িক বন্ধ। দরকার হলে বলুন বা মাইক্রোফোন চাপুন।', 'voice');
+        return announce('Astha voice listening paused. Turn Hands-free on or tap the microphone when you need me.', 'আস্থার ভয়েস শোনা বন্ধ আছে। দরকার হলে হ্যান্ডস-ফ্রি চালু করুন অথবা মাইক্রোফোন চাপুন।', 'voice');
       }
 
       if (!cmd) {
@@ -1629,30 +1658,42 @@ async function handleOnDevicePlacement(query, statedItem) {
 
 // ---- One-tap listening that actually waits --------------------------------
 let listenTimer = null;
+let listenGeneration = 0;
 function toggleListening() {
   if (state.listening) { stopListening(); return; }
+  if (document.hidden || !remoteProcessingAllowed()) return;
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) { setCaption(t('agent_voice'), t('voice_unavailable'), 'voice'); speak(t('voice_unavailable'), tBn('voice_unavailable')); return; }
   if (privacyMode || privacyTransition) return announce('Voice recognition is off in privacy mode. Type your request.', 'গোপনীয়তা মোডে অনলাইন কণ্ঠ শনাক্তকরণ বন্ধ। অনুরোধ লিখুন।');
   if (reader.active) pauseReader(); else VoiceEngine.stop();
   if (typeof SiriVoice !== 'undefined' && SiriVoice.active) SiriVoice.stop(true);
   state.listening = true;
+  const generation = ++listenGeneration;
+  const account = window.ASTHA_ACCOUNT_ID, localAccount = window.ASTHA_LOCAL_ACCOUNT_ID;
+  let rec;
+  const owns = () => generation === listenGeneration && state.listening && recognizer === rec;
+  const current = () => owns() && !document.hidden && !privacyMode && !privacyTransition && remoteProcessingAllowed() &&
+    account === window.ASTHA_ACCOUNT_ID && localAccount === window.ASTHA_LOCAL_ACCOUNT_ID;
   $('mic').setAttribute('aria-label', 'Stop listening'); $('mic').setAttribute('aria-pressed', 'true'); $('mic').classList.add('listening');
   $('mic-label').textContent = t('mic_listening');
   setCaption(t('agent_voice'), 'Listening… take your time.', 'voice', 'busy', 'শুনছি… ধীরে বলুন।');
   playEarcon('confirm');
   let finalText = '', gotSpeech = false;
   const finish = () => {
+    if (!owns()) return;
     clearTimeout(listenTimer);
+    const permitted = current();
     const text = finalText.trim();
     stopListening();
+    if (!permitted) return;
     if (text) handleQuery(text);
     else { setCaption(t('agent_voice'), 'I did not hear anything. Tap the microphone and speak after the chime.', 'voice', null, 'কিছু শুনতে পাইনি। মাইক্রোফোন চেপে শব্দের পরে বলুন।'); speak('I did not hear anything. Tap the microphone and speak after the chime.', 'কিছু শুনতে পাইনি। মাইক্রোফোন চেপে শব্দের পরে বলুন।'); }
   };
   try {
-    recognizer = new SR();
-    recognizer.lang = sttLang(); recognizer.continuous = true; recognizer.interimResults = true; recognizer.maxAlternatives = 1;
-    recognizer.onresult = e => {
+    rec = new SR(); recognizer = rec;
+    rec.lang = sttLang(); rec.continuous = true; rec.interimResults = true; rec.maxAlternatives = 1;
+    rec.onresult = e => {
+      if (!current()) return;
       let interim = '';
       for (let i = e.resultIndex; i < e.results.length; i++) {
         const tr = e.results[i][0].transcript;
@@ -1664,18 +1705,21 @@ function toggleListening() {
       // Wait a moment after the last words in case the sentence continues.
       listenTimer = setTimeout(finish, finalText.trim() ? 2200 : 3500);
     };
-    recognizer.onerror = ev => { if (ev.error === 'no-speech') return; console.warn('speech', ev.error); if (ev.error === 'not-allowed') { stopListening(); announce('Microphone access was denied.', 'মাইক্রোফোনের অনুমতি নেই।', 'voice'); } };
-    recognizer.onend = () => { if (state.listening) { if (finalText.trim()) finish(); else if (!gotSpeech && Date.now() - listenStart < 11000) { try { recognizer.start(); } catch (e) {} } else finish(); } };
+    rec.onerror = ev => { if (!current() || ev.error === 'no-speech') return; if (ev.error === 'not-allowed' || ev.error === 'service-not-allowed') { stopListening(); announce('Microphone access was denied.', 'মাইক্রোফোনের অনুমতি নেই।', 'voice'); } };
+    rec.onend = () => { if (!owns()) return; if (!current()) { stopListening(); return; } if (finalText.trim()) finish(); else if (!gotSpeech && Date.now() - listenStart < 11000) { try { rec.start(); } catch (e) { stopListening(); } } else finish(); };
     const listenStart = Date.now();
-    recognizer.start();
+    rec.start();
     listenTimer = setTimeout(finish, 12000);
   } catch (e) { console.warn(e); stopListening(); }
 }
 
 function stopListening() {
+  listenGeneration++;
+  if (typeof cancelNativeListening === 'function') cancelNativeListening();
   state.listening = false;
   clearTimeout(listenTimer);
-  if (recognizer) { try { recognizer.abort(); } catch (e) {} recognizer = null; }
+  const previous = recognizer; recognizer = null;
+  if (previous) { try { previous.abort(); } catch (e) {} }
   $('mic')?.setAttribute('aria-label', t('mic_idle'));
   $('mic')?.setAttribute('aria-pressed', 'false');
   $('mic')?.classList.remove('listening');
@@ -1689,7 +1733,14 @@ function companionBoot() {
   state.relabel = {};
   populateVoices();
   window.speechSynthesis?.addEventListener('voiceschanged', populateVoices);
-  window.addEventListener('pagehide', () => { if (typeof SiriVoice !== 'undefined') SiriVoice.stop(true); });
+  const pauseListening = () => {
+    SiriVoice.enabled = false;
+    SiriVoice.stop(true);
+    if (typeof OfflineEar !== 'undefined') OfflineEar.cancel();
+    stopListening();
+  };
+  window.addEventListener('pagehide', pauseListening);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) pauseListening(); });
 
   // The existing Hands-free control (or explicit voice command) grants consent.
   // Loading the page or interacting with unrelated controls never opens the microphone.

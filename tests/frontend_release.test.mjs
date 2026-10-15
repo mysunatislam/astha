@@ -38,6 +38,7 @@ function harness(saved = {}, consent = true) {
   const context = vm.createContext({
     console, Date, AbortController, AbortSignal, URL: { createObjectURL: () => 'blob:test', revokeObjectURL() {} },
     navigator: { onLine: true }, privacyMode: false, privacyTransition: false,
+    document: { hidden: false, addEventListener: (name, callback) => calls.listeners.push({ name, callback }) },
     state: { audio: true, listening: false }, voiceLang: 'bn', $, calls,
     localStorage: { getItem: key => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, String(value)) },
     voices: [{ name: 'Local Bangla', lang: 'bn-BD', localService: true }],

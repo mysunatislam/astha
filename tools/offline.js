@@ -568,6 +568,7 @@ function findItems(query) {
 const OfflineEar = {
   id: 'onnx-community/whisper-tiny', asr: null, loading: null,
   get status() { return (engine.ear && engine.ear.status) || 'idle'; }, active: false, cancelFlag: false,
+  generation: 0, request: null,
   wanted() { if (typeof remoteProcessingAllowed === 'function' && !remoteProcessingAllowed()) return true; try { if (localStorage.getItem('astha.offline_voice') === '1') return true; } catch (e) {} return navigator.onLine === false; },
   async load() {
     if (this.status === 'ready') return true;
@@ -586,36 +587,56 @@ const OfflineEar = {
     })();
     return this.loading;
   },
-  async record(maxMs = 9000) {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
-    let ctx; try { ctx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 }); } catch (e) { ctx = new (window.AudioContext || window.webkitAudioContext)(); }
-    if (ctx.state === 'suspended') { try { await ctx.resume(); } catch (e) {} }
-    const src = ctx.createMediaStreamSource(stream), proc = ctx.createScriptProcessor(4096, 1, 1);
+  record(maxMs = 9000, request = this.request) {
+    let stream, ctx, src, proc, timer;
     const chunks = []; let speech = false, silentMs = 0, speechMs = 0, floor = 0.004, done = false; const t0 = Date.now();
-    return new Promise(resolve => {
-      const finish = () => {
+    const current = () => !done && (!request || request.current());
+    const stopTracks = value => { for (const track of value?.getTracks() || []) { try { track.stop(); } catch (e) {} } };
+    return new Promise((resolve, reject) => {
+      const finish = error => {
         if (done) return; done = true;
-        try { proc.disconnect(); src.disconnect(); } catch (e) {}
-        stream.getTracks().forEach(tr => tr.stop()); ctx.close().catch(() => {});
+        clearTimeout(timer);
+        if (request) request.cleanup = null;
+        if (proc) proc.onaudioprocess = null;
+        try { proc?.disconnect(); } catch (e) {}
+        try { src?.disconnect(); } catch (e) {}
+        stopTracks(stream);
+        try { Promise.resolve(ctx?.close()).catch(() => {}); } catch (e) {}
+        if (error) { reject(error); return; }
         const total = chunks.reduce((n, c) => n + c.length, 0);
         let data = new Float32Array(total); let off = 0; chunks.forEach(c => { data.set(c, off); off += c.length; });
-        if (ctx.sampleRate !== 16000) { // linear resample
+        if (ctx && ctx.sampleRate !== 16000) { // linear resample
           const ratio = ctx.sampleRate / 16000, out = new Float32Array(Math.floor(data.length / ratio));
           for (let i = 0; i < out.length; i++) { const p = i * ratio, j = Math.floor(p), f = p - j; out[i] = data[j] * (1 - f) + (data[j + 1] || 0) * f; }
           data = out;
         }
         resolve({ data, speech, ms: Date.now() - t0 });
       };
-      proc.onaudioprocess = e => {
-        if (this.cancelFlag) return finish();
-        const d = e.inputBuffer.getChannelData(0); chunks.push(new Float32Array(d));
-        let s = 0; for (let i = 0; i < d.length; i += 4) s += d[i] * d[i]; const rms = Math.sqrt(s / (d.length / 4));
-        const chunkMs = d.length / ctx.sampleRate * 1000;
-        const thr = Math.max(0.01, floor * 3.5);
-        if (rms > thr) { speech = true; speechMs += chunkMs; silentMs = 0; } else { if (speech) silentMs += chunkMs; floor = 0.9 * floor + 0.1 * rms; }
-        if ((speech && speechMs > 250 && silentMs > 1200) || Date.now() - t0 > maxMs || (!speech && Date.now() - t0 > 6500)) finish();
-      };
-      src.connect(proc); proc.connect(ctx.destination);
+      if (request) request.cleanup = () => finish();
+      if (!current()) { finish(); return; }
+      // The deadline and cancellation do not depend on another audio callback.
+      timer = setTimeout(() => finish(), maxMs);
+      (async () => {
+        try {
+          const granted = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+          if (!current()) { stopTracks(granted); finish(); return; }
+          stream = granted;
+          try { ctx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 16000 }); } catch (e) { ctx = new (window.AudioContext || window.webkitAudioContext)(); }
+          if (ctx.state === 'suspended') { try { await ctx.resume(); } catch (e) {} }
+          if (!current()) { finish(); return; }
+          src = ctx.createMediaStreamSource(stream); proc = ctx.createScriptProcessor(4096, 1, 1);
+          proc.onaudioprocess = e => {
+            if (!current()) return finish();
+            const d = e.inputBuffer.getChannelData(0); chunks.push(new Float32Array(d));
+            let s = 0; for (let i = 0; i < d.length; i += 4) s += d[i] * d[i]; const rms = Math.sqrt(s / (d.length / 4));
+            const chunkMs = d.length / ctx.sampleRate * 1000;
+            const thr = Math.max(0.01, floor * 3.5);
+            if (rms > thr) { speech = true; speechMs += chunkMs; silentMs = 0; } else { if (speech) silentMs += chunkMs; floor = 0.9 * floor + 0.1 * rms; }
+            if ((speech && speechMs > 250 && silentMs > 1200) || Date.now() - t0 > maxMs || (!speech && Date.now() - t0 > 6500)) finish();
+          };
+          src.connect(proc); proc.connect(ctx.destination);
+        } catch (error) { if (current()) finish(error); else finish(); }
+      })();
     });
   },
   langName() { const l = typeof sttLang === 'function' ? sttLang() : 'en-US'; return /^bn/i.test(l) ? 'bengali' : 'english'; },
@@ -625,52 +646,108 @@ const OfflineEar = {
     if (/^(thank you\.?|thanks for watching\.?|you\.?|bye\.?|\.+)$/i.test(text)) text = '';
     return text;
   },
-  cancel() { this.cancelFlag = true; },
+  cancel() {
+    const request = this.request;
+    this.request = null; this.generation++; this.cancelFlag = true; this.active = false;
+    request?.cleanup?.();
+    if (request) this.uiOff();
+  },
   uiOn() { $('mic')?.classList.add('listening'); $('mic')?.setAttribute('aria-pressed', 'true'); if ($('mic-label')) $('mic-label').textContent = 'Listening on this phone…'; },
-  uiOff() { $('mic')?.classList.remove('listening'); $('mic')?.setAttribute('aria-pressed', 'false'); if ($('mic-label')) $('mic-label').textContent = t('mic_idle') || 'Microphone idle'; if (typeof SiriVoice !== 'undefined' && SiriVoice.enabled && navigator.onLine !== false) setTimeout(() => SiriVoice.start(), 200); },
+  uiOff() {
+    $('mic')?.classList.remove('listening'); $('mic')?.setAttribute('aria-pressed', 'false');
+    if ($('mic-label')) $('mic-label').textContent = t('mic_idle') || 'Microphone idle';
+    const generation = this.generation;
+    if (typeof SiriVoice !== 'undefined' && SiriVoice.enabled && navigator.onLine !== false) setTimeout(() => {
+      if (generation === this.generation && !this.active && !state.listening && !document.hidden) SiriVoice.start();
+    }, 200);
+  },
   async listenAndHandle(reason) {
     if (this.active) { this.cancel(); return; }
     if (privacyMode || privacyTransition) return announce('Voice input is off in privacy mode. Type your request.', 'গোপনীয়তা মোডে কণ্ঠ শনাক্তকরণ বন্ধ। অনুরোধ লিখুন।');
+    if (document.hidden) return;
+    const account = window.ASTHA_ACCOUNT_ID, localAccount = window.ASTHA_LOCAL_ACCOUNT_ID;
+    const source = state.source, epoch = state.sourceEpoch, remote = remoteProcessingAllowed();
+    const request = { generation: ++this.generation, cleanup: null };
+    this.request = request;
+    const current = request.current = () => this.request === request && request.generation === this.generation && this.active &&
+      !document.hidden && !privacyMode && !privacyTransition && account === window.ASTHA_ACCOUNT_ID &&
+      localAccount === window.ASTHA_LOCAL_ACCOUNT_ID && source === state.source && epoch === state.sourceEpoch && remote === remoteProcessingAllowed();
     this.active = true; this.cancelFlag = false;
     if (typeof SiriVoice !== 'undefined' && SiriVoice.active) SiriVoice.stop(true);
     if (typeof VoiceEngine !== 'undefined') VoiceEngine.stop();
     this.uiOn();
     try {
-      const loadP = this.load();
+      // Keep the existing concurrent model warmup; cancelled requests never consume its result.
+      const loadP = Promise.resolve(this.load()).catch(() => false);
       if (reason === 'network' && !this._explained) { this._explained = true; setCaption(t('agent_voice'), 'No internet for the online recogniser. Listening on this phone instead.', 'voice', 'busy', 'ইন্টারনেট নেই, তাই এই ফোনেই শুনছি।'); }
       else setCaption(t('agent_voice'), this.status === 'ready' ? 'Listening on this phone… speak after the chime.' : 'Listening… the offline voice model is loading in the background (first time only).', 'voice', 'busy', 'এই ফোনেই শুনছি… শব্দের পরে বলুন।');
       playEarcon('confirm');
-      const audio = await this.record(9000);
-      if (this.cancelFlag) return;
+      const audio = await this.record(9000, request);
+      if (!current()) return;
       if (!audio.speech) { announce('I did not hear anything. Tap the microphone and speak after the chime.', 'কিছু শুনতে পাইনি। মাইক্রোফোন চেপে শব্দের পরে বলুন।', 'voice'); return; }
       setCaption(t('agent_voice'), 'Understanding…', 'voice', 'busy', 'বুঝছি…');
       const ok = await loadP;
+      if (!current()) return;
       if (!ok) { announce('The offline voice model could not load. Connect once to download it, or type your request.', 'অফলাইন ভয়েস মডেল লোড হয়নি। একবার ইন্টারনেটে যুক্ত হয়ে ডাউনলোড করুন, বা লিখে বলুন।', 'voice'); return; }
       const text = await this.transcribe(audio.data);
-      if (this.cancelFlag) return;
+      if (!current()) return;
       if (!text) { announce('I could not make that out. Please say it again.', 'বুঝতে পারিনি। আবার বলুন।', 'voice'); return; }
       setCaption(t('agent_voice'), 'Heard: ' + text, 'voice');
       logEvent('Heard (offline): ' + text);
       handleQuery(text);
-    } catch (e) { console.warn('offline ear', e); announce('The microphone could not be used. Check the permission.', 'মাইক্রোফোন ব্যবহার করা যায়নি। অনুমতি দেখুন।', 'voice'); }
-    finally { this.active = false; this.uiOff(); }
+    } catch (e) { if (current()) announce('The microphone could not be used. Check the permission.', 'মাইক্রোফোন ব্যবহার করা যায়নি। অনুমতি দেখুন।', 'voice'); }
+    finally {
+      if (this.request === request) {
+        this.request = null; this.active = false;
+        request.cleanup?.();
+        this.uiOff();
+      }
+    }
   },
 };
 
 // One-tap listening: the browser recogniser when online, Whisper on the phone otherwise.
 // The Android app has no browser speech recognition, so one request uses the device recognizer.
+let nativeListeningGeneration = 0;
+let nativeListeningRequest = null;
+function cancelNativeListening() {
+  const request = nativeListeningRequest;
+  // Invalidate before invoking the bridge: its cancellation can settle the old promise.
+  nativeListeningRequest = null;
+  nativeListeningGeneration++;
+  if (!request) return;
+  try { Promise.resolve(request.device.stopListening()).catch(() => {}); } catch (error) {}
+}
 async function listenOnDevice() {
   if (privacyMode || privacyTransition) return announce('Voice recognition is off in privacy mode. Type your request.', 'গোপনীয়তা মোডে কণ্ঠ শনাক্তকরণ বন্ধ। অনুরোধ লিখে দিন।', 'voice');
+  if (typeof document !== 'undefined' && document.hidden) return;
+  const device = window.AsthaNative;
+  if (!device || !device.canListen) return;
+  cancelNativeListening();
+  const account = window.ASTHA_ACCOUNT_ID, localAccount = window.ASTHA_LOCAL_ACCOUNT_ID;
+  const source = state.source, epoch = state.sourceEpoch, remote = remoteProcessingAllowed();
+  const request = { device, generation: ++nativeListeningGeneration };
+  nativeListeningRequest = request;
+  const current = () => nativeListeningRequest === request && request.generation === nativeListeningGeneration &&
+    state.listening && !privacyMode && !privacyTransition && !(typeof document !== 'undefined' && document.hidden) &&
+    account === window.ASTHA_ACCOUNT_ID && localAccount === window.ASTHA_LOCAL_ACCOUNT_ID &&
+    source === state.source && epoch === state.sourceEpoch && remote === remoteProcessingAllowed();
   if (reader.active) pauseReader(); else VoiceEngine.stop();
+  if (typeof SiriVoice !== 'undefined' && SiriVoice.active) SiriVoice.stop(true);
   state.listening = true;
   $('mic').setAttribute('aria-label', 'Stop listening'); $('mic').setAttribute('aria-pressed', 'true'); $('mic').classList.add('listening');
   $('mic-label').textContent = t('mic_listening');
   setCaption(t('agent_voice'), 'Listening… take your time.', 'voice', 'busy', 'শুনছি… ধীরে বলুন।');
   playEarcon('confirm');
   let text = '', failure = null;
-  const onDeviceOnly = !remoteProcessingAllowed() || OfflineEar.wanted();
-  try { text = (await window.AsthaNative.listen(sttLang(), { onDeviceOnly })).trim(); } catch (error) { failure = error && error.code; }
-  if (!state.listening) return;   // the user tapped again to cancel
+  const onDeviceOnly = !remote || OfflineEar.wanted();
+  try { text = (await device.listen(sttLang(), { onDeviceOnly })).trim(); } catch (error) { failure = error && error.code; }
+  // An old completion must never clear a newer request, dispatch words or start a fallback.
+  if (nativeListeningRequest !== request) return;
+  if (!current()) { stopListening(); return; }
+  // Recognition already completed. Shared UI cleanup must not cancel another bridge call.
+  nativeListeningRequest = null;
+  nativeListeningGeneration++;
   stopListening();
   if (failure === 'permission') return announce('Microphone access was denied.', 'মাইক্রোফোনের অনুমতি নেই।', 'voice');
   if (failure === 'on_device_unavailable' || failure === 'language_unavailable') return OfflineEar.listenAndHandle('native_unavailable');
@@ -680,32 +757,44 @@ async function listenOnDevice() {
 }
 function toggleListening() {
   const device = window.AsthaNative && window.AsthaNative.canListen ? window.AsthaNative : null;
-  if (state.listening) { if (device) device.stopListening(); stopListening(); return; }
+  if (state.listening) { stopListening(); return; }
   if (OfflineEar.active) { OfflineEar.cancel(); return; }
+  if (document.hidden) return;
   if (device) { listenOnDevice(); return; }
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  if (!SR || OfflineEar.wanted()) return OfflineEar.listenAndHandle(!SR ? 'nosr' : (navigator.onLine === false ? 'network' : 'pref'));
   if (privacyMode || privacyTransition) return announce('Voice recognition is off in privacy mode. Type your request.', 'গোপনীয়তা মোডে অনলাইন কণ্ঠ শনাক্তকরণ বন্ধ। অনুরোধ লিখুন।');
+  if (!SR || !remoteProcessingAllowed() || OfflineEar.wanted()) return OfflineEar.listenAndHandle(!SR ? 'nosr' : (navigator.onLine === false ? 'network' : 'pref'));
   if (reader.active) pauseReader(); else VoiceEngine.stop();
   if (typeof SiriVoice !== 'undefined' && SiriVoice.active) SiriVoice.stop(true);
   state.listening = true;
+  const generation = ++listenGeneration;
+  const account = window.ASTHA_ACCOUNT_ID, localAccount = window.ASTHA_LOCAL_ACCOUNT_ID;
+  const source = state.source, epoch = state.sourceEpoch;
+  let rec;
+  const owns = () => generation === listenGeneration && state.listening && recognizer === rec;
+  const current = () => owns() && !document.hidden && !privacyMode && !privacyTransition && remoteProcessingAllowed() &&
+    account === window.ASTHA_ACCOUNT_ID && localAccount === window.ASTHA_LOCAL_ACCOUNT_ID &&
+    source === state.source && epoch === state.sourceEpoch;
   $('mic').setAttribute('aria-label', 'Stop listening'); $('mic').setAttribute('aria-pressed', 'true'); $('mic').classList.add('listening');
   $('mic-label').textContent = t('mic_listening');
   setCaption(t('agent_voice'), 'Listening… take your time.', 'voice', 'busy', 'শুনছি… ধীরে বলুন।');
   playEarcon('confirm');
   let finalText = '', gotSpeech = false, handedOff = false;
   const finish = () => {
+    if (!owns()) return;
     clearTimeout(listenTimer);
+    const permitted = current();
     const text = finalText.trim();
     stopListening();
-    if (handedOff) return;
+    if (!permitted || handedOff) return;
     if (text) handleQuery(text);
     else { setCaption(t('agent_voice'), 'I did not hear anything. Tap the microphone and speak after the chime.', 'voice', null, 'কিছু শুনতে পাইনি। মাইক্রোফোন চেপে শব্দের পরে বলুন।'); speak('I did not hear anything. Tap the microphone and speak after the chime.', 'কিছু শুনতে পাইনি। মাইক্রোফোন চেপে শব্দের পরে বলুন।'); }
   };
   try {
-    recognizer = new SR();
-    recognizer.lang = sttLang(); recognizer.continuous = true; recognizer.interimResults = true; recognizer.maxAlternatives = 1;
-    recognizer.onresult = e => {
+    rec = new SR(); recognizer = rec;
+    rec.lang = sttLang(); rec.continuous = true; rec.interimResults = true; rec.maxAlternatives = 1;
+    rec.onresult = e => {
+      if (!current()) return;
       let interim = '';
       for (let i = e.resultIndex; i < e.results.length; i++) { const tr = e.results[i][0].transcript; if (e.results[i].isFinal) finalText += ' ' + tr; else interim += tr; }
       gotSpeech = true;
@@ -713,17 +802,17 @@ function toggleListening() {
       clearTimeout(listenTimer);
       listenTimer = setTimeout(finish, finalText.trim() ? 2200 : 3500);
     };
-    recognizer.onerror = ev => {
-      if (ev.error === 'no-speech') return;
+    rec.onerror = ev => {
+      if (!current() || ev.error === 'no-speech') return;
       console.warn('speech', ev.error);
       if (ev.error === 'not-allowed') { stopListening(); announce('Microphone access was denied.', 'মাইক্রোফোনের অনুমতি নেই।', 'voice'); return; }
       if (ev.error === 'network' || ev.error === 'service-not-allowed') { handedOff = true; clearTimeout(listenTimer); stopListening(); OfflineEar.listenAndHandle('network'); }
     };
-    recognizer.onend = () => { if (state.listening) { if (finalText.trim()) finish(); else if (!gotSpeech && Date.now() - listenStart < 11000) { try { recognizer.start(); } catch (e) {} } else finish(); } };
+    rec.onend = () => { if (!owns()) return; if (!current()) { stopListening(); return; } if (finalText.trim()) finish(); else if (!gotSpeech && Date.now() - listenStart < 11000) { try { rec.start(); } catch (e) { if (owns()) stopListening(); } } else finish(); };
     const listenStart = Date.now();
-    recognizer.start();
-    listenTimer = setTimeout(finish, 12000);
-  } catch (e) { console.warn(e); stopListening(); }
+    rec.start();
+    if (current()) listenTimer = setTimeout(finish, 12000);
+  } catch (e) { console.warn(e); if (generation === listenGeneration) stopListening(); }
 }
 function stopAllSpeech() {
   // Drop answers that have not been spoken yet, and end a hazard alert as well.
