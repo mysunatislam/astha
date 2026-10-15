@@ -142,19 +142,26 @@ test('historical download markers do not claim offline readiness after cache evi
 const swSource = fs.readFileSync(new URL('../web/sw.js', import.meta.url), 'utf8');
 function serviceWorker() {
   const events = new Map(), entries = new Map(), removed = [], added = [];
+  const oldEntries = new Map(), otherEntries = new Map();
+  const currentName = /const CACHE = '([^']+)'/.exec(swSource)[1];
+  const stores = new Map([[currentName, entries], ['astha-shell-old', oldEntries], ['transformers-cache', otherEntries]]);
   const key = request => new URL(typeof request === 'string' ? request : request.url, 'https://app.example/astha/sw.js').href;
-  const cache = {
-    addAll: async paths => { added.push(...paths); for (const p of paths) entries.set(key(p), new Response('cached shell')); },
-    add: async () => {}, match: async request => entries.get(key(request))?.clone(),
-    put: async (request, response) => entries.set(key(request), response),
+  const open = async name => {
+    if (!stores.has(name)) stores.set(name, new Map());
+    const store = stores.get(name);
+    return {
+      addAll: async paths => { added.push(...paths); for (const p of paths) store.set(key(p), new Response('cached shell')); },
+      add: async request => added.push(key(request)), match: async request => store.get(key(request))?.clone(),
+      put: async (request, response) => store.set(key(request), response),
+    };
   };
   const context = {
     self: { location: new URL('https://app.example/astha/sw.js'), addEventListener: (name, fn) => events.set(name, fn), skipWaiting: async () => {}, clients: { claim: async () => {} } },
-    caches: { open: async () => cache, keys: async () => ['astha-shell-old', 'transformers-cache'], delete: async name => removed.push(name) },
+    caches: { open, keys: async () => [...stores.keys()], delete: async name => { removed.push(name); return stores.delete(name); } },
     fetch: async () => { throw new Error('offline'); }, URL, Request, Response, AbortSignal, Set, Promise,
   };
   vm.createContext(context); vm.runInContext(swSource, context);
-  return { context, events, entries, removed, added };
+  return { context, events, entries, oldEntries, otherEntries, stores, removed, added };
 }
 test('service-worker install caches bootstrap dependencies and preserves unrelated caches', async () => {
   const s = serviceWorker(); let pending;
@@ -162,6 +169,50 @@ test('service-worker install caches bootstrap dependencies and preserves unrelat
   assert(s.added.includes('./config.js')); assert(s.added.includes('./backend.js'));
   s.events.get('activate')({ waitUntil: promise => { pending = promise; } }); await pending;
   assert.deepEqual(s.removed, ['astha-shell-old']);
+});
+
+test('shell installation does not download optional AI libraries', async () => {
+  const s = serviceWorker(); let pending, fetched = 0;
+  s.context.fetch = async () => { fetched++; return new Response('unexpected runtime'); };
+  s.events.get('install')({ waitUntil: promise => { pending = promise; } }); await pending;
+  assert.equal(fetched, 0);
+  assert.equal(s.added.some(url => /^https:\/\//.test(url)), false);
+  assert(s.added.includes('./index.html'));
+});
+
+test('a shell update preserves only approved runtime downloads for offline use after old caches are removed', async () => {
+  const s = serviceWorker(); let pending, fetched = 0;
+  const runtime = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
+  const unrelatedRuntime = 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.21.0/dist/ort.webgpu.min.js';
+  const unapproved = 'https://third.example/unapproved.js';
+  s.oldEntries.set(runtime, new Response('previously downloaded OCR runtime'));
+  s.oldEntries.set('https://app.example/astha/index.html', new Response('old shell'));
+  s.oldEntries.set(unapproved, new Response('unapproved asset'));
+  s.otherEntries.set(unrelatedRuntime, new Response('another application runtime'));
+  s.context.fetch = async () => { fetched++; throw new Error('offline'); };
+  s.events.get('install')({ waitUntil: promise => { pending = promise; } }); await pending;
+  assert.equal(fetched, 0); assert.equal(s.added.some(url => /^https:\/\//.test(url)), false);
+  assert.equal(await s.entries.get(runtime).clone().text(), 'previously downloaded OCR runtime');
+  assert.equal(await s.entries.get('https://app.example/astha/index.html').clone().text(), 'cached shell');
+  assert.equal(s.entries.has(unapproved), false); assert.equal(s.entries.has(unrelatedRuntime), false);
+  s.events.get('activate')({ waitUntil: promise => { pending = promise; } }); await pending;
+  assert.equal(s.stores.has('astha-shell-old'), false); assert.equal(s.stores.has('transformers-cache'), true);
+  s.events.get('fetch')({ request: { url: runtime, method: 'GET', mode: 'cors' }, respondWith: promise => { pending = promise; } });
+  assert.equal(await (await pending).text(), 'previously downloaded OCR runtime');
+  assert.equal(fetched, 0);
+});
+
+test('a runtime used online is cached and available on its next offline use', async () => {
+  const s = serviceWorker(); let pending, fetched = 0;
+  const url = 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js';
+  const request = { url, method: 'GET', mode: 'cors' };
+  const load = () => { s.events.get('fetch')({ request, respondWith: promise => { pending = promise; } }); return pending; };
+  s.context.fetch = async () => { fetched++; return new Response('cached OCR runtime'); };
+  assert.equal(await (await load()).text(), 'cached OCR runtime');
+  assert.equal(fetched, 1); assert(s.entries.has(url));
+  s.context.fetch = async () => { fetched++; throw new Error('offline'); };
+  assert.equal(await (await load()).text(), 'cached OCR runtime');
+  assert.equal(fetched, 1);
 });
 test('service worker bypasses API calls on subpaths and arbitrary third-party resources', () => {
   const s = serviceWorker();

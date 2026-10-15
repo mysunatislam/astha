@@ -172,23 +172,24 @@ const VoiceEngine = {
   // (voice off, nothing to say, and no fallback voice on this device).
   _noticeGiven: false,
   // Very few phones and almost no computers ship a Bangla voice.
-  _deviceVoice(lang) {
-    if (lang !== 'bn') return true;
+  _deviceVoice(lang, localOnly = false) {
+    if (lang !== 'bn' && !localOnly) return true;
     if (typeof refreshVoices === 'function') refreshVoices();
-    return typeof voices !== 'undefined' && voices.some(v => /^bn/i.test(v.lang));
+    return typeof voices !== 'undefined' && voices.some(v => v.lang.toLowerCase().startsWith(lang) && (!localOnly || v.localService));
   },
   _banglaVoiced(worked) { const notice = $('voice-notice'); if (notice) notice.hidden = worked; },
   // Bangla was wanted and could not be voiced: say so once, then carry on in English.
   _withoutBangla(fallback) {
+    if (fallback.notice === false) return fallback.text;
     this._banglaVoiced(false);
     if (this._noticeGiven) return fallback.text;
     this._noticeGiven = true;
     return 'This device has no Bangla voice, so I am speaking English. Turn on Online AI to hear my Bangla voice. ' + fallback.text;
   },
   // Speak in the chosen voice language, or in English when Bangla cannot be voiced here.
-  say(en, bn) {
+  say(en, bn, { local = false, fallbackNotice = true } = {}) {
     const useBn = voiceLang === 'bn' && !!bn;
-    return this.speak(useBn ? bn : en, useBn ? 'bn' : 'en', { fallback: useBn && en ? { text: en, lang: 'en' } : null });
+    return this.speak(useBn ? bn : en, useBn ? 'bn' : 'en', { local, fallback: useBn && en ? { text: en, lang: 'en', notice: fallbackNotice } : null });
   },
   // `local` skips the server voice, for alerts that cannot wait on the network.
   // `fallback` is what to say instead when this language has no voice at all.
@@ -243,7 +244,7 @@ const VoiceEngine = {
     } catch (e) { /* offline, signed out, or the server is down: use the local voice instead */ }
     if (generation !== this.generation) return false;
     // The Android WebView has no speech synthesis; the app supplies the device voice instead.
-    const u = window.speechSynthesis && this._deviceVoice(lang) ? makeUtterance(sanitizeForSpeech(text), lang) : null;
+    const u = window.speechSynthesis && this._deviceVoice(lang, local) ? makeUtterance(sanitizeForSpeech(text), lang, { localOnly: local }) : null;
     if (!u) {
       // The native bridge reports completion, not first audio; do not invent that timing.
       this._finishSpeechTiming('error', speechTiming);

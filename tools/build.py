@@ -11,6 +11,7 @@ html = SRC.read_text(encoding="utf-8")
 vocab = (HERE / "vocab.js").read_text(encoding="utf-8")
 css = (HERE / "styles.css").read_text(encoding="utf-8")
 module = (HERE / "module.js").read_text(encoding="utf-8")
+runtime_js = (HERE / "runtime-loader.js").read_text(encoding="utf-8")
 agent_js = (HERE / "agent.js").read_text(encoding="utf-8")
 perceive_js = (HERE / "perceive.js").read_text(encoding="utf-8")
 spatial_js = (HERE / "spatial.js").read_text(encoding="utf-8")
@@ -32,6 +33,9 @@ def rep_between(start, end, new):
     i = html.index(start)
     j = html.index(end, i)
     html = html[:i] + new + html[j:]
+
+# Optional local inference libraries must not block the app shell or online requests.
+rep("async function ensureVisionModels() {", runtime_js.rstrip("\n") + "\n\nasync function ensureVisionModels() {")
 
 # ---- theme: calm navy by default (no yellow), selector kept ----
 rep('<html lang="en" data-theme="clinical-yellow"', '<html lang="en" data-theme="mulberry-apricot"')
@@ -593,9 +597,6 @@ rep("  renderSpatialLayout();\n  enhancementBoot();\n})();", "  renderSpatialLay
 rep('(function boot() {', 'window.__asthaBoot = function boot() {')
 rep('  companionBoot();\n  eyeBoot();\n  cloudBoot();\n})();',
     '  companionBoot();\n  eyeBoot();\n  cloudBoot();\n  offlineBoot();\n  AsthaExperience.boot();\n  AsthaPiCamera.boot();\n  AsthaBraille.boot();\n  AsthaScreenAccess.boot();\n  AsthaMessages.boot();\n  AsthaDiagnosticsUI.boot();\n  AsthaVisionDetails.boot();\n  refreshMemory();\n  refreshRooms();\n'
-    '  // Warm the on-device detector while the page settles (cached weights + WebGL shader compile),\n'
-    '  // so the first "describe" or camera start does not begin with a silent wait. Skipped on data-saver.\n'
-    "  setTimeout(() => { if (typeof loadCoco === 'function' && engine.coco.status === 'idle' && !(navigator.connection && navigator.connection.saveData)) loadCoco().catch(() => {}); }, 1200);\n"
     '};')
 # Page navigation, the personal setup assessment and the connected-devices page.
 assessment_html = (HERE / "assessment.html").read_text(encoding="utf-8").replace('<div id="pi-connection-slot"></div>', '<div id="pi-connection-slot">' + (HERE / "pi-camera-controls.html").read_text(encoding="utf-8") + '</div>')

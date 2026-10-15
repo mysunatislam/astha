@@ -29,6 +29,21 @@ test('provider tasks carry Astha identity without replacing names read from docu
   assert.match(query, /Do not add an introduction to ordinary visual answers unless asked/);
 });
 
+test('ordinary vision prompts request a brief first answer while reading retains full transcription', async t => {
+  useMaira(); const queries = [];
+  t.mock.method(globalThis, 'fetch', async (_url, options) => {
+    queries.push(JSON.parse(options.body).query); return reply(JSON.stringify(answer));
+  });
+  await callMaira({ task: 'describe', userId: 'synthetic-fast-answer' });
+  assert.match(queries[0], /one or two short sentences per language/);
+  assert.match(queries[0], /more detail when explicitly asked/);
+  assert.match(queries[0], /do not infer distances or a safe path/);
+  assert.doesNotMatch(queries[0], /exceptionally vivid|rich, highly detailed/);
+  await callMaira({ task: 'read', userId: 'synthetic-fast-answer' });
+  assert.match(queries[1], /Transcribe ALL readable text exactly as printed/);
+  assert.match(queries[1], /preserve complete legible text for reading tasks/);
+});
+
 test('explicit provider selection and config-only status preserve Gemini and legacy Maira installations', () => {
   assert.equal(getCloudProvider({}), 'none');
   assert.deepEqual(getCloudStatus({}), { provider: 'none', configured: false });

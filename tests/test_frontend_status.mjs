@@ -33,6 +33,7 @@ function harness({ yoloFails = false } = {}) {
     setCaption() {}, speak() {}, playEarcon() {}, showHazard() {}, safetyCheck() {}, announce() {},
     logEvent: text => log.push(text), console: { warn() {}, error() {} }, setTimeout, clearTimeout,
     COCO_CACHE_URL: 'synthetic-model-cache', cocoSsd: { load: async () => fallback },
+    ensureVisionRuntime: async () => {},
     YoloDetector: class { provider = 'webgpu'; async load() { if (yoloFails) throw new Error('forced initialization failure'); } },
     localStorage: { setItem() {} },
   });

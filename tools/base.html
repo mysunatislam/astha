@@ -1287,13 +1287,7 @@
   <span data-i18n="footer">Astha — Voice-Led AI Visual Companion.</span>
 </footer>
 
-<!-- ONNX Runtime Web (WebGPU + WASM SIMD acceleration for YOLO26n) -->
-<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.21.0/dist/ort.webgpu.min.js"></script>
-<!-- TensorFlow.js + COCO-SSD (Fallback Detector) -->
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"></script>
-<!-- Tesseract.js -->
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+<!-- Local vision runtimes load on demand; the app shell does not wait for a CDN. -->
 
 <script>
 /* =====================================================================
@@ -2001,9 +1995,7 @@ class YoloDetector {
   }
 
   async load() {
-    if (typeof ort === 'undefined') {
-      throw new Error('ONNX Runtime Web (ort) library not loaded');
-    }
+    await ensureVisionRuntime('ort');
 
     const hasWebGPU = typeof navigator !== 'undefined' && !!navigator.gpu;
     const providers = hasWebGPU ? ['webgpu', 'wasm'] : ['wasm'];
@@ -2139,14 +2131,6 @@ class YoloDetector {
 }
 
 let cocoPromise = null;
-async function waitForCocoSsd(timeoutMs = 10000) {
-  const start = Date.now();
-  while (typeof cocoSsd === 'undefined') {
-    if (Date.now() - start > timeoutMs) throw new Error('coco-ssd script timeout');
-    await new Promise(r => setTimeout(r, 100));
-  }
-  return cocoSsd;
-}
 const COCO_CACHE_URL = 'indexeddb://astha-coco-ssd-lite';
 
 function loadCoco() {
@@ -2171,7 +2155,8 @@ function loadCoco() {
       }
 
       // 2. Fallback to COCO-SSD
-      const lib = (typeof cocoSsd !== 'undefined') ? cocoSsd : await waitForCocoSsd();
+      await ensureVisionRuntime('coco');
+      const lib = cocoSsd;
       let model = null;
       try { model = await lib.load({ base: 'lite_mobilenet_v2', modelUrl: COCO_CACHE_URL }); } catch (e) { model = null; }
       if (!model) {
@@ -2238,6 +2223,7 @@ async function ensureOcr() {
   if (engine.ocr.workers[langs]) return engine.ocr.workers[langs];
   setEngineState('ocr', 'loading');
   try {
+    await ensureVisionRuntime('ocr');
     const worker = await Tesseract.createWorker(langs, 1, {
       logger: m => { if (m.status && typeof m.progress === 'number' && /loading|initializing|recognizing/i.test(m.status)) setProgress('ocr', m.progress); },
     });
@@ -3078,10 +3064,10 @@ function updateVoiceSupport() {
     : 'Speech uses the voices available on this device.';
 }
 
-function makeUtterance(text, language) {
+function makeUtterance(text, language, { localOnly = false } = {}) {
   const u = new SpeechSynthesisUtterance(text);
   const matches = voices.filter(v => v.lang.toLowerCase().startsWith(language));
-  const localOnly = !remoteProcessingAllowed();
+  localOnly = localOnly || !remoteProcessingAllowed();
   const selected = localOnly ? matches.find(v => v.localService) : matches[0];
   if (localOnly && !selected) return null;
   if (selected) u.voice = selected;

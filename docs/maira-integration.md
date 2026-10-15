@@ -22,7 +22,10 @@ so online answers already come from Gemini; no change was made.
 from that list (for example a lighter Gemini model for lower latency); it changes the
 project for every client using that profile, so it is the owner's decision. The tool reads
 the keys from the environment or `server/.env`, sends them only to Maira and never prints
-them. No latency comparison between models has been measured here.
+them. The 16 October latency increment selects an isolated ASTHA-only
+`gemini-3.1-flash-lite` profile via Render's `MAIRA_PROFILE_ID`; shared defaults stay
+unchanged. Small synthetic/public-image comparisons, prompt/startup corrections and
+remaining free-host cold-start limits are recorded in [the latency review](latency-review-2026-10-16.md).
 
 ## Finding S24: incomplete production Maira configuration
 

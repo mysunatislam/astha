@@ -1,5 +1,5 @@
 // Cache only approved static resources. API responses and private audio are never cached.
-const CACHE = 'astha-shell-546e0d539a';
+const CACHE = 'astha-shell-3414010140';
 const SHELL = ['./', './index.html', './config.js', './native-api.js', './native-device.js', './pi-camera.js', './backend.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png'];
 const RUNTIMES = [
   'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.21.0/dist/ort.webgpu.min.js',
@@ -19,8 +19,19 @@ self.addEventListener('install', event => {
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE);
     await cache.addAll(SHELL);
-    // A CDN failure must not prevent the local shell from installing.
-    await Promise.allSettled(RUNTIMES.map(url => cache.add(new Request(url, { mode: 'cors', credentials: 'omit', signal: fetchDeadline() }))));
+    // Optional vision runtimes enter the cache on first use. Opening Home must not
+    // download every AI library or delay shell activation while waiting for a CDN.
+    // Preserve already downloaded, still-approved runtimes across a shell update
+    // before activation removes old shells. Cache reads never request a CDN.
+    const previousNames = (await caches.keys()).filter(name => name.startsWith('astha-shell-') && name !== CACHE);
+    const previous = await Promise.all(previousNames.map(name => caches.open(name)));
+    await Promise.all(RUNTIMES.map(async url => {
+      if (await cache.match(url)) return;
+      for (const old of previous) {
+        const response = await old.match(url);
+        if (cacheable(response)) { await cache.put(url, response); return; }
+      }
+    }));
     await self.skipWaiting();
   })());
 });

@@ -36,7 +36,7 @@ function harness({ mode = 'road', audio = true, deviceVoice = true, voiceLang = 
     setTimeout: (fn, ms) => { timers.push({ fn, ms }); return timers.length; }, clearTimeout() {},
     state: { audio, shield: false, source: 'camera', sourceEpoch: 1, busy: false, listening: false, narrate: true, hazardCooldown: new Map(), announced: new Map() },
     reader: { active: false }, reading: { active: false }, uiLang: 'en', voiceLang, privacyTransition: false,
-    voices: banglaVoice ? [{ lang: 'en-US' }, { lang: 'bn-BD' }] : [{ lang: 'en-US' }], refreshVoices() {},
+    voices: banglaVoice ? [{ lang: 'en-US', localService: true }, { lang: 'bn-BD', localService: true }] : [{ lang: 'en-US', localService: true }], refreshVoices() {},
     VoiceEchoFilter: { recordMachineSpeech() {} },
     remoteProcessingAllowed: () => false, offlineError: () => new Error('offline'), backendReachable: () => false,
     apiUrl: path => path, deadlineSignal: () => undefined,

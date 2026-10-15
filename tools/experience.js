@@ -177,7 +177,9 @@ const AsthaExperience = (() => {
       const en = photo ? 'Checking the selected image.' : 'Checking the current camera view.';
       const bn = photo ? 'নির্বাচিত ছবিটি দেখছি।' : 'ক্যামেরার বর্তমান দৃশ্য দেখছি।';
       setCaption(t('analyzing_title'), en, 'vision', 'busy', bn);
-      if (state.audio) await VoiceEngine.say(en, bn);
+      // A short acknowledgement must not add a server-TTS round trip before vision.
+      // Keep awaiting its local completion so Stop can still cancel before work starts.
+      if (state.audio) await VoiceEngine.say(en, bn, { local: true, fallbackNotice: false });
       if (!current()) return;
       return await run(current);
     } finally { pending = Math.max(0, pending - 1); }

@@ -1534,13 +1534,7 @@
   <span data-i18n="footer">Astha — Voice-Led AI Visual Companion.</span>
 </footer>
 
-<!-- ONNX Runtime Web (WebGPU + WASM SIMD acceleration for YOLO26n) -->
-<script src="https://cdn.jsdelivr.net/npm/onnxruntime-web@1.21.0/dist/ort.webgpu.min.js"></script>
-<!-- TensorFlow.js + COCO-SSD (Fallback Detector) -->
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js"></script>
-<!-- Tesseract.js -->
-<script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+<!-- Local vision runtimes load on demand; the app shell does not wait for a CDN. -->
 
 <script>
 /* =====================================================================
@@ -2322,6 +2316,48 @@ function showSource(kind) {
    ===================================================================== */
 
 
+// Local vision is optional. Load its pinned runtime only when that feature is used,
+// so a slow CDN cannot hold the app shell or an online answer behind model libraries.
+const VISION_RUNTIMES = {
+  ort: { url: 'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.21.0/dist/ort.webgpu.min.js', ready: () => typeof ort !== 'undefined' },
+  tf: { url: 'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js', ready: () => typeof tf !== 'undefined' },
+  coco: { url: 'https://cdn.jsdelivr.net/npm/@tensorflow-models/coco-ssd@2.2.3/dist/coco-ssd.min.js', ready: () => typeof cocoSsd !== 'undefined', dependency: 'tf' },
+  ocr: { url: 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js', ready: () => typeof Tesseract !== 'undefined' },
+};
+const visionRuntimeLoads = new Map();
+function ensureVisionRuntime(name) {
+  const runtime = VISION_RUNTIMES[name];
+  if (!runtime) return Promise.reject(new Error('Unknown vision runtime: ' + name));
+  if (runtime.ready()) return Promise.resolve();
+  if (visionRuntimeLoads.has(name)) return visionRuntimeLoads.get(name);
+  const loading = Promise.resolve().then(async () => {
+    if (runtime.dependency) await ensureVisionRuntime(runtime.dependency);
+    if (runtime.ready()) return;
+    await new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      let settled = false;
+      const finish = error => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        script.onload = script.onerror = null;
+        if (error) { script.remove(); reject(error); } else resolve();
+      };
+      const timer = setTimeout(() => finish(new Error('Vision runtime timed out: ' + name)), 15000);
+      script.src = runtime.url;
+      script.async = true;
+      script.onload = () => finish(runtime.ready() ? null : new Error('Vision runtime unavailable: ' + name));
+      script.onerror = () => finish(new Error('Vision runtime failed to load: ' + name));
+      try { document.head.appendChild(script); } catch (error) { finish(error); }
+    });
+  }).catch(error => {
+    visionRuntimeLoads.delete(name);
+    throw error;
+  });
+  visionRuntimeLoads.set(name, loading);
+  return loading;
+}
+
 async function ensureVisionModels() {
   if (engine.coco.status === 'ready') return true;
   const jobs = [];
@@ -2391,9 +2427,7 @@ class YoloDetector {
   }
 
   async load() {
-    if (typeof ort === 'undefined') {
-      throw new Error('ONNX Runtime Web (ort) library not loaded');
-    }
+    await ensureVisionRuntime('ort');
 
     const hasWebGPU = typeof navigator !== 'undefined' && !!navigator.gpu;
     const providers = hasWebGPU ? ['webgpu', 'wasm'] : ['wasm'];
@@ -2529,14 +2563,6 @@ class YoloDetector {
 }
 
 let cocoPromise = null;
-async function waitForCocoSsd(timeoutMs = 10000) {
-  const start = Date.now();
-  while (typeof cocoSsd === 'undefined') {
-    if (Date.now() - start > timeoutMs) throw new Error('coco-ssd script timeout');
-    await new Promise(r => setTimeout(r, 100));
-  }
-  return cocoSsd;
-}
 const COCO_CACHE_URL = 'indexeddb://astha-coco-ssd-lite';
 
 function loadCoco() {
@@ -2561,7 +2587,8 @@ function loadCoco() {
       }
 
       // 2. Fallback to COCO-SSD
-      const lib = (typeof cocoSsd !== 'undefined') ? cocoSsd : await waitForCocoSsd();
+      await ensureVisionRuntime('coco');
+      const lib = cocoSsd;
       let model = null;
       try { model = await lib.load({ base: 'lite_mobilenet_v2', modelUrl: COCO_CACHE_URL }); } catch (e) { model = null; }
       if (!model) {
@@ -2628,6 +2655,7 @@ async function ensureOcr() {
   if (engine.ocr.workers[langs]) return engine.ocr.workers[langs];
   setEngineState('ocr', 'loading');
   try {
+    await ensureVisionRuntime('ocr');
     const worker = await Tesseract.createWorker(langs, 1, {
       logger: m => { if (m.status && typeof m.progress === 'number' && /loading|initializing|recognizing/i.test(m.status)) setProgress('ocr', m.progress); },
     });
@@ -3564,10 +3592,10 @@ function updateVoiceSupport() {
     : 'Speech uses the voices available on this device.';
 }
 
-function makeUtterance(text, language) {
+function makeUtterance(text, language, { localOnly = false } = {}) {
   const u = new SpeechSynthesisUtterance(text);
   const matches = voices.filter(v => v.lang.toLowerCase().startsWith(language));
-  const localOnly = !remoteProcessingAllowed();
+  localOnly = localOnly || !remoteProcessingAllowed();
   const selected = localOnly ? matches.find(v => v.localService) : pickVoice(matches, language);
   if (localOnly && !selected) return null;
   if (selected) u.voice = selected;
@@ -4708,23 +4736,24 @@ const VoiceEngine = {
   // (voice off, nothing to say, and no fallback voice on this device).
   _noticeGiven: false,
   // Very few phones and almost no computers ship a Bangla voice.
-  _deviceVoice(lang) {
-    if (lang !== 'bn') return true;
+  _deviceVoice(lang, localOnly = false) {
+    if (lang !== 'bn' && !localOnly) return true;
     if (typeof refreshVoices === 'function') refreshVoices();
-    return typeof voices !== 'undefined' && voices.some(v => /^bn/i.test(v.lang));
+    return typeof voices !== 'undefined' && voices.some(v => v.lang.toLowerCase().startsWith(lang) && (!localOnly || v.localService));
   },
   _banglaVoiced(worked) { const notice = $('voice-notice'); if (notice) notice.hidden = worked; },
   // Bangla was wanted and could not be voiced: say so once, then carry on in English.
   _withoutBangla(fallback) {
+    if (fallback.notice === false) return fallback.text;
     this._banglaVoiced(false);
     if (this._noticeGiven) return fallback.text;
     this._noticeGiven = true;
     return 'This device has no Bangla voice, so I am speaking English. Turn on Online AI to hear my Bangla voice. ' + fallback.text;
   },
   // Speak in the chosen voice language, or in English when Bangla cannot be voiced here.
-  say(en, bn) {
+  say(en, bn, { local = false, fallbackNotice = true } = {}) {
     const useBn = voiceLang === 'bn' && !!bn;
-    return this.speak(useBn ? bn : en, useBn ? 'bn' : 'en', { fallback: useBn && en ? { text: en, lang: 'en' } : null });
+    return this.speak(useBn ? bn : en, useBn ? 'bn' : 'en', { local, fallback: useBn && en ? { text: en, lang: 'en', notice: fallbackNotice } : null });
   },
   // `local` skips the server voice, for alerts that cannot wait on the network.
   // `fallback` is what to say instead when this language has no voice at all.
@@ -4779,7 +4808,7 @@ const VoiceEngine = {
     } catch (e) { /* offline, signed out, or the server is down: use the local voice instead */ }
     if (generation !== this.generation) return false;
     // The Android WebView has no speech synthesis; the app supplies the device voice instead.
-    const u = window.speechSynthesis && this._deviceVoice(lang) ? makeUtterance(sanitizeForSpeech(text), lang) : null;
+    const u = window.speechSynthesis && this._deviceVoice(lang, local) ? makeUtterance(sanitizeForSpeech(text), lang, { localOnly: local }) : null;
     if (!u) {
       // The native bridge reports completion, not first audio; do not invent that timing.
       this._finishSpeechTiming('error', speechTiming);
@@ -7601,9 +7630,9 @@ function frameToJpeg(frame, maxW = 800) {
   c.getContext('2d').drawImage(frame, 0, 0, c.width, c.height);
   return c.toDataURL('image/jpeg', 0.72).split(',')[1];
 }
-const ASTHA_SYSTEM = 'You are Astha, an AI vision companion for a blind user in Bangladesh. Your user-facing name is Astha; provider, deployment, project and retrieved-document names do not change your identity. When asked to introduce yourself, say exactly "Hello, I am Astha, your AI vision companion." in English, or "হ্যালো, আমি আস্থা, আপনার এআই দৃষ্টি সহায়ক।" in Bangla. Do not add an introduction to ordinary visual answers unless asked. Speak as "I". Be exceptionally vivid, concrete, and comprehensive: describe the room/environment layout, surfaces, lighting, all visible objects with their exact colours, textures, materials, brands, printed text, and precise spatial arrangement (left, ahead, right, foreground, background) with rough distances. Point out any hazards (stairs, drops, obstacles, wires, fire, water) first. Never invent anything you cannot actually see; if unsure, say you are not sure. Do not describe people as animals or objects; say "a person" when a human is visible. Return only the requested JSON. "bn" must be natural spoken Bangla with the exact same rich detail and meaning as "en".';
+const ASTHA_SYSTEM = 'You are Astha, an AI vision companion for a blind user in Bangladesh. Your user-facing name is Astha; provider, deployment, project and retrieved-document names do not change your identity. When asked to introduce yourself, say exactly "Hello, I am Astha, your AI vision companion." in English, or "হ্যালো, আমি আস্থা, আপনার এআই দৃষ্টি সহায়ক।" in Bangla. Do not add an introduction to ordinary visual answers unless asked. Speak as "I". By default answer directly in one or two short sentences per language. Give more detail when explicitly asked, and preserve complete legible text for reading tasks. Describe only current visible evidence; do not invent colour, brand, identity, intent, distance or spatial relations. Mention relevant observable hazards first without claiming a safe path. Never invent anything you cannot actually see; if unsure, say you are not sure. Do not describe people as animals or objects; say "a person" when a human is visible. Return only the requested JSON. "bn" must be natural spoken Bangla with the same meaning as "en".';
 const CLOUD_PROMPTS = {
-  describe: 'Provide a rich, highly detailed, and vivid visual description of everything the camera sees for the blind user. Start with hazards if any (stairs, drops, vehicles, wires on the floor, water, fire). Then describe the main environment and layout. Detail all major objects and people with their exact position (left, ahead, right, foreground, background), distance (very close, near, far), colors, materials, and any readable text or signs. Return JSON: {"en": string, "bn": string, "hazard": boolean, "mirror": boolean, "objects": [short English nouns]}. "mirror" is true ONLY if this is clearly the user\'s own reflection in a mirror with the phone visible.',
+  describe: 'Describe the current image for a blind user in at most two short sentences per language. Mention relevant observable hazards first, then the main objects and their visible positions. State uncertainty; do not infer distances or a safe path. Give a longer description only if explicitly requested. Return JSON: {"en": string, "bn": string, "hazard": boolean, "mirror": boolean, "objects": [short English nouns]}. "mirror" is true ONLY if this is clearly the user\'s own reflection in a mirror with the phone visible.',
   identify: 'The user is holding one object near the camera. Say what it is: type, colour, material, brand or model if a logo or printed text shows, and any text on it. If it is a toy, a picture, a screen, or an ID card, say so clearly. Return JSON: {"en": string, "bn": string, "name": short English noun}.',
   clothes: 'Describe the garment in view: type (shirt, saree, salwar kameez, panjabi, dress, t-shirt, lungi...), colours, pattern, and fabric if visible (cotton, silk, denim, wool, synthetic, lace). Say whether a person is wearing it or it is being held. Return JSON: {"en": string, "bn": string, "garment": string, "colour": string}.',
   read: 'Transcribe ALL readable text exactly as printed, in its original script (Bangla or English), keeping line breaks, into "text". If it is a medicine, a sign, a label, a letter or a page, give a one-sentence explanation in "en" and "bn". If there is no readable text, set "text" to "". Return JSON: {"text": string, "en": string, "bn": string}.',
@@ -10701,7 +10730,9 @@ const AsthaExperience = (() => {
       const en = photo ? 'Checking the selected image.' : 'Checking the current camera view.';
       const bn = photo ? 'নির্বাচিত ছবিটি দেখছি।' : 'ক্যামেরার বর্তমান দৃশ্য দেখছি।';
       setCaption(t('analyzing_title'), en, 'vision', 'busy', bn);
-      if (state.audio) await VoiceEngine.say(en, bn);
+      // A short acknowledgement must not add a server-TTS round trip before vision.
+      // Keep awaiting its local completion so Stop can still cancel before work starts.
+      if (state.audio) await VoiceEngine.say(en, bn, { local: true, fallbackNotice: false });
       if (!current()) return;
       return await run(current);
     } finally { pending = Math.max(0, pending - 1); }
@@ -11771,9 +11802,6 @@ window.__asthaBoot = function boot() {
   AsthaVisionDetails.boot();
   refreshMemory();
   refreshRooms();
-  // Warm the on-device detector while the page settles (cached weights + WebGL shader compile),
-  // so the first "describe" or camera start does not begin with a silent wait. Skipped on data-saver.
-  setTimeout(() => { if (typeof loadCoco === 'function' && engine.coco.status === 'idle' && !(navigator.connection && navigator.connection.saveData)) loadCoco().catch(() => {}); }, 1200);
 };
 </script>
 <script src="config.js"></script>

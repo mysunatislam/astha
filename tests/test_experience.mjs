@@ -33,7 +33,7 @@ function harness() {
     setUiLanguage: next => { context.uiLang = next; }, setVoiceLanguage: next => { context.voiceLang = next; },
     reader: { active: false }, reading: { active: false }, speaking: false,
     Date: class extends Date { static now() { return now; } },
-    VoiceEngine: { requestController: null, speak: async () => true, say(en, bn) { return this.speak(context.voiceLang === 'bn' ? bn : en, context.voiceLang); } },
+    VoiceEngine: { requestController: null, speak: async () => true, say(en, bn, options) { return this.speak(context.voiceLang === 'bn' ? bn : en, context.voiceLang, options); } },
     asthaSpeaking: () => context.speaking,
     setMode: (...args) => modes.push(args), announce: (en, bn, kind) => announcements.push({ en, bn, kind }),
     setCaption: (...args) => context.captions.push(args), captions: [], t: key => key,
@@ -460,6 +460,19 @@ test('stop during the spoken checking acknowledgement prevents the detector from
   const pending = h.experience.visualTask('Can you see my pen?', () => { runs++; });
   h.experience.route('stop'); acknowledgment.resolve(); await pending;
   assert.equal(runs, 0); assert.equal(h.experience.busy, false);
+});
+
+test('visual checking acknowledgement uses a local voice before work in either language', async () => {
+  for (const language of ['en', 'bn']) {
+    const h = harness(); h.context.state.audio = true; h.context.voiceLang = language;
+    let acknowledged = false, ran = false;
+    h.context.VoiceEngine.speak = async (words, lang, options) => {
+      assert.equal(lang, language); assert.equal(options.local, true); assert.equal(options.fallbackNotice, false);
+      assert.match(words, language === 'bn' ? /দেখছি/ : /Checking/); acknowledged = true;
+    };
+    await h.experience.visualTask('Can you see my pen?', current => { assert(acknowledged && current()); ran = true; });
+    assert(ran);
+  }
 });
 
 test('check again reruns the last visual question and retains selected-image wording', async () => {

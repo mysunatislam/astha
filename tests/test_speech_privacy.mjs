@@ -273,3 +273,37 @@ test('VoiceEngine private/offline speech sends no POST or GET request', async ()
     assert.deepEqual(h.calls.local, ['বাংলা']);
   }
 });
+
+test('local bilingual acknowledgements skip server speech even with online consent', async () => {
+  const h = voiceHarness();
+  assert.equal(await h.run("VoiceEngine.say('Checking.', 'দেখছি।', { local: true })"), true);
+  assert.equal(h.calls.fetch.length, 0); assert.deepEqual(h.calls.local, ['দেখছি।']);
+  h.context.voiceLang = 'en'; h.context.voices = [{ name: 'Local English', lang: 'en-US', localService: true }];
+  assert.equal(await h.run("VoiceEngine.say('Checking.', 'দেখছি।', { local: true })"), true);
+  assert.equal(h.calls.fetch.length, 0); assert.deepEqual(h.calls.local, ['দেখছি।', 'Checking.']);
+});
+
+test('brief local acknowledgment without a Bangla voice uses English without a long online-voice notice', async () => {
+  const h = voiceHarness();
+  h.context.voices = [{ name: 'Local English', lang: 'en-US', localService: true }];
+  assert.equal(await h.run("VoiceEngine.say('Checking.', 'দেখছি।', { local: true, fallbackNotice: false })"), true);
+  assert.equal(h.calls.fetch.length, 0); assert.deepEqual(h.calls.local, ['Checking.']);
+  assert.equal(h.run('VoiceEngine._noticeGiven'), false, 'ordinary missing-Bangla recovery keeps its own notice');
+});
+
+test('local acknowledgment cannot select network-backed browser voices while online processing is allowed', async () => {
+  const h = voiceHarness();
+  h.context.voices = [{ name: 'Network Bangla', lang: 'bn-BD', localService: false },
+    { name: 'Network English', lang: 'en-US', localService: false }];
+  assert.equal(await h.run("VoiceEngine.say('Checking.', 'দেখছি।', { local: true, fallbackNotice: false })"), false);
+  assert.equal(h.calls.fetch.length, 0); assert.deepEqual(h.calls.local, []);
+  const base = readFileSync(new URL('../tools/base.html', import.meta.url), 'utf8');
+  const start = base.indexOf('function makeUtterance('), end = base.indexOf('\nfunction speak(', start);
+  h.context.SpeechSynthesisUtterance = class { constructor(text) { this.text = text; } };
+  h.run(base.slice(start, end));
+  h.context.voices.push({ name: 'Offline English', lang: 'en-US', localService: true });
+  h.context.voiceLang = 'en';
+  h.context.window.speechSynthesis.speak = u => { h.calls.local.push(u.voice.name); queueMicrotask(() => u.onend?.()); };
+  assert.equal(await h.run("VoiceEngine.say('Checking.', 'দেখছি।', { local: true, fallbackNotice: false })"), true);
+  assert.deepEqual(h.calls.local, ['Offline English']);
+});
