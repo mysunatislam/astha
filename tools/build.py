@@ -118,14 +118,19 @@ rep("    setCaption(t('describe_title'), msgEn, 'vision', null, msgBn);\n    pla
 NEW_CLOTHES = r"""function inspectClothesAndColor(skipCloud) {
   if (withCamera(inspectClothesAndColor)) return;
   if (cloudReady() && !skipCloud) return cloudClothes();
+  const current = captureLocalActionGuard();
   return withBusy(t('clothes_title'), async () => {
+    if (!current()) return;
     await ensureVisionModels();
+    if (!current()) return;
     const frame = captureFrame(640); if (!frame) return;
     const cocoObjs = await runCoco(frame);
+    if (!current()) return;
     const person = cocoObjs.filter(o => o.id === 'person').sort((a, b) => (b.bbox[2] * b.bbox[3]) - (a.bbox[2] * a.bbox[3]))[0];
     const big = !!person && (person.bbox[2] * person.bbox[3]) / (frame.width * frame.height) > 0.2;
     const rect = big ? bodyRect(frame, person.bbox) : centerRect(frame, 0.6);
     const info = await analyzeClothing(frame, rect);
+    if (!current()) return;
     const mirror = Date.now() - (state.mirrorSeenAt || 0) < 5000;
     const s = clothingSentence(info, big ? (mirror ? 'wearing' : 'person') : 'holding');
     drawOverlay(frame, cocoObjs, []);
@@ -141,8 +146,9 @@ rep_between("function inspectClothesAndColor() {", "\n/* =======================
 NEW_IDENTIFY = r"""function identifyObject(skipCloud) {
   if (withCamera(identifyObject)) return;
   if (cloudReady() && !skipCloud) return cloudIdentify();
-  withBusy(t('identify_title'), async () => {
-    if (!(await ensureVisionModels())) return;
+  const current = captureLocalActionGuard();
+  return withBusy(t('identify_title'), async () => {
+    if (!current() || !(await ensureVisionModels()) || !current()) return;
     const frame = captureFrame(640); if (!frame) return;
     heartSet({ x: 0.5, y: 0.5, mode: 'seek', label: 'Looking…' });
 
@@ -150,21 +156,25 @@ NEW_IDENTIFY = r"""function identifyObject(skipCloud) {
     let ocrText = '';
     try {
       const worker = await ensureOcr();
+      if (!current()) return;
       const res = await worker.recognize(cropToCanvas(frame, centerRect(frame, 0.7)));
+      if (!current()) return;
       // Keep only confident lines that look like words; drop the noise OCR produces on textures.
       ocrText = (res.data.lines || []).filter(l => l.confidence >= 60).map(l => l.text.replace(/\s+/g, ' ').trim())
         .filter(l => { const letters = l.replace(/[^\p{L}\p{N}]/gu, '').length; return letters >= 3 && letters / l.length >= 0.6; })
         .join(' ').trim();
       if (ocrText.replace(/[^\p{L}\p{N}]/gu, '').length < 4) ocrText = '';
-    } catch (e) { console.warn('identify OCR', e); }
+    } catch (e) { if (!current()) return; console.warn('identify OCR', e); }
 
     // 2. Boxes, then refine the central one (toy vs real, ID card vs person, phone brand).
     const cocoObjs = await runCoco(frame);
+    if (!current()) return;
     state.lastCocoPreds = cocoObjs;
     const cx = frame.width / 2, cy = frame.height / 2;
     const central = cocoObjs.filter(o => o.bbox[0] < cx && o.bbox[0] + o.bbox[2] > cx && o.bbox[1] < cy && o.bbox[1] + o.bbox[3] > cy).sort((a, b) => b.score - a.score)[0];
     let refined = null;
-    if (central && central.score >= 0.5) { try { refined = await refineDetection(frame, central, ocrText); } catch (e) { console.warn('refine', e); } }
+    if (central && central.score >= 0.5) { try { refined = await refineDetection(frame, central, ocrText, current); } catch (e) { if (!current()) return; console.warn('refine', e); } }
+    if (!current()) return;
     if (central && refined && refined.newId) { state.relabel[central.id] = { newId: refined.newId, kind: refined.kind, until: Date.now() + 8000 }; central.origId = central.id; central.id = refined.newId; central.note = refined.kind; }
     if (central && refined && refined.brand) { central.brand = refined.brand; state.relabel[central.id] = { newId: central.id, kind: 'brand', brand: refined.brand, until: Date.now() + 15000 }; }
     drawOverlay(frame, cocoObjs, []);
@@ -173,9 +183,11 @@ NEW_IDENTIFY = r"""function identifyObject(skipCloud) {
     let ranked = [];
     if (engine.clip.status === 'ready') {
       const [emb] = await clipEmbedCrops(frame, [centerRect(frame, 0.55)]);
+      if (!current()) return;
       ranked = scoreEmbedding(emb).filter(r => r.id !== '_bg' && !VOCAB_BY_ID[r.id].quiet && !VOCAB_BY_ID[r.id].special);
     }
     const finish = (en, bn, labelText) => {
+      if (!current()) return;
       announce(en, bn, 'vision'); playEarcon('confirm'); haptic('CONFIRM');
       heartFlash({ x: 0.5, y: 0.5, mode: 'lock', label: labelText });
       logEvent(t('log_identify', { a: labelText }));
@@ -186,7 +198,7 @@ NEW_IDENTIFY = r"""function identifyObject(skipCloud) {
     const ocrTail = ocrText.length >= 3 ? [` The text on it says: “${ocrText.slice(0, 80)}”.`, ` এর গায়ে লেখা: “${ocrText.slice(0, 80)}”।`] : ['', ''];
 
     // 4. Special cases first.
-    if (refined && refined.kind === 'mirror') { await mirrorCheck(frame, false); return; }
+    if (refined && refined.kind === 'mirror') { await mirrorCheck(frame, false, current); return; }
     if (refined && refined.kind === 'brand') {
       const b = brandMeta(refined.brand);
       const byText = BRAND_WORDS[refined.brand].test(ocrText);
@@ -216,6 +228,7 @@ NEW_IDENTIFY = r"""function identifyObject(skipCloud) {
     const top = ranked[0];
     if (top && VOCAB_BY_ID[top.id].garment && top.p >= 0.25) {
       const info = await analyzeClothing(frame);
+      if (!current()) return;
       const s = clothingSentence(info, 'holding');
       return finish(s.en + ocrTail[0], s.bn + ocrTail[1], s.isGarment ? s.garment.en : label(top.id));
     }
@@ -330,9 +343,10 @@ rep("    state.cameraPending=false; state.sceneKey=null; showSource('camera');\n
     "    state.cameraPending=false; state.sceneKey=null; showSource('camera');\n    if (state.pendingRead) { state.pendingRead=false; startReading(); ensureVisionModels(); return; }\n"
     "    if (state.pendingAction) {\n"
     "      const act=state.pendingAction; state.pendingAction=null;\n"
+    "      const actionCurrent=captureLocalActionGuard();\n"
     "      if (cloudReady()) { act(); ensureVisionModels().then(() => { if (state.source==='camera') startLiveLoop(); }); return; }\n"
     "      announce('Camera on. Loading the vision models, then I will look.', 'ক্যামেরা চালু। মডেল লোড হচ্ছে, তারপর দেখছি।');\n"
-    "      if (!await ensureVisionModels() || token!==cameraRequest || state.source!=='camera') return;\n"
+    "      if (!await ensureVisionModels() || !actionCurrent() || token!==cameraRequest || state.source!=='camera') return;\n"
     "      startLiveLoop(); act(); return;\n"
     "    }\n"
     "    announce('Camera on. Loading recognition models.', 'ক্যামেরা চালু। শনাক্তকরণ মডেল লোড হচ্ছে।');")

@@ -251,11 +251,14 @@ async function cloudClothes() {
     }
   });
 }
-async function cloudCompliment(frame, r) {
-  state.complimentIdx = ((state.complimentIdx || 0) + 1) % COMPLIMENTS.length;
-  const c = COMPLIMENTS[state.complimentIdx];
+async function cloudCompliment(frame, r, current = captureLocalActionGuard()) {
+  if (!current()) return;
+  const nextIdx = ((state.complimentIdx || 0) + 1) % COMPLIMENTS.length;
+  const c = COMPLIMENTS[nextIdx];
   let en = `I can see you in the mirror. ${c[0]}`, bn = `আয়নায় আপনাকে দেখতে পাচ্ছি। ${c[1]}`;
   try { const cl = await gemini(CLOUD_PROMPTS.clothes, frame); if (cl.en) { en += ' ' + cl.en.replace(/^(You are|The person is) wearing/i, 'You are wearing'); bn += ' ' + cl.bn; } } catch (e) { if (e.cancelled) return; }
+  if (!current()) return;
+  state.complimentIdx = nextIdx;
   state.lastComplimentAt = Date.now();
   announce(en, bn, 'vision'); playEarcon('confirm'); heartFlash({ x: 0.5, y: 0.45, mode: 'lock', label: '♥' }, 5000);
 }

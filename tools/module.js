@@ -489,12 +489,14 @@ const REFINE = {
 const BRAND_WORDS = { iphone: /iphone|apple/i, samsung: /samsung|galaxy/i, xiaomi: /xiaomi|redmi|poco|\bmi\b/i, realme: /realme/i, oppo: /oppo/i, vivo: /vivo/i, oneplus: /oneplus|one plus/i, pixel: /pixel/i, nokia: /nokia/i, huawei: /huawei|honor/i, tecno: /tecno|infinix|itel/i, walton: /walton/i };
 
 // Returns { kind: 'real'|'toy'|'idcard'|'picture'|'doll'|'mirror'|'brand'|null, newId?, brand?, p }
-async function refineDetection(frame, obj, ocrText) {
+async function refineDetection(frame, obj, ocrText, current = captureLocalActionGuard()) {
+  if (!current()) return null;
   const group = Object.keys(REFINE).find(k => REFINE[k].applies.includes(obj.id));
   if (!group || engine.clip.status !== 'ready' || !obj.bbox) return null;
   const set = await getPromptSet('refine_' + group, REFINE[group].defs);
-  if (!set) return null;
+  if (!set || !current()) return null;
   const emb = await clipEmbedBox(frame, obj.bbox);
+  if (!current()) return null;
   const ranked = rankAgainst(emb, set);
   const area = (obj.bbox[2] * obj.bbox[3]) / (frame.width * frame.height);
   const p = id => (ranked.find(r => r.id === id) || {}).p || 0;
@@ -551,12 +553,14 @@ function trackPersonMotion(objs, frame) {
 
 // Applies refinement to the world map and remembers the relabel for a few seconds,
 // so the live loop does not immediately flip an "ID card" back into a "person".
-async function refineWorld(frame, cocoObjs, ocrText, max = 2) {
+async function refineWorld(frame, cocoObjs, ocrText, max = 2, current = captureLocalActionGuard()) {
+  if (!current()) return [];
   const candidates = (cocoObjs || []).filter(o => Object.values(REFINE).some(g => g.applies.includes(o.id))).sort((a, b) => b.score - a.score).slice(0, max);
   const notes = [];
   for (const o of candidates) {
     let r = null;
-    try { r = await refineDetection(frame, o, ocrText); } catch (e) { console.warn('refine', e); }
+    try { r = await refineDetection(frame, o, ocrText, current); } catch (e) { if (e.cancelled || !current()) return []; console.warn('refine', e); }
+    if (!current()) return [];
     if (!r) continue;
     const now = Date.now();
     const entry = state.world.get(o.id);
@@ -588,22 +592,29 @@ const refineVotes = new Map();
 // cannot turn a person into a picture or a passing car into a toy.
 async function liveRefineAndMirror(frame) {
   if (state.busy || !state.liveLoop) return;
+  const current = captureLocalActionGuard();
+  if (!current()) return;
   const now = Date.now();
   const cand = state.lastCocoPreds.filter(o => Object.values(REFINE).some(g => g.applies.includes(o.id)) && now - (liveRefineCache.get(o.id) || 0) > 4000).sort((a, b) => b.score - a.score)[0];
   if (cand) {
     liveRefineCache.set(cand.id, now);
     let r = null;
-    try { r = await refineDetection(frame, cand, ''); } catch (e) { console.warn('live refine', e); }
+    try { r = await refineDetection(frame, cand, '', current); } catch (e) { if (e.cancelled || !current()) return; console.warn('live refine', e); }
+    if (!current()) return;
     if (r) {
       const v = refineVotes.get(cand.id);
       const agree = v && v.kind === r.kind && now - v.t < 12000;
       refineVotes.set(cand.id, { kind: r.kind, t: now });
       if (r.kind === 'mirror') state.mirrorSeenAt = now;
-      else if (r.kind !== 'real' && agree) await refineWorld(frame, [cand], '', 1);
+      else if (r.kind !== 'real' && agree) await refineWorld(frame, [cand], '', 1, current);
     }
   }
+  if (!current()) return;
   if (now - (state.mirrorSeenAt || 0) < 3000 && now - (state.lastComplimentAt || 0) > 60000 && !state.busy && !reading.active) {
-    state.busy = true; try { await mirrorCheck(frame, true); } finally { state.busy = false; }
+    const busyToken = Symbol('live-mirror');
+    state.busyToken = busyToken; state.busy = true;
+    try { await mirrorCheck(frame, true, current); }
+    finally { if (state.busyToken === busyToken) { state.busyToken = null; state.busy = false; } }
   }
 }
 
@@ -727,18 +738,28 @@ const COMPLIMENTS = [
   ['Looking lovely, as always.', 'বরাবরের মতোই চমৎকার লাগছে।'],
   ['You look wonderful. Ready to go!', 'আপনাকে অসাধারণ লাগছে। বেরোনোর জন্য তৈরি!'],
 ];
-async function mirrorCheck(frame, onlyIfMirror) {
+async function mirrorCheck(frame, onlyIfMirror, current = captureLocalActionGuard()) {
+  if (!current()) return false;
+  try {
   // With the cloud available, only Gemini may declare a mirror; on-device needs a phone in view and a high score.
   let isMirror = false;
   if (cloudReady()) {
-    try { const r = await gemini(CLOUD_PROMPTS.mirror, frame, { maxTokens: 200 }); isMirror = r.mirror === true; if (isMirror) { await cloudCompliment(frame, r); return true; } } catch (e) { cloudFail(e); }
+    try {
+      const r = await gemini(CLOUD_PROMPTS.mirror, frame, { maxTokens: 200 });
+      if (!current()) return false;
+      isMirror = r.mirror === true;
+      if (isMirror) { await cloudCompliment(frame, r, current); return current(); }
+    } catch (e) { if (e.cancelled || !current()) return false; cloudFail(e); }
     if (onlyIfMirror) return false;
   } else {
     const phone = state.lastCocoPreds.some(o => o.id === 'cell phone');
     isMirror = phone && Date.now() - (state.mirrorSeenAt || 0) < 5000;
     if (!isMirror && phone && engine.clip.status === 'ready') {
       const [emb] = await clipEmbedCrops(frame, [centerRect(frame, 0.95)]);
-      const r = rankAgainst(emb, await getPromptSet('mirror', MIRROR_SET));
+      if (!current()) return false;
+      const set = await getPromptSet('mirror', MIRROR_SET);
+      if (!current()) return false;
+      const r = rankAgainst(emb, set);
       isMirror = r[0].id === 'mirror' && r[0].p >= 0.6;
     }
   }
@@ -746,6 +767,7 @@ async function mirrorCheck(frame, onlyIfMirror) {
   const person = [...state.world.values()].find(o => o.id === 'person' && o.bbox);
   const rect = person ? bodyRect(frame, person.bbox) : centerRect(frame, 0.6);
   const info = await analyzeClothing(frame, rect);
+  if (!current()) return false;
   const cl = clothingSentence(info, 'wearing');
   state.complimentIdx = ((state.complimentIdx || 0) + 1) % COMPLIMENTS.length;
   const c = COMPLIMENTS[state.complimentIdx];
@@ -757,6 +779,7 @@ async function mirrorCheck(frame, onlyIfMirror) {
   heartFlash({ x: 0.5, y: 0.45, mode: 'lock', label: '♥' }, 5000);
   logEvent('Mirror: complimented');
   return true;
+  } catch (e) { if (e.cancelled || !current()) return false; throw e; }
 }
 
 // ---- Astha's heart --------------------------------------------------------
@@ -1201,13 +1224,20 @@ const hf = SiriVoice;
 // ---- "How do I look?" ---------------------------------------------------
 function howDoILook() {
   if (withCamera(howDoILook)) return;
+  const current = captureLocalActionGuard();
+  if (!current()) return;
   return withBusy(t('clothes_title'), async () => {
-    if (!(await ensureVisionModels())) return;
+    try {
+    if (!(await ensureVisionModels()) || !current()) return;
     const frame = captureFrame(640); if (!frame) return;
-    const cocoObjs = await runCoco(frame); state.lastCocoPreds = cocoObjs;
+    const cocoObjs = await runCoco(frame);
+    if (!current()) return;
+    state.lastCocoPreds = cocoObjs;
     state.world.clear(); ingest(cocoObjs, 1e9); drawOverlay(frame, cocoObjs, []);
-    await refineWorld(frame, cocoObjs, '', 1);
-    await mirrorCheck(frame, false);
+    await refineWorld(frame, cocoObjs, '', 1, current);
+    if (!current()) return;
+    await mirrorCheck(frame, false, current);
+    } catch (e) { if (e.cancelled || !current()) return; throw e; }
   });
 }
 

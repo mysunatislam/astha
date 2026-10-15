@@ -94,8 +94,9 @@ const DepthEngine = {
     return this.loading;
   },
   // Runs the model on a small copy of the frame and stores a nearness map (0 = farthest, 1 = nearest).
-  async run(frame) {
-    if (this.status !== 'ready' || this.busy || !frame) return this.last;
+  async run(frame, current = captureLocalActionGuard()) {
+    if (!current()) return null;
+    if (this.status !== 'ready' || this.busy || !frame) return this.fresh(Infinity);
     this.busy = true; const t0 = Date.now();
     try {
       const s = this.size / Math.max(frame.width, frame.height);
@@ -105,6 +106,7 @@ const DepthEngine = {
       const d = cx.getImageData(0, 0, w, h);
       const img = new this.RawImage(new Uint8ClampedArray(d.data), w, h, 4);
       const out = await this.pipe(img);
+      if (!current()) return null;
       const tensor = out.predicted_depth;
       const dims = tensor.dims, H = dims[dims.length - 2], W = dims[dims.length - 1];
       const raw = tensor.data;
@@ -117,15 +119,17 @@ const DepthEngine = {
       const near = new Float32Array(raw.length);
       for (let i = 0; i < raw.length; i++) near[i] = Math.min(1, Math.max(0, (raw[i] - lo) / span));
       this.last = { near, w: W, h: H, at: Date.now(), fw: frame.width, fh: frame.height };
+      this.lastCurrent = current;
       this.lastAt = this.last.at; this.failures = 0; this.lastMs = this.lastAt - t0;
       return this.last;
     } catch (e) {
+      if (!current() || e.cancelled) return null;
       this.failures++; console.warn('depth run', e);
       if (this.failures >= 3) { setEngineState('depth', 'error'); }
       return null;
     } finally { this.busy = false; }
   },
-  fresh(maxAgeMs = 3000) { return this.last && Date.now() - this.last.at <= maxAgeMs ? this.last : null; },
+  fresh(maxAgeMs = 3000) { return this.last && (!this.lastCurrent || this.lastCurrent()) && Date.now() - this.last.at <= maxAgeMs ? this.last : null; },
   // Slow phones get a slower cadence, so depth never starves the detector or the recogniser.
   due(baseMs) { return Date.now() - this.lastAt > Math.max(baseMs, this.lastMs * 2.5); },
   // Median nearness inside the inner half of a box (frame coordinates), or null.
@@ -470,12 +474,17 @@ function sceneSummary(opts = {}) {
 function describeScene(skipCloud, forceDetailed) {
   if (withCamera(describeScene)) return;
   if (typeof cloudReady === 'function' && cloudReady() && !skipCloud) return cloudDescribe();
-  withBusy(t('analyzing_title'), async () => {
-    if (!(await ensureVisionModels())) return;
+  const current = captureLocalActionGuard();
+  if (!current()) return;
+  return withBusy(t('analyzing_title'), async () => {
+    try {
+    if (!(await ensureVisionModels()) || !current()) return;
     const frame = captureFrame(640); if (!frame) return;
     const [cocoObjs, clip] = await Promise.all([runCoco(frame), runClipZones(frame)]);
-    if (DepthEngine.status === 'ready') { try { await DepthEngine.run(frame); } catch (e) {} }
+    if (!current()) return;
+    if (DepthEngine.status === 'ready') { try { await DepthEngine.run(frame, current); } catch (e) {} }
     else if (DepthEngine.status === 'idle' && DepthEngine.wanted()) DepthEngine.load().catch(() => {});
+    if (!current()) return;
     if (typeof trackMotion === 'function' && state.source === 'camera') trackMotion(cocoObjs, frame);
     perceptionHook(cocoObjs, frame, { noDepthKick: true, depthMaxAge: 60000 });
     state.lastCocoPreds = cocoObjs; state.lastClipHits = clip.hits.map(h => Object.assign(h, { at: Date.now() }));
@@ -488,6 +497,7 @@ function describeScene(skipCloud, forceDetailed) {
     playEarcon('confirm'); speak(s.en, s.bn); haptic('CONFIRM');
     if (typeof heartPointAt === 'function') heartPointAt(objs[0]);
     logEvent(t('log_describe', { n: objs.length }));
+    } catch (e) { if (e.cancelled || !current()) return; throw e; }
   });
 }
 

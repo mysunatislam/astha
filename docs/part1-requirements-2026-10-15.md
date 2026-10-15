@@ -24,6 +24,7 @@ observation/enrollment to satisfy this list.
 
 | Evidence on this date | Verified boundary | Still unverified |
 | --- | --- | --- |
+| Final integrated check `part1-final-check-2026-10-15-r2.log` | All 446 regressions, syntax and reproducible web generation passed after extending cancellation to local perception/identification and adding explicit Android backup/transfer exclusions. | Device behavior, actual backup/restore and visual or spatial accuracy are not established by these checks. |
 | Integrated Part 1 check `part1-integrated-check-2026-10-15.log` | All 423 regressions, JavaScript syntax and reproducible web builds passed after the cancellation, diagnostic and native speech policy changes. Root/server npm audits each reported zero vulnerabilities. | Physical speech recognition, acoustic interruption, model accuracy and phone behavior are not established by these tests. |
 | Existing baseline log `part1-baseline-check-2026-10-15.log` | Reproducible generated assets, JavaScript syntax and 374 regressions passed in the recorded run. | Changes after that run require the integrated check again. |
 | Focused review run | 99/99 tests passed across `test_speech_priority.mjs`, `test_experience.mjs`, `test_measured_distance.mjs`, `test_pi_camera.mjs`, `test_offline_release.mjs`. | Models, devices and recognition/synthesis engines are stand-ins, except the Python loopback handler. |
@@ -45,12 +46,29 @@ are supported without treating a bus stop or quoted instruction as a command. Re
 events are simulated in regressions; human speech and loudspeaker echo still need a real
 device test.
 
+Final review extended the same boundary through local descriptions, spatial answers,
+object identification, clothing, mirror refinement, still-image hazard checking and
+pending camera actions. Their root cause was inference continuing after the audio had
+stopped: `withBusy` cleanup alone did not guard the callback's own speech or state writes.
+The smallest fix carries `captureLocalActionGuard()` across each awaited model stage in
+`tools/base.html`, `tools/build.py`, `tools/perceive.js`, `tools/spatial.js` and the relevant
+`tools/module.js` / `tools/cloud.js` helpers. Explicit Stop also clears pending camera
+reading/actions in `tools/offline.js`. Deferred-result regressions exercise the actual
+actions with synthetic model results; ordinary successful descriptions remain covered.
+
 The optional Camera and tools → Vision diagnostics panel adds local-only object-detection,
 online-reasoning and speech-request-to-first-audio-event timings to the existing real
 preview/boxes. It starts disabled, clears on closing/background/source change, and records
 no images, prompts or transcripts. Native first-audio, wake-word, transcription and
 complete image-to-answer timings remain unmeasured. The panel was inspected in a desktop
 browser in Bangla and English with the camera off and online processing declined.
+
+Android now declares explicit legacy, cloud-backup and device-transfer exclusions for
+all documented app-storage domains in `android/app/src/main/res/xml/astha_backup_rules.xml`
+and `astha_data_extraction_rules.xml`, linked by `AndroidManifest.xml`. The existing
+`allowBackup=false` alone did not address every manufacturer's device-transfer behavior.
+XML/manifest regression checks pass; actual OEM restore testing remains pending.
+[Android backup configuration](https://developer.android.com/identity/data/autobackup).
 
 Native STT/TTS default to installed on-device engines. An online-capable foreground
 engine requires an explicit processing option supplied only after session consent;

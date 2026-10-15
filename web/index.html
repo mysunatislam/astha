@@ -2998,11 +2998,13 @@ async function withBusy(title, fn) {
 }
 
 async function analyzeStill(opts = {}) {
+  const current = captureLocalActionGuard();
+  if (!current()) return null;
   const epoch = state.sourceEpoch;
   const frame = captureFrame(640);
   if (!frame) return null;
   const [cocoObjs, clip] = await Promise.all([runCoco(frame), runClipZones(frame)]);
-  if (epoch !== state.sourceEpoch) return null;
+  if (!current() || epoch !== state.sourceEpoch) return null;
   state.lastCocoPreds = cocoObjs; state.lastClipHits = clip.hits.map(h => Object.assign(h, { at: Date.now() }));
   state.world.clear();
   ingest(cocoObjs.concat(clip.hits), 1e9);
@@ -3141,14 +3143,19 @@ function extractDominantColor(src) {
 function inspectClothesAndColor(skipCloud) {
   if (withCamera(inspectClothesAndColor)) return;
   if (cloudReady() && !skipCloud) return cloudClothes();
+  const current = captureLocalActionGuard();
   return withBusy(t('clothes_title'), async () => {
+    if (!current()) return;
     await ensureVisionModels();
+    if (!current()) return;
     const frame = captureFrame(640); if (!frame) return;
     const cocoObjs = await runCoco(frame);
+    if (!current()) return;
     const person = cocoObjs.filter(o => o.id === 'person').sort((a, b) => (b.bbox[2] * b.bbox[3]) - (a.bbox[2] * a.bbox[3]))[0];
     const big = !!person && (person.bbox[2] * person.bbox[3]) / (frame.width * frame.height) > 0.2;
     const rect = big ? bodyRect(frame, person.bbox) : centerRect(frame, 0.6);
     const info = await analyzeClothing(frame, rect);
+    if (!current()) return;
     const mirror = Date.now() - (state.mirrorSeenAt || 0) < 5000;
     const s = clothingSentence(info, big ? (mirror ? 'wearing' : 'person') : 'holding');
     drawOverlay(frame, cocoObjs, []);
@@ -3171,8 +3178,9 @@ function refineObjectIdentity(ranked, cocoObjs, frame, ocrText) {
 function identifyObject(skipCloud) {
   if (withCamera(identifyObject)) return;
   if (cloudReady() && !skipCloud) return cloudIdentify();
-  withBusy(t('identify_title'), async () => {
-    if (!(await ensureVisionModels())) return;
+  const current = captureLocalActionGuard();
+  return withBusy(t('identify_title'), async () => {
+    if (!current() || !(await ensureVisionModels()) || !current()) return;
     const frame = captureFrame(640); if (!frame) return;
     heartSet({ x: 0.5, y: 0.5, mode: 'seek', label: 'Looking…' });
 
@@ -3180,21 +3188,25 @@ function identifyObject(skipCloud) {
     let ocrText = '';
     try {
       const worker = await ensureOcr();
+      if (!current()) return;
       const res = await worker.recognize(cropToCanvas(frame, centerRect(frame, 0.7)));
+      if (!current()) return;
       // Keep only confident lines that look like words; drop the noise OCR produces on textures.
       ocrText = (res.data.lines || []).filter(l => l.confidence >= 60).map(l => l.text.replace(/\s+/g, ' ').trim())
         .filter(l => { const letters = l.replace(/[^\p{L}\p{N}]/gu, '').length; return letters >= 3 && letters / l.length >= 0.6; })
         .join(' ').trim();
       if (ocrText.replace(/[^\p{L}\p{N}]/gu, '').length < 4) ocrText = '';
-    } catch (e) { console.warn('identify OCR', e); }
+    } catch (e) { if (!current()) return; console.warn('identify OCR', e); }
 
     // 2. Boxes, then refine the central one (toy vs real, ID card vs person, phone brand).
     const cocoObjs = await runCoco(frame);
+    if (!current()) return;
     state.lastCocoPreds = cocoObjs;
     const cx = frame.width / 2, cy = frame.height / 2;
     const central = cocoObjs.filter(o => o.bbox[0] < cx && o.bbox[0] + o.bbox[2] > cx && o.bbox[1] < cy && o.bbox[1] + o.bbox[3] > cy).sort((a, b) => b.score - a.score)[0];
     let refined = null;
-    if (central && central.score >= 0.5) { try { refined = await refineDetection(frame, central, ocrText); } catch (e) { console.warn('refine', e); } }
+    if (central && central.score >= 0.5) { try { refined = await refineDetection(frame, central, ocrText, current); } catch (e) { if (!current()) return; console.warn('refine', e); } }
+    if (!current()) return;
     if (central && refined && refined.newId) { state.relabel[central.id] = { newId: refined.newId, kind: refined.kind, until: Date.now() + 8000 }; central.origId = central.id; central.id = refined.newId; central.note = refined.kind; }
     if (central && refined && refined.brand) { central.brand = refined.brand; state.relabel[central.id] = { newId: central.id, kind: 'brand', brand: refined.brand, until: Date.now() + 15000 }; }
     drawOverlay(frame, cocoObjs, []);
@@ -3203,9 +3215,11 @@ function identifyObject(skipCloud) {
     let ranked = [];
     if (engine.clip.status === 'ready') {
       const [emb] = await clipEmbedCrops(frame, [centerRect(frame, 0.55)]);
+      if (!current()) return;
       ranked = scoreEmbedding(emb).filter(r => r.id !== '_bg' && !VOCAB_BY_ID[r.id].quiet && !VOCAB_BY_ID[r.id].special);
     }
     const finish = (en, bn, labelText) => {
+      if (!current()) return;
       announce(en, bn, 'vision'); playEarcon('confirm'); haptic('CONFIRM');
       heartFlash({ x: 0.5, y: 0.5, mode: 'lock', label: labelText });
       logEvent(t('log_identify', { a: labelText }));
@@ -3216,7 +3230,7 @@ function identifyObject(skipCloud) {
     const ocrTail = ocrText.length >= 3 ? [` The text on it says: “${ocrText.slice(0, 80)}”.`, ` এর গায়ে লেখা: “${ocrText.slice(0, 80)}”।`] : ['', ''];
 
     // 4. Special cases first.
-    if (refined && refined.kind === 'mirror') { await mirrorCheck(frame, false); return; }
+    if (refined && refined.kind === 'mirror') { await mirrorCheck(frame, false, current); return; }
     if (refined && refined.kind === 'brand') {
       const b = brandMeta(refined.brand);
       const byText = BRAND_WORDS[refined.brand].test(ocrText);
@@ -3246,6 +3260,7 @@ function identifyObject(skipCloud) {
     const top = ranked[0];
     if (top && VOCAB_BY_ID[top.id].garment && top.p >= 0.25) {
       const info = await analyzeClothing(frame);
+      if (!current()) return;
       const s = clothingSentence(info, 'holding');
       return finish(s.en + ocrTail[0], s.bn + ocrTail[1], s.isGarment ? s.garment.en : label(top.id));
     }
@@ -3330,7 +3345,9 @@ function toggleShield() {
 function safetyCheck(silentIfClear) {
   if (!state.source) { if (silentIfClear) return; return withCamera(safetyCheck); }
   if (typeof cloudReady === 'function' && cloudReady() && typeof cloudSafetyCheck === 'function') return cloudSafetyCheck(silentIfClear);
+  const current = captureLocalActionGuard();
   const run = () => {
+    if (!current()) return;
     const hz = worldSorted().filter(isHazard);
     if (hz.length) {
       const o = hz[0];
@@ -3352,7 +3369,11 @@ function safetyCheck(silentIfClear) {
     }
   };
   if (state.source === 'camera' || state.world.size) run();
-  else withBusy(t('analyzing_title'), async () => { if (await ensureVisionModels()) { await analyzeStill(); run(); } });
+  else return withBusy(t('analyzing_title'), async () => {
+    if (!current() || !(await ensureVisionModels()) || !current()) return;
+    await analyzeStill();
+    if (current()) run();
+  });
 }
 
 /* =====================================================================
@@ -4046,9 +4067,10 @@ async function toggleCamera() {
     if (state.pendingRead) { state.pendingRead=false; startReading(); ensureVisionModels(); return; }
     if (state.pendingAction) {
       const act=state.pendingAction; state.pendingAction=null;
+      const actionCurrent=captureLocalActionGuard();
       if (cloudReady()) { act(); ensureVisionModels().then(() => { if (state.source==='camera') startLiveLoop(); }); return; }
       announce('Camera on. Loading the vision models, then I will look.', 'ক্যামেরা চালু। মডেল লোড হচ্ছে, তারপর দেখছি।');
-      if (!await ensureVisionModels() || token!==cameraRequest || state.source!=='camera') return;
+      if (!await ensureVisionModels() || !actionCurrent() || token!==cameraRequest || state.source!=='camera') return;
       startLiveLoop(); act(); return;
     }
     announce('Camera on. Loading recognition models.', 'ক্যামেরা চালু। শনাক্তকরণ মডেল লোড হচ্ছে।');
@@ -4780,12 +4802,14 @@ const REFINE = {
 const BRAND_WORDS = { iphone: /iphone|apple/i, samsung: /samsung|galaxy/i, xiaomi: /xiaomi|redmi|poco|\bmi\b/i, realme: /realme/i, oppo: /oppo/i, vivo: /vivo/i, oneplus: /oneplus|one plus/i, pixel: /pixel/i, nokia: /nokia/i, huawei: /huawei|honor/i, tecno: /tecno|infinix|itel/i, walton: /walton/i };
 
 // Returns { kind: 'real'|'toy'|'idcard'|'picture'|'doll'|'mirror'|'brand'|null, newId?, brand?, p }
-async function refineDetection(frame, obj, ocrText) {
+async function refineDetection(frame, obj, ocrText, current = captureLocalActionGuard()) {
+  if (!current()) return null;
   const group = Object.keys(REFINE).find(k => REFINE[k].applies.includes(obj.id));
   if (!group || engine.clip.status !== 'ready' || !obj.bbox) return null;
   const set = await getPromptSet('refine_' + group, REFINE[group].defs);
-  if (!set) return null;
+  if (!set || !current()) return null;
   const emb = await clipEmbedBox(frame, obj.bbox);
+  if (!current()) return null;
   const ranked = rankAgainst(emb, set);
   const area = (obj.bbox[2] * obj.bbox[3]) / (frame.width * frame.height);
   const p = id => (ranked.find(r => r.id === id) || {}).p || 0;
@@ -4842,12 +4866,14 @@ function trackPersonMotion(objs, frame) {
 
 // Applies refinement to the world map and remembers the relabel for a few seconds,
 // so the live loop does not immediately flip an "ID card" back into a "person".
-async function refineWorld(frame, cocoObjs, ocrText, max = 2) {
+async function refineWorld(frame, cocoObjs, ocrText, max = 2, current = captureLocalActionGuard()) {
+  if (!current()) return [];
   const candidates = (cocoObjs || []).filter(o => Object.values(REFINE).some(g => g.applies.includes(o.id))).sort((a, b) => b.score - a.score).slice(0, max);
   const notes = [];
   for (const o of candidates) {
     let r = null;
-    try { r = await refineDetection(frame, o, ocrText); } catch (e) { console.warn('refine', e); }
+    try { r = await refineDetection(frame, o, ocrText, current); } catch (e) { if (e.cancelled || !current()) return []; console.warn('refine', e); }
+    if (!current()) return [];
     if (!r) continue;
     const now = Date.now();
     const entry = state.world.get(o.id);
@@ -4879,22 +4905,29 @@ const refineVotes = new Map();
 // cannot turn a person into a picture or a passing car into a toy.
 async function liveRefineAndMirror(frame) {
   if (state.busy || !state.liveLoop) return;
+  const current = captureLocalActionGuard();
+  if (!current()) return;
   const now = Date.now();
   const cand = state.lastCocoPreds.filter(o => Object.values(REFINE).some(g => g.applies.includes(o.id)) && now - (liveRefineCache.get(o.id) || 0) > 4000).sort((a, b) => b.score - a.score)[0];
   if (cand) {
     liveRefineCache.set(cand.id, now);
     let r = null;
-    try { r = await refineDetection(frame, cand, ''); } catch (e) { console.warn('live refine', e); }
+    try { r = await refineDetection(frame, cand, '', current); } catch (e) { if (e.cancelled || !current()) return; console.warn('live refine', e); }
+    if (!current()) return;
     if (r) {
       const v = refineVotes.get(cand.id);
       const agree = v && v.kind === r.kind && now - v.t < 12000;
       refineVotes.set(cand.id, { kind: r.kind, t: now });
       if (r.kind === 'mirror') state.mirrorSeenAt = now;
-      else if (r.kind !== 'real' && agree) await refineWorld(frame, [cand], '', 1);
+      else if (r.kind !== 'real' && agree) await refineWorld(frame, [cand], '', 1, current);
     }
   }
+  if (!current()) return;
   if (now - (state.mirrorSeenAt || 0) < 3000 && now - (state.lastComplimentAt || 0) > 60000 && !state.busy && !reading.active) {
-    state.busy = true; try { await mirrorCheck(frame, true); } finally { state.busy = false; }
+    const busyToken = Symbol('live-mirror');
+    state.busyToken = busyToken; state.busy = true;
+    try { await mirrorCheck(frame, true, current); }
+    finally { if (state.busyToken === busyToken) { state.busyToken = null; state.busy = false; } }
   }
 }
 
@@ -5018,18 +5051,28 @@ const COMPLIMENTS = [
   ['Looking lovely, as always.', 'বরাবরের মতোই চমৎকার লাগছে।'],
   ['You look wonderful. Ready to go!', 'আপনাকে অসাধারণ লাগছে। বেরোনোর জন্য তৈরি!'],
 ];
-async function mirrorCheck(frame, onlyIfMirror) {
+async function mirrorCheck(frame, onlyIfMirror, current = captureLocalActionGuard()) {
+  if (!current()) return false;
+  try {
   // With the cloud available, only Gemini may declare a mirror; on-device needs a phone in view and a high score.
   let isMirror = false;
   if (cloudReady()) {
-    try { const r = await gemini(CLOUD_PROMPTS.mirror, frame, { maxTokens: 200 }); isMirror = r.mirror === true; if (isMirror) { await cloudCompliment(frame, r); return true; } } catch (e) { cloudFail(e); }
+    try {
+      const r = await gemini(CLOUD_PROMPTS.mirror, frame, { maxTokens: 200 });
+      if (!current()) return false;
+      isMirror = r.mirror === true;
+      if (isMirror) { await cloudCompliment(frame, r, current); return current(); }
+    } catch (e) { if (e.cancelled || !current()) return false; cloudFail(e); }
     if (onlyIfMirror) return false;
   } else {
     const phone = state.lastCocoPreds.some(o => o.id === 'cell phone');
     isMirror = phone && Date.now() - (state.mirrorSeenAt || 0) < 5000;
     if (!isMirror && phone && engine.clip.status === 'ready') {
       const [emb] = await clipEmbedCrops(frame, [centerRect(frame, 0.95)]);
-      const r = rankAgainst(emb, await getPromptSet('mirror', MIRROR_SET));
+      if (!current()) return false;
+      const set = await getPromptSet('mirror', MIRROR_SET);
+      if (!current()) return false;
+      const r = rankAgainst(emb, set);
       isMirror = r[0].id === 'mirror' && r[0].p >= 0.6;
     }
   }
@@ -5037,6 +5080,7 @@ async function mirrorCheck(frame, onlyIfMirror) {
   const person = [...state.world.values()].find(o => o.id === 'person' && o.bbox);
   const rect = person ? bodyRect(frame, person.bbox) : centerRect(frame, 0.6);
   const info = await analyzeClothing(frame, rect);
+  if (!current()) return false;
   const cl = clothingSentence(info, 'wearing');
   state.complimentIdx = ((state.complimentIdx || 0) + 1) % COMPLIMENTS.length;
   const c = COMPLIMENTS[state.complimentIdx];
@@ -5048,6 +5092,7 @@ async function mirrorCheck(frame, onlyIfMirror) {
   heartFlash({ x: 0.5, y: 0.45, mode: 'lock', label: '♥' }, 5000);
   logEvent('Mirror: complimented');
   return true;
+  } catch (e) { if (e.cancelled || !current()) return false; throw e; }
 }
 
 // ---- Astha's heart --------------------------------------------------------
@@ -5492,13 +5537,20 @@ const hf = SiriVoice;
 // ---- "How do I look?" ---------------------------------------------------
 function howDoILook() {
   if (withCamera(howDoILook)) return;
+  const current = captureLocalActionGuard();
+  if (!current()) return;
   return withBusy(t('clothes_title'), async () => {
-    if (!(await ensureVisionModels())) return;
+    try {
+    if (!(await ensureVisionModels()) || !current()) return;
     const frame = captureFrame(640); if (!frame) return;
-    const cocoObjs = await runCoco(frame); state.lastCocoPreds = cocoObjs;
+    const cocoObjs = await runCoco(frame);
+    if (!current()) return;
+    state.lastCocoPreds = cocoObjs;
     state.world.clear(); ingest(cocoObjs, 1e9); drawOverlay(frame, cocoObjs, []);
-    await refineWorld(frame, cocoObjs, '', 1);
-    await mirrorCheck(frame, false);
+    await refineWorld(frame, cocoObjs, '', 1, current);
+    if (!current()) return;
+    await mirrorCheck(frame, false, current);
+    } catch (e) { if (e.cancelled || !current()) return; throw e; }
   });
 }
 
@@ -7489,11 +7541,14 @@ async function cloudClothes() {
     }
   });
 }
-async function cloudCompliment(frame, r) {
-  state.complimentIdx = ((state.complimentIdx || 0) + 1) % COMPLIMENTS.length;
-  const c = COMPLIMENTS[state.complimentIdx];
+async function cloudCompliment(frame, r, current = captureLocalActionGuard()) {
+  if (!current()) return;
+  const nextIdx = ((state.complimentIdx || 0) + 1) % COMPLIMENTS.length;
+  const c = COMPLIMENTS[nextIdx];
   let en = `I can see you in the mirror. ${c[0]}`, bn = `আয়নায় আপনাকে দেখতে পাচ্ছি। ${c[1]}`;
   try { const cl = await gemini(CLOUD_PROMPTS.clothes, frame); if (cl.en) { en += ' ' + cl.en.replace(/^(You are|The person is) wearing/i, 'You are wearing'); bn += ' ' + cl.bn; } } catch (e) { if (e.cancelled) return; }
+  if (!current()) return;
+  state.complimentIdx = nextIdx;
   state.lastComplimentAt = Date.now();
   announce(en, bn, 'vision'); playEarcon('confirm'); heartFlash({ x: 0.5, y: 0.45, mode: 'lock', label: '♥' }, 5000);
 }
@@ -8580,8 +8635,9 @@ const DepthEngine = {
     return this.loading;
   },
   // Runs the model on a small copy of the frame and stores a nearness map (0 = farthest, 1 = nearest).
-  async run(frame) {
-    if (this.status !== 'ready' || this.busy || !frame) return this.last;
+  async run(frame, current = captureLocalActionGuard()) {
+    if (!current()) return null;
+    if (this.status !== 'ready' || this.busy || !frame) return this.fresh(Infinity);
     this.busy = true; const t0 = Date.now();
     try {
       const s = this.size / Math.max(frame.width, frame.height);
@@ -8591,6 +8647,7 @@ const DepthEngine = {
       const d = cx.getImageData(0, 0, w, h);
       const img = new this.RawImage(new Uint8ClampedArray(d.data), w, h, 4);
       const out = await this.pipe(img);
+      if (!current()) return null;
       const tensor = out.predicted_depth;
       const dims = tensor.dims, H = dims[dims.length - 2], W = dims[dims.length - 1];
       const raw = tensor.data;
@@ -8603,15 +8660,17 @@ const DepthEngine = {
       const near = new Float32Array(raw.length);
       for (let i = 0; i < raw.length; i++) near[i] = Math.min(1, Math.max(0, (raw[i] - lo) / span));
       this.last = { near, w: W, h: H, at: Date.now(), fw: frame.width, fh: frame.height };
+      this.lastCurrent = current;
       this.lastAt = this.last.at; this.failures = 0; this.lastMs = this.lastAt - t0;
       return this.last;
     } catch (e) {
+      if (!current() || e.cancelled) return null;
       this.failures++; console.warn('depth run', e);
       if (this.failures >= 3) { setEngineState('depth', 'error'); }
       return null;
     } finally { this.busy = false; }
   },
-  fresh(maxAgeMs = 3000) { return this.last && Date.now() - this.last.at <= maxAgeMs ? this.last : null; },
+  fresh(maxAgeMs = 3000) { return this.last && (!this.lastCurrent || this.lastCurrent()) && Date.now() - this.last.at <= maxAgeMs ? this.last : null; },
   // Slow phones get a slower cadence, so depth never starves the detector or the recogniser.
   due(baseMs) { return Date.now() - this.lastAt > Math.max(baseMs, this.lastMs * 2.5); },
   // Median nearness inside the inner half of a box (frame coordinates), or null.
@@ -8956,12 +9015,17 @@ function sceneSummary(opts = {}) {
 function describeScene(skipCloud, forceDetailed) {
   if (withCamera(describeScene)) return;
   if (typeof cloudReady === 'function' && cloudReady() && !skipCloud) return cloudDescribe();
-  withBusy(t('analyzing_title'), async () => {
-    if (!(await ensureVisionModels())) return;
+  const current = captureLocalActionGuard();
+  if (!current()) return;
+  return withBusy(t('analyzing_title'), async () => {
+    try {
+    if (!(await ensureVisionModels()) || !current()) return;
     const frame = captureFrame(640); if (!frame) return;
     const [cocoObjs, clip] = await Promise.all([runCoco(frame), runClipZones(frame)]);
-    if (DepthEngine.status === 'ready') { try { await DepthEngine.run(frame); } catch (e) {} }
+    if (!current()) return;
+    if (DepthEngine.status === 'ready') { try { await DepthEngine.run(frame, current); } catch (e) {} }
     else if (DepthEngine.status === 'idle' && DepthEngine.wanted()) DepthEngine.load().catch(() => {});
+    if (!current()) return;
     if (typeof trackMotion === 'function' && state.source === 'camera') trackMotion(cocoObjs, frame);
     perceptionHook(cocoObjs, frame, { noDepthKick: true, depthMaxAge: 60000 });
     state.lastCocoPreds = cocoObjs; state.lastClipHits = clip.hits.map(h => Object.assign(h, { at: Date.now() }));
@@ -8974,6 +9038,7 @@ function describeScene(skipCloud, forceDetailed) {
     playEarcon('confirm'); speak(s.en, s.bn); haptic('CONFIRM');
     if (typeof heartPointAt === 'function') heartPointAt(objs[0]);
     logEvent(t('log_describe', { n: objs.length }));
+    } catch (e) { if (e.cancelled || !current()) return; throw e; }
   });
 }
 
@@ -9151,25 +9216,32 @@ const AsthaSpatial = (() => {
 // "What is on each side?" / "কোন দিকে কত দূরে কী আছে?"
 function answerSpatial() {
   if (withCamera(answerSpatial)) return;
-  withBusy(t('analyzing_title'), async () => {
-    if (!(await ensureVisionModels())) return;
-    if (DepthEngine.status !== 'ready') {
-      if (DepthEngine.status === 'idle' && DepthEngine.wanted()) DepthEngine.load().catch(() => {});
-      return announce('I need the depth model for this. It is loading; ask again in a moment.', 'এর জন্য গভীরতার মডেল লাগবে। লোড হচ্ছে; একটু পরে আবার জিজ্ঞাসা করুন।', 'vision');
-    }
-    const frame = captureFrame(640); if (!frame) return;
-    const objs = await runCoco(frame);
-    let map = null;
-    try { map = await DepthEngine.run(frame); } catch (e) {}
-    if (!map) return announce('I could not judge depth in this picture.', 'এই ছবিতে গভীরতা বুঝতে পারলাম না।', 'vision');
-    perceptionHook(objs, frame, { noDepthKick: true, depthMaxAge: 60000 });
-    const reading = state.source === 'pi' && typeof AsthaSensors !== 'undefined' ? AsthaSensors.measured('front') : null;
-    const result = AsthaSpatial.layout(objs, frame, map, reading);
-    state.spatial = result;
-    const words = AsthaSpatial.sentences(result);
-    if (!words) return announce('I cannot judge distances in this picture. Turn slowly so I can see more.', 'এই ছবিতে দূরত্ব বুঝতে পারছি না। ধীরে ঘুরুন যাতে আরও দেখতে পাই।', 'vision');
-    setCaption(t('describe_title'), words.en, 'vision', null, words.bn);
-    speak(words.en, words.bn);
+  const stillWanted = captureLocalActionGuard();
+  return withBusy(t('analyzing_title'), async () => {
+    try {
+      if (!stillWanted()) return;
+      const ready = await ensureVisionModels();
+      if (!stillWanted() || !ready) return;
+      if (DepthEngine.status !== 'ready') {
+        if (DepthEngine.status === 'idle' && DepthEngine.wanted()) DepthEngine.load().catch(() => {});
+        return announce('I need the depth model for this. It is loading; ask again in a moment.', 'এর জন্য গভীরতার মডেল লাগবে। লোড হচ্ছে; একটু পরে আবার জিজ্ঞাসা করুন।', 'vision');
+      }
+      const frame = captureFrame(640); if (!frame) return;
+      const objs = await runCoco(frame);
+      if (!stillWanted()) return;
+      let map = null;
+      try { map = await DepthEngine.run(frame); } catch (e) { if (e.cancelled || !stillWanted()) return; }
+      if (!stillWanted()) return;
+      if (!map) return announce('I could not judge depth in this picture.', 'এই ছবিতে গভীরতা বুঝতে পারলাম না।', 'vision');
+      perceptionHook(objs, frame, { noDepthKick: true, depthMaxAge: 60000 });
+      const reading = state.source === 'pi' && typeof AsthaSensors !== 'undefined' ? AsthaSensors.measured('front') : null;
+      const result = AsthaSpatial.layout(objs, frame, map, reading);
+      state.spatial = result;
+      const words = AsthaSpatial.sentences(result);
+      if (!words) return announce('I cannot judge distances in this picture. Turn slowly so I can see more.', 'এই ছবিতে দূরত্ব বুঝতে পারছি না। ধীরে ঘুরুন যাতে আরও দেখতে পাই।', 'vision');
+      setCaption(t('describe_title'), words.en, 'vision', null, words.bn);
+      speak(words.en, words.bn);
+    } catch (e) { if (e.cancelled || !stillWanted()) return; throw e; }
   });
 }
 
@@ -9903,6 +9975,7 @@ function stopAllSpeech() {
   // Drop answers that have not been spoken yet, and end a hazard alert as well.
   if (typeof AsthaExperience !== 'undefined') AsthaExperience.cancelPending();
   if (typeof AsthaCancellation !== 'undefined') AsthaCancellation.cancel();
+  state.pendingAction = null; state.pendingRead = false;
   state.busyToken = null; state.busy = false;
   $('companion-main')?.setAttribute('aria-busy', 'false');
   if (typeof AsthaAgent !== 'undefined') AsthaAgent.cancel?.();

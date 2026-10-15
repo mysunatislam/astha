@@ -130,24 +130,31 @@ const AsthaSpatial = (() => {
 // "What is on each side?" / "কোন দিকে কত দূরে কী আছে?"
 function answerSpatial() {
   if (withCamera(answerSpatial)) return;
-  withBusy(t('analyzing_title'), async () => {
-    if (!(await ensureVisionModels())) return;
-    if (DepthEngine.status !== 'ready') {
-      if (DepthEngine.status === 'idle' && DepthEngine.wanted()) DepthEngine.load().catch(() => {});
-      return announce('I need the depth model for this. It is loading; ask again in a moment.', 'এর জন্য গভীরতার মডেল লাগবে। লোড হচ্ছে; একটু পরে আবার জিজ্ঞাসা করুন।', 'vision');
-    }
-    const frame = captureFrame(640); if (!frame) return;
-    const objs = await runCoco(frame);
-    let map = null;
-    try { map = await DepthEngine.run(frame); } catch (e) {}
-    if (!map) return announce('I could not judge depth in this picture.', 'এই ছবিতে গভীরতা বুঝতে পারলাম না।', 'vision');
-    perceptionHook(objs, frame, { noDepthKick: true, depthMaxAge: 60000 });
-    const reading = state.source === 'pi' && typeof AsthaSensors !== 'undefined' ? AsthaSensors.measured('front') : null;
-    const result = AsthaSpatial.layout(objs, frame, map, reading);
-    state.spatial = result;
-    const words = AsthaSpatial.sentences(result);
-    if (!words) return announce('I cannot judge distances in this picture. Turn slowly so I can see more.', 'এই ছবিতে দূরত্ব বুঝতে পারছি না। ধীরে ঘুরুন যাতে আরও দেখতে পাই।', 'vision');
-    setCaption(t('describe_title'), words.en, 'vision', null, words.bn);
-    speak(words.en, words.bn);
+  const stillWanted = captureLocalActionGuard();
+  return withBusy(t('analyzing_title'), async () => {
+    try {
+      if (!stillWanted()) return;
+      const ready = await ensureVisionModels();
+      if (!stillWanted() || !ready) return;
+      if (DepthEngine.status !== 'ready') {
+        if (DepthEngine.status === 'idle' && DepthEngine.wanted()) DepthEngine.load().catch(() => {});
+        return announce('I need the depth model for this. It is loading; ask again in a moment.', 'এর জন্য গভীরতার মডেল লাগবে। লোড হচ্ছে; একটু পরে আবার জিজ্ঞাসা করুন।', 'vision');
+      }
+      const frame = captureFrame(640); if (!frame) return;
+      const objs = await runCoco(frame);
+      if (!stillWanted()) return;
+      let map = null;
+      try { map = await DepthEngine.run(frame); } catch (e) { if (e.cancelled || !stillWanted()) return; }
+      if (!stillWanted()) return;
+      if (!map) return announce('I could not judge depth in this picture.', 'এই ছবিতে গভীরতা বুঝতে পারলাম না।', 'vision');
+      perceptionHook(objs, frame, { noDepthKick: true, depthMaxAge: 60000 });
+      const reading = state.source === 'pi' && typeof AsthaSensors !== 'undefined' ? AsthaSensors.measured('front') : null;
+      const result = AsthaSpatial.layout(objs, frame, map, reading);
+      state.spatial = result;
+      const words = AsthaSpatial.sentences(result);
+      if (!words) return announce('I cannot judge distances in this picture. Turn slowly so I can see more.', 'এই ছবিতে দূরত্ব বুঝতে পারছি না। ধীরে ঘুরুন যাতে আরও দেখতে পাই।', 'vision');
+      setCaption(t('describe_title'), words.en, 'vision', null, words.bn);
+      speak(words.en, words.bn);
+    } catch (e) { if (e.cancelled || !stillWanted()) return; throw e; }
   });
 }

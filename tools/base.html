@@ -2559,11 +2559,13 @@ async function withBusy(title, fn) {
 }
 
 async function analyzeStill(opts = {}) {
+  const current = captureLocalActionGuard();
+  if (!current()) return null;
   const epoch = state.sourceEpoch;
   const frame = captureFrame(640);
   if (!frame) return null;
   const [cocoObjs, clip] = await Promise.all([runCoco(frame), runClipZones(frame)]);
-  if (epoch !== state.sourceEpoch) return null;
+  if (!current() || epoch !== state.sourceEpoch) return null;
   state.lastCocoPreds = cocoObjs; state.lastClipHits = clip.hits.map(h => Object.assign(h, { at: Date.now() }));
   state.world.clear();
   ingest(cocoObjs.concat(clip.hits), 1e9);
@@ -2858,7 +2860,9 @@ function toggleShield() {
 
 function safetyCheck(silentIfClear) {
   if (!state.source) { setCaption(t('agent_safety'), t('need_source'), 'safety', null, tBn('need_source')); speak(t('need_source'), tBn('need_source')); return; }
+  const current = captureLocalActionGuard();
   const run = () => {
+    if (!current()) return;
     const hz = worldSorted().filter(isHazard);
     if (hz.length) {
       const o = hz[0];
@@ -2880,7 +2884,11 @@ function safetyCheck(silentIfClear) {
     }
   };
   if (state.source === 'camera' || state.world.size) run();
-  else withBusy(t('analyzing_title'), async () => { if (await ensureVisionModels()) { await analyzeStill(); run(); } });
+  else return withBusy(t('analyzing_title'), async () => {
+    if (!current() || !(await ensureVisionModels()) || !current()) return;
+    await analyzeStill();
+    if (current()) run();
+  });
 }
 
 /* =====================================================================

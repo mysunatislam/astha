@@ -5,6 +5,8 @@ import vm from 'node:vm';
 
 const read = file => fs.readFileSync(new URL('../' + file, import.meta.url), 'utf8');
 const cloud = read('tools/cloud.js'), module = read('tools/module.js');
+const base = read('tools/base.html');
+const localGuard = base.slice(base.indexOf('function captureLocalActionGuard()'), base.indexOf('async function withBusy('));
 const policy = module.slice(module.indexOf('function apiUrl(path)'), module.indexOf('const VoiceEchoFilter'));
 function deferred() { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; }
 const settle = () => new Promise(resolve => setImmediate(resolve));
@@ -35,7 +37,7 @@ function harness() {
   });
   context.window = context;
   context.ASTHA_ACCOUNT_ID = 'synthetic-cloud-owner';
-  vm.runInContext(policy + cloud.slice(0, cloud.indexOf('// ---- Modes:')) + '\nremoteProcessingConsent=true;serverCloud.available=true;globalThis.cancellation=AsthaCancellation;', context);
+  vm.runInContext(policy + localGuard + cloud.slice(0, cloud.indexOf('// ---- Modes:')) + '\nremoteProcessingConsent=true;serverCloud.available=true;globalThis.cancellation=AsthaCancellation;', context);
   context.frameToJpeg = () => 'synthetic-image';
   context.fetch = async (url, options) => { calls.fetch.push({ url, options }); return context.transport(url, options); };
   context.transport = async () => reply(result);

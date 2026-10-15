@@ -729,6 +729,7 @@ function stopAllSpeech() {
   // Drop answers that have not been spoken yet, and end a hazard alert as well.
   if (typeof AsthaExperience !== 'undefined') AsthaExperience.cancelPending();
   if (typeof AsthaCancellation !== 'undefined') AsthaCancellation.cancel();
+  state.pendingAction = null; state.pendingRead = false;
   state.busyToken = null; state.busy = false;
   $('companion-main')?.setAttribute('aria-busy', 'false');
   if (typeof AsthaAgent !== 'undefined') AsthaAgent.cancel?.();
