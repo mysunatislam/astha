@@ -252,12 +252,20 @@ function parseSpokenPlace(query) {
   return null;
 }
 async function handleOnDevicePlacement(query, statedItem) {
+  const stillWanted = captureLocalActionGuard();
   return withBusy('Remembering…', async () => {
     const accountKey = LocalStore.KEY;
+    if (!stillWanted() || privacyMode || privacyTransition) return;
     const frame = captureFrame(640); if (!frame) return;
     heartSet({ x: 0.5, y: 0.5, mode: 'seek', label: 'Looking…' });
-    await ensureVisionModels();
-    const cocoObjs = await runCoco(frame); state.lastCocoPreds = cocoObjs;
+    let cocoObjs;
+    try {
+      await ensureVisionModels();
+      if (!stillWanted()) return;
+      cocoObjs = await runCoco(frame);
+    } catch (e) { if (!stillWanted() || e.cancelled) return; throw e; }
+    if (!stillWanted()) return;
+    state.lastCocoPreds = cocoObjs;
     if (typeof perceptionHook === 'function') perceptionHook(cocoObjs, frame, { noDepthKick: true });
     let item = statedItem ? statedItem.trim() : '', itemBn = null, targetId = null, seen = false;
     const vm = item && typeof findVocabMatch === 'function' ? findVocabMatch(item) : null;
@@ -266,20 +274,22 @@ async function handleOnDevicePlacement(query, statedItem) {
     if (!seen && engine.clip.status === 'ready') {
       try {
         const [emb] = await clipEmbedCrops(frame, [centerRect(frame, 0.6)]);
+        if (!stillWanted()) return;
         const ranked = scoreEmbedding(emb).filter(r => r.id !== '_bg' && !(VOCAB_BY_ID[r.id] || {}).quiet);
         if (targetId) seen = ranked.slice(0, 3).some(r => r.id === targetId && r.p >= 0.12);
         else if (!item && ranked[0] && ranked[0].p >= 0.15 && (VOCAB_BY_ID[ranked[0].id] || {}).personal) { item = label(ranked[0].id); itemBn = labelBn(ranked[0].id); targetId = ranked[0].id; seen = true; }
-      } catch (e) { console.warn('placement clip', e); }
+      } catch (e) { if (!stillWanted() || e.cancelled) return; console.warn('placement clip', e); }
     }
     if (!item) {
       const central = cocoObjs.filter(o => (VOCAB_BY_ID[o.id] || {}).personal).sort((a, b) => (a.bbox[2] * a.bbox[3]) - (b.bbox[2] * b.bbox[3]))[0];
       if (central) { item = objLabel(central); itemBn = objLabelBn(central); targetId = central.id; seen = true; }
     }
+    if (!stillWanted()) return;
     if (!item) { heartHide(); return announce('Tell me what you are keeping, for example: I am keeping my wallet here.', 'কী রাখছেন বলুন, যেমন: আমার মানিব্যাগ এখানে রাখছি।', 'memory'); }
     // Only the user's named place confirms a physical location. An image alone cannot
     // establish that an item rests on a detected surface or belongs to the current room.
     const spoken = parseSpokenPlace(query);
-    if (privacyMode || privacyTransition || LocalStore.KEY !== accountKey) return;
+    if (!stillWanted() || privacyMode || privacyTransition || LocalStore.KEY !== accountKey) return;
     if (!spoken) {
       heartHide();
       return announce('Tell me the place to save, for example: my wallet is on the table. The image does not confirm its physical location.', 'কোথায় রাখছেন বলুন, যেমন: আমার মানিব্যাগ টেবিলের ওপর। শুধু ছবি থেকে প্রকৃত স্থান নিশ্চিত করা যায় না।', 'memory');
@@ -658,10 +668,12 @@ async function listenOnDevice() {
   setCaption(t('agent_voice'), 'Listening… take your time.', 'voice', 'busy', 'শুনছি… ধীরে বলুন।');
   playEarcon('confirm');
   let text = '', failure = null;
-  try { text = (await window.AsthaNative.listen(sttLang())).trim(); } catch (error) { failure = error && error.code; }
+  const onDeviceOnly = !remoteProcessingAllowed() || OfflineEar.wanted();
+  try { text = (await window.AsthaNative.listen(sttLang(), { onDeviceOnly })).trim(); } catch (error) { failure = error && error.code; }
   if (!state.listening) return;   // the user tapped again to cancel
   stopListening();
   if (failure === 'permission') return announce('Microphone access was denied.', 'মাইক্রোফোনের অনুমতি নেই।', 'voice');
+  if (failure === 'on_device_unavailable' || failure === 'language_unavailable') return OfflineEar.listenAndHandle('native_unavailable');
   if (failure === 'recognizer_unavailable') return announce('This phone has no speech recognizer installed. Type your request instead.', 'এই ফোনে কণ্ঠ শনাক্ত করার ব্যবস্থা নেই। অনুরোধ লিখে দিন।', 'voice');
   if (text) return handleQuery(text);
   setCaption(t('agent_voice'), 'I did not hear anything. Tap the microphone and speak after the chime.', 'voice', null, 'কিছু শুনতে পাইনি। মাইক্রোফোন চেপে শব্দের পরে বলুন।');
@@ -716,7 +728,17 @@ function toggleListening() {
 function stopAllSpeech() {
   // Drop answers that have not been spoken yet, and end a hazard alert as well.
   if (typeof AsthaExperience !== 'undefined') AsthaExperience.cancelPending();
+  if (typeof AsthaCancellation !== 'undefined') AsthaCancellation.cancel();
+  state.pendingAction = null; state.pendingRead = false;
+  state.busyToken = null; state.busy = false;
+  $('companion-main')?.setAttribute('aria-busy', 'false');
+  if (typeof AsthaAgent !== 'undefined') AsthaAgent.cancel?.();
+  if (typeof reading !== 'undefined' && reading.active) stopReading(true);
   stopReader(); stopListening(); VoiceEngine.stop(true);
+  if (typeof VideoRoomCalib !== 'undefined' && VideoRoomCalib.active) {
+    VideoRoomCalib.active = false; clearInterval(VideoRoomCalib.timer); VideoRoomCalib.timer = null;
+    if ($('calib-start-btn')) $('calib-start-btn').textContent = t('calib_resume');
+  }
   if (typeof Seeker !== 'undefined' && Seeker.active) Seeker.stop('user');
   if (OfflineEar.active) OfflineEar.cancel();
   $('reader-progress').textContent = t('reader_stopped');
@@ -770,6 +792,9 @@ function offlineRoute(query, q) {
   if (typeof cloudReady === 'function' && cloudReady()) {
     if (Seeker.active && /\b(found it|got it|i have it|i got it|i see it|thanks|thank you)\b|পেয়েছি|পেয়ে গেছি|হয়েছে|peyechi/.test(q)) { Seeker.stop('found'); announce('Great.', 'বাহ, ভালো।', 'voice'); return true; }
     if (Seeker.active && /\b(stop (looking|searching|guiding)|cancel|never mind|forget it)\b|খোঁজা বন্ধ|থাক/.test(q)) { Seeker.stop('user'); return true; }
+    // The Pi's distance sensor and the depth model are on this phone; the online assistant cannot use them.
+    if (/\b(which way (should|can|do) i (go|walk|turn)|where can i (walk|go)|what('s| is) on (each|either|both) sides?|how far .* on (each|either|both) sides?|spatial (view|layout|map))\b|কোন দিকে (ফাঁকা|যাব|জায়গা)|চারদিকে কত দূরে|দুই পাশে কী|দুপাশে কী/.test(q)) { answerSpatial(); return true; }
+    if (/how far|কত ?দূরে|koto dure/.test(q) && state.source === 'pi' && typeof AsthaSensors !== 'undefined' && AsthaSensors.measured('front')) { answerHowFar(query); return true; }
     if (/prepare (for |me for )?offline|download (the |all )?models|work offline|go offline|make (it|astha) work without internet|অফলাইন/.test(q)) { OfflinePack.prepare(); return true; }
     if (/\b(am i|are we|are you) (online|offline|connected)\b|is there internet|do (i|we) have internet|ইন্টারনেট আছে|নেট আছে/.test(q)) { announce('Internet is connected. Cloud mode has permission and credentials; a successful model response has not yet been confirmed.', 'ইন্টারনেট সংযোগ আছে। ক্লাউড মোডে অনুমতি ও পরিচয়পত্র আছে; মডেলের সফল উত্তর এখনো নিশ্চিত করা হয়নি।', 'system'); return true; }
     return false;
@@ -781,6 +806,7 @@ function offlineRoute(query, q) {
   const guideBn = q.match(/([ঀ-৿\s]+?)(?:-?এর| এর)?\s*(কাছে নিয়ে (?:চলো|যাও)|পথ দেখাও|দিকে নিয়ে (?:চলো|যাও))/);
   if (guideBn) { Seeker.start(guideBn[1].replace(/আমাকে|আমায়/g, '').trim(), 'guide'); return true; }
   if (/how far|কত ?দূরে|koto dure/.test(q)) { answerHowFar(query); return true; }
+  if (/\b(which way (should|can|do) i (go|walk|turn)|where can i (walk|go)|what('s| is) on (each|either|both) sides?|how far .* on (each|either|both) sides?|spatial (view|layout|map))\b|কোন দিকে (ফাঁকা|যাব|জায়গা)|চারদিকে কত দূরে|দুই পাশে কী|দুপাশে কী/.test(q)) { answerSpatial(); return true; }
   if (/(which|what) room|what kind of (room|place)|what place is this|কোন ঘর|কোন রুম|kon ghor/.test(q)) { answerWhichRoom(); return true; }
   if (/describe (it |everything )?in detail|in detail|full description|বিস্তারিত/.test(q)) { describeScene(undefined, true); return true; }
   if (/what('s| is) (happening|going on)|whats (happening|going on)|what is around me|summari[sz]e|give me a summary|কী হচ্ছে|কি হচ্ছে|সারাংশ|ki hocche|ki hochche/.test(q)) { describeScene(); return true; }
@@ -791,7 +817,7 @@ function offlineRoute(query, q) {
 }
 try {
   INTENTS.unshift(
-    { id: 'seek', run: q => offlineRoute(q, q.toLowerCase()), kw: ['guide me to', 'take me to', 'lead me to', 'navigate to', 'how far', 'which room', 'what room', 'in detail', 'what is happening', "what's happening", 'going on', 'prepare offline', 'work offline', 'পথ দেখাও', 'নিয়ে চলো', 'কত দূরে', 'কোন ঘর', 'বিস্তারিত', 'কী হচ্ছে', 'অফলাইন', 'koto dure', 'kon ghor'] },
+    { id: 'seek', run: q => offlineRoute(q, q.toLowerCase()), kw: ['guide me to', 'take me to', 'lead me to', 'navigate to', 'how far', 'which room', 'what room', 'in detail', 'what is happening', "what's happening", 'going on', 'prepare offline', 'work offline', 'which way', 'each side', 'both sides', 'where can i walk', 'spatial', 'কোন দিকে', 'দুই পাশে', 'দুপাশে', 'পথ দেখাও', 'নিয়ে চলো', 'কত দূরে', 'কোন ঘর', 'বিস্তারিত', 'কী হচ্ছে', 'অফলাইন', 'koto dure', 'kon ghor'] },
   );
 } catch (e) {}
 

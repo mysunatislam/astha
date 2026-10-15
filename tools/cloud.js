@@ -115,32 +115,68 @@ If no target item is clearly placed on a surface, return JSON:
 // Existing callers use this function name; all provider requests go through ASTHA.
 async function gemini(task, frame, opts = {}) {
   const requester = window.ASTHA_ACCOUNT_ID;
-  const stillAllowed = () => {
-    if (!remoteProcessingAllowed() || window.ASTHA_ACCOUNT_ID !== requester || opts.signal?.aborted) {
-      const error = new Error('Remote request cancelled or account changed'); error.noCloud = true; throw error;
-    }
+  const source = typeof state === 'undefined' ? undefined : state.source;
+  const epoch = typeof state === 'undefined' ? undefined : state.sourceEpoch;
+  const cancellation = typeof AsthaCancellation === 'undefined' ? null : AsthaCancellation;
+  const generation = cancellation?.generation;
+  const controller = new AbortController();
+  const cancelled = () => {
+    const error = new Error('Remote request cancelled'); error.noCloud = true; error.cancelled = true; return error;
   };
-  stillAllowed();
-  if (!serverCloud.available) { const error = new Error('no cloud reasoning available'); error.noCloud = true; throw error; }
-  cloud.lastCallAt = Date.now();
-  const image = frame ? frameToJpeg(frame, opts.maxW || 800) : undefined;
-  const res = await fetch(apiUrl('/api/vision'), {
-    method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ task: 'custom', prompt: task, image, maxTokens: opts.maxTokens || 900 }),
-    signal: deadlineSignal(30000, opts.signal),
-  });
-  stillAllowed();
-  if (res.status === 401 || res.status === 503) {
-    serverCloud.checked = true; serverCloud.available = false; serverCloud.provider = null;
-    updateCloudBadge();
+  const stillAllowed = () => {
+    if (!remoteProcessingAllowed() || window.ASTHA_ACCOUNT_ID !== requester || opts.signal?.aborted || controller.signal.aborted ||
+        cancellation?.generation !== generation || (typeof state !== 'undefined' && (source !== state.source || epoch !== state.sourceEpoch)) ||
+        (typeof document !== 'undefined' && document.hidden)) throw cancelled();
+  };
+  const fromCaller = () => controller.abort();
+  let rejectAborted;
+  const aborted = new Promise((_, reject) => { rejectAborted = reject; });
+  const onAbort = () => rejectAborted(cancelled());
+  controller.signal.addEventListener('abort', onAbort, { once: true });
+  opts.signal?.addEventListener('abort', fromCaller, { once: true });
+  if (opts.signal?.aborted) controller.abort();
+  cancellation?.controllers.add(controller);
+  const timing = typeof AsthaDiagnostics === 'undefined' ? null : AsthaDiagnostics.start('reasoning', { sourceEpoch: epoch || 0 });
+  let outcome = 'error';
+  try {
+    const work = (async () => {
+      stillAllowed();
+      if (!serverCloud.available) { const error = new Error('no cloud reasoning available'); error.noCloud = true; throw error; }
+      cloud.lastCallAt = Date.now();
+      const image = frame ? frameToJpeg(frame, opts.maxW || 800) : undefined;
+      const res = await fetch(apiUrl('/api/vision'), {
+        method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ task: 'custom', prompt: task, image, maxTokens: opts.maxTokens || 900 }),
+        signal: deadlineSignal(30000, controller.signal),
+      });
+      stillAllowed();
+      if (res.status === 401 || res.status === 503) {
+        serverCloud.checked = true; serverCloud.available = false; serverCloud.provider = null;
+        updateCloudBadge();
+      }
+      if (res.status === 429) throw new Error('rate limit');
+      if (!res.ok) { const error = new Error('ASTHA online service unavailable'); error.noCloud = true; throw error; }
+      const result = await res.json();
+      stillAllowed();
+      if (!result || typeof result !== 'object' || Array.isArray(result)) throw new Error('Invalid ASTHA response');
+      serverCloud.checked = true;
+      return result;
+    })();
+    // Also settle promptly when a transport or body decoder ignores abort. Its late
+    // completion still passes through the guards above and is consumed by this race.
+    const result = await Promise.race([work, aborted]);
+    outcome = 'success';
+    return result;
+  } catch (error) {
+    if (error.cancelled || controller.signal.aborted || cancellation?.generation !== generation) outcome = 'cancel';
+    stillAllowed();
+    throw error;
+  } finally {
+    if (typeof AsthaDiagnostics !== 'undefined') AsthaDiagnostics.finish(timing, outcome);
+    cancellation?.controllers.delete(controller);
+    opts.signal?.removeEventListener('abort', fromCaller);
+    controller.signal.removeEventListener('abort', onAbort);
   }
-  if (res.status === 429) throw new Error('rate limit');
-  if (!res.ok) { const error = new Error('ASTHA online service unavailable'); error.noCloud = true; throw error; }
-  const result = await res.json();
-  stillAllowed();
-  if (!result || typeof result !== 'object' || Array.isArray(result)) throw new Error('Invalid ASTHA response');
-  serverCloud.checked = true;
-  return result;
 }
 function parseJsonLoose(text) {
   try { return JSON.parse(text); } catch (e) {}
@@ -148,6 +184,16 @@ function parseJsonLoose(text) {
   return { en: (text || '').trim(), bn: '' };
 }
 function cloudFail(e) { console.warn('cloud', e); return /rate limit/.test(String(e)); }
+function scheduleCloudFallback(run) {
+  const cancellation = typeof AsthaCancellation === 'undefined' ? null : AsthaCancellation;
+  const generation = cancellation?.generation, requester = window.ASTHA_ACCOUNT_ID;
+  const source = state.source, epoch = state.sourceEpoch;
+  setTimeout(() => {
+    if (cancellation?.generation !== generation || requester !== window.ASTHA_ACCOUNT_ID ||
+        source !== state.source || epoch !== state.sourceEpoch || document.hidden) return;
+    run();
+  }, 20);
+}
 
 // ---- Server-backed actions with on-device fallback ----
 async function cloudDescribe() {
@@ -164,8 +210,9 @@ async function cloudDescribe() {
         r.objects.slice(0, 3).forEach(obj => autoRecordMemory({ item: obj, location: r.en || 'In front of you', source: 'Scene description' }));
       }
     } catch (e) {
+      if (e.cancelled) return;
       if (cloudFail(e)) announce('The cloud is busy for a moment; describing on-device.', 'ক্লাউড একটু ব্যস্ত; ডিভাইসেই বর্ণনা করছি।', 'system');
-      setTimeout(() => describeScene(true), 20);
+      scheduleCloudFallback(() => describeScene(true));
     }
   });
 }
@@ -181,8 +228,9 @@ async function cloudIdentify() {
         autoRecordMemory({ item: r.name, location: 'Held in front of camera', source: 'Identified object', score: null });
       }
     } catch (e) {
+      if (e.cancelled) return;
       cloudFail(e);
-      setTimeout(() => identifyObject(true), 20);
+      scheduleCloudFallback(() => identifyObject(true));
     }
   });
 }
@@ -197,16 +245,20 @@ async function cloudClothes() {
         autoRecordMemory({ item: (r.colour ? r.colour + ' ' : '') + r.garment, location: 'Worn or held', source: 'Clothes inspection' });
       }
     } catch (e) {
+      if (e.cancelled) return;
       cloudFail(e);
-      setTimeout(() => inspectClothesAndColor(true), 20);
+      scheduleCloudFallback(() => inspectClothesAndColor(true));
     }
   });
 }
-async function cloudCompliment(frame, r) {
-  state.complimentIdx = ((state.complimentIdx || 0) + 1) % COMPLIMENTS.length;
-  const c = COMPLIMENTS[state.complimentIdx];
+async function cloudCompliment(frame, r, current = captureLocalActionGuard()) {
+  if (!current()) return;
+  const nextIdx = ((state.complimentIdx || 0) + 1) % COMPLIMENTS.length;
+  const c = COMPLIMENTS[nextIdx];
   let en = `I can see you in the mirror. ${c[0]}`, bn = `আয়নায় আপনাকে দেখতে পাচ্ছি। ${c[1]}`;
-  try { const cl = await gemini(CLOUD_PROMPTS.clothes, frame); if (cl.en) { en += ' ' + cl.en.replace(/^(You are|The person is) wearing/i, 'You are wearing'); bn += ' ' + cl.bn; } } catch (e) {}
+  try { const cl = await gemini(CLOUD_PROMPTS.clothes, frame); if (cl.en) { en += ' ' + cl.en.replace(/^(You are|The person is) wearing/i, 'You are wearing'); bn += ' ' + cl.bn; } } catch (e) { if (e.cancelled) return; }
+  if (!current()) return;
+  state.complimentIdx = nextIdx;
   state.lastComplimentAt = Date.now();
   announce(en, bn, 'vision'); playEarcon('confirm'); heartFlash({ x: 0.5, y: 0.45, mode: 'lock', label: '♥' }, 5000);
 }
@@ -231,7 +283,7 @@ async function cloudVerifyAndSpeak(fresh, fallbackEn, fallbackBn) {
     if (r.mirror === true && now - (state.lastComplimentAt || 0) > 60000) return cloudCompliment(frame, r);
     if (r.none || !r.en) return;
     setCaption(t('new_title'), r.en, 'vision', null, r.bn); speak(r.en, r.bn); heartPointAt(fresh[0]);
-  } catch (e) { if (!cloudFail(e) && stillWanted()) { setCaption(t('new_title'), fallbackEn, 'vision', null, fallbackBn); speak(fallbackEn, fallbackBn); } }
+  } catch (e) { if (!e.cancelled && !cloudFail(e) && stillWanted()) { setCaption(t('new_title'), fallbackEn, 'vision', null, fallbackBn); speak(fallbackEn, fallbackBn); } }
 }
 async function cloudScreen(frame) { return gemini(CLOUD_PROMPTS.screen, frame, { maxW: 1280, maxTokens: 2500 }); }
 
@@ -265,8 +317,9 @@ async function cloudReadLive() {
       heartFlash({ x: 0.5, y: 0.5, mode: 'lock', label: r.isBoardOrSign ? 'Board text' : 'Read' });
       logEvent('Cloud read: ' + (text.slice(0, 40) || 'board text'));
     } catch (e) {
+      if (e.cancelled) return;
       if (cloudFail(e)) announce('Cloud reading is busy; switching to on-device reader.', 'ক্লাউড রিডার ব্যস্ত; ডিভাইসের রিডারে চেষ্টা করছি।', 'system');
-      setTimeout(() => startReading(), 20);
+      scheduleCloudFallback(() => startReading());
     }
   });
 }
@@ -296,8 +349,9 @@ async function cloudSafetyCheck(silentIfClear) {
       logEvent('Cloud safety: ' + (r.en || '').slice(0, 40));
       return r;
     } catch (e) {
+      if (e.cancelled) return;
       if (cloudFail(e)) announce('Cloud safety busy; checking on-device.', 'ক্লাউড ব্যস্ত; ডিভাইসে পরীক্ষা করছি।', 'system');
-      setTimeout(() => safetyCheck(silentIfClear), 20);
+      scheduleCloudFallback(() => safetyCheck(silentIfClear));
     }
   });
 }
@@ -343,6 +397,7 @@ async function cloudCalibrateVideoFrame(frame, roomName) {
     const r = await gemini(prompt, f, { maxTokens: 600 });
     return r;
   } catch (e) {
+    if (e.cancelled) throw e;
     cloudFail(e);
     return null;
   }
@@ -378,6 +433,7 @@ async function cloudRecordPlacement(query, frame, rooms) {
       }
       return null;
     } catch (e) {
+      if (e.cancelled) throw e;
       cloudFail(e);
       throw e;
     }

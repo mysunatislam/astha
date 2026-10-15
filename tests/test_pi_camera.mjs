@@ -253,6 +253,99 @@ assert legacy == ['raspistill', '-n', '-t', '300', '-w', '640', '-h', '480', '-q
 modern = m.CommandSource('rpicam-still', 320, 240, 60, 1).command
 assert modern == ['rpicam-still', '-n', '-t', '1', '--width', '320', '--height', '240', '-q', '60', '-o', '-']
 
+# A NoIR camera needs its own colour tuning; only a plain installed file name is accepted.
+import os, sys, tempfile, types
+with tempfile.TemporaryDirectory() as folder:
+    open(os.path.join(folder, 'imx219_noir.json'), 'w').close()
+    assert m.tuning_path('imx219_noir.json', [folder]) == os.path.join(folder, 'imx219_noir.json')
+    assert m.noir_tunings([folder, os.path.join(folder, 'missing')]) == ['imx219_noir.json']
+    for name in ('../imx219_noir.json', '/tmp/imx219_noir.json', 'sub/imx219_noir.json', '.json', 'imx219_noir.txt', '', None):
+        assert m.tuning_path(name, [folder]) is None, name
+    assert m.tuning_path('imx477_noir.json', [folder]) is None
+tuned = m.CommandSource('rpicam-still', 320, 240, 60, 1, '/usr/share/libcamera/ipa/rpi/vc4/imx219_noir.json').command
+assert tuned[-4:] == ['--tuning-file', '/usr/share/libcamera/ipa/rpi/vc4/imx219_noir.json', '-o', '-']
+seen = {}
+class FakeCamera:
+    def __init__(self, **kwargs): seen.clear(); seen.update(kwargs); self.options = {}
+    def create_video_configuration(self, **kwargs): return kwargs
+    def configure(self, config): pass
+real_picamera2 = sys.modules.get('picamera2')
+sys.modules['picamera2'] = types.SimpleNamespace(Picamera2=FakeCamera)
+try:
+    m.Picamera2Source(640, 480, 70, 300, '/x/imx219_noir.json')
+    assert seen == {'tuning': '/x/imx219_noir.json'}
+    m.Picamera2Source(640, 480, 70, 300)
+    assert seen == {}, 'without --tuning picamera2 keeps its default tuning'
+finally:
+    if real_picamera2 is None: sys.modules.pop('picamera2', None)
+    else: sys.modules['picamera2'] = real_picamera2
+
+# ESP32 telemetry: only well-formed samples pass, field by field.
+good = {'type': 'sample', 'v': 1, 'seq': 5, 'ms': 900, 'distance_cm': 85.2, 'distance_status': 'ok',
+        'imu': {'ax': 0.01, 'ay': -0.02, 'az': 0.99, 'gx': 0.4, 'gy': -0.1, 'gz': 0.0, 'temp_c': 29.1}, 'imu_status': 'ok'}
+parsed = m.telemetry_sample(json.dumps(dict(good, extra='dropped')).encode())
+assert parsed == {'seq': 5, 'distance_cm': 85.2, 'distance_status': 'ok', 'imu': good['imu'], 'imu_status': 'ok'}
+no_imu = dict(good, imu=None, imu_status='not_found', distance_cm=None, distance_status='out_of_range')
+assert m.telemetry_sample(json.dumps(no_imu))['imu'] is None
+for bad in [dict(good, type='hello'), dict(good, v=2), dict(good, seq=-1), dict(good, seq=True), dict(good, distance_cm=-3),
+            dict(good, distance_cm=900), dict(good, distance_cm='85'), dict(good, distance_status='ok', distance_cm=None),
+            dict(good, distance_status='out_of_range'), dict(good, distance_status='made_up'),
+            dict(good, imu=dict(good['imu'], ax=float('nan'))), dict(good, imu=dict(good['imu'], gz=9999)),
+            dict(good, imu={'ax': 1}), dict(good, imu_status='not_found'), dict(good, imu_status='broken')]:
+    assert m.telemetry_sample(json.dumps(bad)) is None, bad
+for noise in [b'', b'ets Jul 29 2019 12:21:46', b'{', b'[1,2]', b'\xff\xfe', b'{"type":"sample"' + b' ' * 2000 + b'}']:
+    assert m.telemetry_sample(noise) is None
+
+# /telemetry has the same gates as pictures, and refuses a reading older than a second.
+telemetry = m.Telemetry()
+server = m.CameraServer(('127.0.0.1', 0), m.make_handler(m.Frames(), token, {origin}, {'model': 'Fixture'}, telemetry))
+thread = threading.Thread(target=server.serve_forever, daemon=True); thread.start()
+try:
+    assert request({'Origin': origin}, '/telemetry')[0] == 401
+    assert request({'Authorization': 'Bearer ' + token}, '/telemetry')[0] == 403
+    headers = {'Origin': origin, 'Authorization': 'Bearer ' + token}
+    assert request(headers, '/telemetry')[0] == 503
+    telemetry.put(parsed)
+    status, result_headers, body = request(headers, '/telemetry')
+    reading = json.loads(body)
+    assert status == 200 and reading['distance_cm'] == 85.2 and reading['imu']['az'] == 0.99 and 0 <= reading['age_ms'] < 1000
+    assert result_headers['Cache-Control'] == 'no-store'
+    assert request(headers, '/telemetry?x=1')[0] == 400
+    telemetry.at = time.monotonic() - 2
+    assert request(headers, '/telemetry')[0] == 503
+    preflight = {'Origin': origin, 'Access-Control-Request-Method': 'GET', 'Access-Control-Request-Headers': 'authorization'}
+    assert request(preflight, '/telemetry', method='OPTIONS')[0] == 204
+finally:
+    server.shutdown(); server.server_close(); thread.join(timeout=2)
+# Without --telemetry the path does not exist.
+plain = m.CameraServer(('127.0.0.1', 0), m.make_handler(m.Frames(), token, {origin}, {'model': 'Fixture'}))
+thread = threading.Thread(target=plain.serve_forever, daemon=True); thread.start(); server = plain
+try:
+    assert request({'Origin': origin, 'Authorization': 'Bearer ' + token}, '/telemetry')[0] == 400
+    assert request({'Origin': origin, 'Access-Control-Request-Method': 'GET'}, '/telemetry', method='OPTIONS')[0] == 403
+finally:
+    plain.shutdown(); plain.server_close(); thread.join(timeout=2)
+
+# The serial reader skips boot noise and split lines, and reopens a port that fails.
+class FakePort:
+    def __init__(self, chunks): self.chunks = list(chunks); self.closed = False
+    in_waiting = 0
+    def read(self, size):
+        if size == 0: return b''
+        if not self.chunks: raise OSError('unplugged')
+        return self.chunks.pop(0)
+    def close(self): self.closed = True
+line = json.dumps(good).encode()
+ports = [FakePort([b'rst:0x1 boot\r\n' + line[:20], line[20:] + b'\r\n', b'']), FakePort([json.dumps(dict(good, seq=6)).encode() + b'\n'])]
+opened, latest, stopped = [], m.Telemetry(), threading.Event()
+def opener():
+    if not ports: stopped.set(); raise OSError('gone')
+    opened.append(ports.pop(0)); return opened[-1]
+worker = threading.Thread(target=m.telemetry_loop, args=(opener, latest, stopped), daemon=True); worker.start()
+worker.join(timeout=10)
+assert not worker.is_alive() and latest.received == 2 and latest.sample['seq'] == 6
+assert all(port.closed for port in opened)
+
 # The capture loop keeps only the newest picture and survives a failing camera.
 class Source:
     def __init__(self): self.calls = 0
@@ -348,4 +441,81 @@ test('a rejected pairing is explained aloud and leaves the phone camera availabl
   assert.equal(h.ui.status, 'pairing_rejected'); assert.equal(h.context.state.source, null);
   assert.deepEqual(h.spoken.map(pair => pair[0]), ['Pairing was rejected. Check the camera address and private pairing code.']);
   assert.equal(h.elements.get('pi-camera-connect').disabled, false);
+});
+test('distance readings are polled only from a Pi with a sensor, validated, and stopped with the pairing', async () => {
+  const flush = async () => { for (let i = 0; i < 6; i++) await new Promise(resolve => setImmediate(resolve)); };
+  const json = (body, status = 200) => new Response(typeof body === 'string' ? body : JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
+  const sample = (seq, extra = {}) => ({ seq, distance_cm: 85.2, distance_status: 'ok', imu: null, imu_status: 'not_found', age_ms: 40, ...extra });
+  let sequence = 0, hasSensor = true;
+  const queue = [];
+  const route = async url => {
+    if (url.endsWith('/status')) return json({ model: 'Pi', telemetry: hasSensor });
+    if (url.endsWith('/telemetry')) return queue.shift() || json('', 503);
+    return reply({ sequence: String(++sequence) });
+  };
+  const h = setup(route), readings = [];
+  await h.pi.connect({ origin: ORIGIN, token: TOKEN, onTelemetry: reading => readings.push(reading) });
+  await flush();
+  const paths = () => h.calls.map(([url]) => new URL(url).pathname);
+  assert.deepEqual(paths(), ['/frame', '/status']);
+  queue.push(json(sample(1)));
+  await h.run(0); await flush();
+  const plain = value => JSON.parse(JSON.stringify(value));   // readings are made inside the sandbox
+  assert.deepEqual(plain(readings), [{ distanceM: 0.852, status: 'ok', seq: 1, ageMs: 40 }]);
+  assert.equal(h.calls.at(-1)[1].headers.Authorization, 'Bearer ' + TOKEN); assert.equal(h.calls.at(-1)[1].credentials, 'omit');
+  // A repeated reading, malformed ones and an unavailable sensor deliver nothing new.
+  for (const response of [json(sample(1)), json(sample(2, { distance_cm: '85' })), json(sample(2, { distance_cm: 900 })),
+    json(sample(2, { age_ms: 5000 })), json(sample(2, { distance_status: 'made_up' })), json(sample(2, { distance_status: 'out_of_range' })),
+    json('{not json'), json('', 503), json('x'.repeat(3000))]) {
+    queue.push(response); await h.run(200); await flush();
+  }
+  assert.equal(readings.length, 1);
+  queue.push(json(sample(3, { distance_cm: null, distance_status: 'out_of_range' })));
+  await h.run(200); await flush();
+  assert.deepEqual(plain(readings.at(-1)), { distanceM: null, status: 'out_of_range', seq: 3, ageMs: 40 });
+  // In the background nothing is requested; coming back resumes.
+  h.listeners.get('visibilitychange'); h.document.hidden = true; h.listeners.get('visibilitychange')();
+  assert.equal([...h.timers.values()].some(timer => timer.ms === 200 || timer.ms === 0), false);
+  h.document.hidden = false; h.listeners.get('visibilitychange')();
+  queue.push(json(sample(4, { distance_cm: 120 })));
+  const telemetryTimer = [...h.timers.entries()].filter(([, timer]) => timer.ms === 0).at(-1);
+  h.timers.delete(telemetryTimer[0]); await telemetryTimer[1].fn(); await flush();
+  assert.equal(readings.at(-1).distanceM, 1.2);
+  h.pi.stop();
+  assert.equal([...h.timers.values()].some(timer => timer.ms === 200), false, 'stop ends the polling');
+  // A Pi without the sensor is never asked; a rejected token ends the polling.
+  hasSensor = false;
+  const noSensor = setup(route);
+  await noSensor.pi.connect({ origin: ORIGIN, token: TOKEN, onTelemetry: () => assert.fail('no sensor') }); await flush();
+  assert.equal(noSensor.calls.some(([url]) => url.endsWith('/telemetry')), false);
+  hasSensor = true;
+  const rejected = setup(route);
+  await rejected.pi.connect({ origin: ORIGIN, token: TOKEN, onTelemetry: () => assert.fail('rejected') }); await flush();
+  queue.length = 0; queue.push(json('', 401));
+  await rejected.run(0); await flush();
+  assert.equal([...rejected.timers.values()].some(timer => timer.ms === 200), false);
+  rejected.pi.stop(); noSensor.pi.stop();
+});
+test('Pi UI passes each distance to the sensor interface with its age and forgets it on stop', async () => {
+  let handlers;
+  const reports = [];
+  const h = uiSetup({ async connect(options) { handlers = options; options.onFrame({ width: 640, height: 480 }); options.onStatus({ state: 'connected' }); },
+    stop() {}, active: () => true, paired: () => true, getFrame: () => null,
+    describe: async () => ({ model: 'Raspberry Pi 4 Model B Rev 1.4', backend: 'picamera2', width: 640, height: 480, telemetry: true }) });
+  h.context.AsthaSensors = { report: (...args) => reports.push(args), clear: () => reports.push('clear') };
+  await h.ui.connect();
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(h.elements.get('pi-camera-device').textContent, 'Raspberry Pi 4 Model B Rev 1.4 · picamera2 · 640×480 · distance sensor');
+  reports.length = 0;
+  const before = Date.now();
+  handlers.onTelemetry({ distanceM: 0.85, status: 'ok', seq: 1, ageMs: 40 });
+  handlers.onTelemetry({ distanceM: null, status: 'out_of_range', seq: 2, ageMs: 10 });
+  assert.equal(reports.length, 1);
+  const [channel, metres, origin, at] = reports[0];
+  assert.deepEqual([channel, metres, origin], ['front', 0.85, 'ultrasonic']);
+  assert.ok(at <= Date.now() - 40 && at >= before - 40, 'the reading is dated by its own age');
+  h.ui.stop();
+  assert.equal(reports.at(-1), 'clear');
+  handlers.onTelemetry({ distanceM: 0.5, status: 'ok', seq: 3, ageMs: 0 });
+  assert.equal(reports.at(-1), 'clear', 'a reading after Stop is ignored');
 });

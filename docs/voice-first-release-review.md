@@ -12,8 +12,9 @@ Three words are used precisely here:
   has not been built or connected.
 - **Pending** means it needs a physical device or a person and has not been done.
 
-Nothing in this document has been verified on a physical phone, a Raspberry Pi or a
-Braille controller, and no blind or low-vision person has tested it.
+The Pi camera and ultrasonic telemetry link have the specific hardware checks recorded
+in [the Pi guide](pi-camera.md). The complete phone pairing and spoken-answer flow,
+Braille controller and blind-user evaluation remain pending.
 
 ## How ASTHA decides when to speak
 
@@ -112,11 +113,12 @@ of sight, and it does not change what ASTHA is able to detect.
 | Home, pages, voice navigation, setup, account sync | Tested | `test_experience.mjs`, `test_preferences.mjs`, `test_i18n_release.mjs` (every label has Bangla and English). Viewed in a desktop browser. |
 | Fresh-frame visual questions, continuous reading | Tested with a stand-in model | Real model accuracy pending. |
 | Screen helper on a computer (explain slides, documents, designs, code) | Built | The control and its route exist and were viewed in a desktop browser. Explanation quality depends on the online model and is pending. |
-| Raspberry Pi camera bridge | Simulated | `test_pi_camera.mjs` including the Python handler. No Pi has run it. |
+| Raspberry Pi camera bridge | Hardware link checked; phone pairing pending | The Pi guide records authenticated TLS camera streaming from an actual Pi 4/NoIR camera to a PC. Automated tests also exercise the Python handler. Android release certificate trust and real phone pairing remain pending. |
 | Android device voice and speech recognition | Simulated | `test_native_device.mjs` against a stand-in plugin. The Java compiles and passes lint; it has not run on a phone. |
 | Reading other apps on Android | Simulated | Same. Opt-in twice (ASTHA, then Android). Read-only; cannot tap, type or send. |
 | Six-key Braille controller | Simulated | `test_braille.mjs`. Keyboard practice works in a browser. No controller exists; the Bluetooth transport has only met a stand-in. Android needs a native Bluetooth transport because the WebView has no Web Bluetooth. |
-| Distance sensor | Interface only | `tools/sensors.js`. Nothing reports to it and no spoken distance uses it yet. |
+| Spatial layout ("what's on each side?") | Simulated | `tools/spatial.js`, `test_spatial_layout.mjs` with synthetic depth maps. Real accuracy, the floor at a downward camera angle, and use on a phone are unmeasured. |
+| Distance sensor | Hardware link verified; app side simulated | HC-SR04 on an ESP32 → Pi `/telemetry` verified on hardware (10 readings a second, at most 100 ms old). The app's use of it (`test_pi_camera.mjs`, `test_measured_distance.mjs`) is tested with stand-ins; not yet run on a phone, and accuracy at known distances is unmeasured. |
 | Hands-free wake word in the Android app | Not available | The WebView has no continuous recognizer. Where that is the case the hands-free button is hidden and asking for it is explained, instead of failing silently. The microphone button works one request at a time. |
 | Opening an app, preparing a message (Android) | Simulated | "Open the WhatsApp app" finds the app by its launcher name and asks before opening. "Write a message saying …" asks, then opens Android's share menu with the text; the user chooses the app and the person and presses send. ASTHA cannot address or send anything. |
 | Message agent (Android) | Simulated | `test_messages.mjs` runs the page side against a stand-in; `MessageCommandsTest` (JVM) covers the spoken answers; `test_native_device.mjs` checks the guardrails. Not run with a real messaging app. |
@@ -160,6 +162,36 @@ with the screen locked, how phone makers' battery savers treat the service, and 
 messaging app's reply action behaves all need the device checklist below. Google Play
 requires a declaration for the microphone foreground service and reviews notification
 access; those are the owner's to complete at submission.
+
+## Spatial layout: what is on each side
+
+"What's on each side?", "which way should I go?", "where can I walk?", "দুই পাশে কী আছে?" or
+"কোন দিকে ফাঁকা?" takes one fresh picture and says how far the nearest thing is to the left,
+straight ahead and to the right. It runs on the phone in both online and offline modes,
+because the online assistant has neither the depth model nor the Pi's distance sensor.
+
+How the distances are made:
+
+1. The on-device depth model (Depth Anything V2) only knows which parts of the picture are
+   nearer. Its output behaves like *k ÷ distance + c*.
+2. Two or more known distances in the same picture fix *k* and *c*: the Pi's ultrasonic
+   reading (measured, counted four times) and the size-based distance of each recognised
+   object (estimates). The fit is refused when the known distances are all alike, when
+   nearer things would come out farther, or when they disagree by more than about 50 %.
+3. For each direction, the nearest part of a band around eye level (30–70 % of the
+   picture's height) is converted to metres. Straight ahead uses the sensor's reading
+   whenever there is one.
+
+What is said, for example: "To your left: something about 1 metre away, a chair. Straight
+ahead: measured at 1.9 metres, a person. To your right: nothing seen within 4 metres.
+Distances are estimates from the picture, except the measured one. Use your cane to
+confirm." Estimates are rounded to half metres and always say "about". Without a usable
+fit ASTHA says only which side is nearer, and no picture-based number. It never calls a
+direction clear, free or safe; a test fails if those words appear.
+
+Limits: one picture, no memory of what was behind the camera, and no tilt sensor (the
+MPU6050 was deferred), so a camera pointing down can put the floor into the band and make a
+direction look nearer than it is. The directions are relative to where the camera points.
 
 ## Checks run in a desktop browser
 

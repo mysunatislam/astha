@@ -11,6 +11,10 @@
   const RETRY_WINDOW = 45000;
   const RETRY_DELAYS = [500, 1000, 2000, 4000];
   const TRANSIENT = new Set(['frame_timeout', 'camera_unavailable', 'stale_frame', 'connection_failed']);
+  // Distance readings from an ESP32 on the Pi (served at /telemetry when the Pi has one).
+  const TELEMETRY_INTERVAL = 200;
+  const TELEMETRY_TIMEOUT = 1500;
+  const DISTANCE_STATUSES = new Set(['ok', 'out_of_range', 'no_echo_start', 'error']);
   let generation = 0, session = null;
   const fail = code => Object.assign(new Error(code), { code });
   const errorCode = error => typeof error?.code === 'string' ? error.code : 'connection_failed';
@@ -31,6 +35,7 @@
     if (!previous) return;
     previous.token = '';
     clearTimeout(previous.timer);
+    clearTimeout(previous.telemetryTimer);
     previous.controller?.abort();
     dropFrame(previous);
     notify(previous, code === 'stopped' ? 'stopped' : 'error', code);
@@ -124,6 +129,7 @@
       current.retry = 0; current.lostAt = 0;
       current.onFrame?.(current.frame);
       notify(current, 'connected');
+      if (!current.telemetryChecked && current.onTelemetry) { current.telemetryChecked = true; checkTelemetry(current); }
     } finally {
       decoded?.close();
     } })();
@@ -153,17 +159,64 @@
       catch (error) { if (session === current && !current.paused) recover(current, errorCode(error)); }
     }, delay);
   }
-  async function connect({ origin, token, onFrame, onStatus, interval } = {}) {
+  async function getJson(current, path, timeoutMs) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const endpoint = new URL(path, current.origin);
+      const response = await win.fetch(endpoint.href, {
+        method: 'GET', mode: 'cors', credentials: 'omit', cache: 'no-store', redirect: 'error',
+        headers: { Authorization: 'Bearer ' + current.token, Accept: 'application/json' }, signal: controller.signal,
+      });
+      if (session !== current) return { status: 0 };
+      if (!response.ok) return { status: response.status };
+      const body = await response.text();
+      if (body.length > 2048) return { status: 0 };
+      return { status: response.status, value: JSON.parse(body) };
+    } catch { return { status: 0 }; }
+    finally { clearTimeout(timeout); }
+  }
+  // Only a well-formed distance passes; anything else from the Pi is ignored.
+  function distanceReading(raw) {
+    if (!raw || typeof raw !== 'object' || !DISTANCE_STATUSES.has(raw.distance_status)) return null;
+    if (!Number.isSafeInteger(raw.seq) || raw.seq < 0 || !Number.isSafeInteger(raw.age_ms) || raw.age_ms < 0 || raw.age_ms > 1000) return null;
+    const ok = raw.distance_status === 'ok';
+    if (ok ? !(Number.isFinite(raw.distance_cm) && raw.distance_cm >= 0 && raw.distance_cm <= 500) : raw.distance_cm !== null) return null;
+    return { distanceM: ok ? raw.distance_cm / 100 : null, status: raw.distance_status, seq: raw.seq, ageMs: raw.age_ms };
+  }
+  async function checkTelemetry(current) {
+    const reply = await getJson(current, '/status', TIMEOUT);
+    if (session !== current || reply.value?.telemetry !== true) return;
+    current.telemetry = true;
+    scheduleTelemetry(current, 0);
+  }
+  function scheduleTelemetry(current, delay = TELEMETRY_INTERVAL) {
+    clearTimeout(current.telemetryTimer);
+    current.telemetryTimer = setTimeout(async () => {
+      if (session !== current || current.paused || !current.telemetry) return;
+      const reply = await getJson(current, '/telemetry', TELEMETRY_TIMEOUT);
+      if (session !== current || current.paused) return;
+      if (reply.status === 401 || reply.status === 403) { current.telemetry = false; return; }   // the picture link reports the pairing
+      const reading = reply.status === 200 ? distanceReading(reply.value) : null;
+      if (reading && reading.seq !== current.telemetrySeq) {
+        current.telemetrySeq = reading.seq;
+        try { current.onTelemetry?.(reading); } catch {}
+      }
+      scheduleTelemetry(current);
+    }, delay);
+  }
+  async function connect({ origin, token, onFrame, onStatus, onTelemetry, interval } = {}) {
     stop();
     let endpoint;
     try { endpoint = new URL(origin); } catch { throw fail('invalid_origin'); }
     if (endpoint.protocol !== 'https:' || endpoint.username || endpoint.password || endpoint.pathname !== '/' || endpoint.search || endpoint.hash) throw fail('invalid_origin');
     if (typeof token !== 'string' || !/^[A-Za-z0-9_-]{43,128}$/.test(token)) throw fail('invalid_pairing_token');
-    if (onFrame != null && typeof onFrame !== 'function' || onStatus != null && typeof onStatus !== 'function') throw fail('invalid_callback');
+    if (onFrame != null && typeof onFrame !== 'function' || onStatus != null && typeof onStatus !== 'function' || onTelemetry != null && typeof onTelemetry !== 'function') throw fail('invalid_callback');
     if (typeof createImageBitmap !== 'function') throw fail('unsupported_decoder');
     const pace = Number.isFinite(interval) ? Math.min(5000, Math.max(DEFAULT_INTERVAL, Math.round(interval))) : DEFAULT_INTERVAL;
-    const current = { origin: endpoint.origin, token, onFrame, onStatus, generation, sequence: 0, connected: false, everConnected: false,
-      frame: null, freshUntil: 0, interval: pace, retry: 0, lostAt: 0, resync: false, paused: false, cameraRun: '' };
+    const current = { origin: endpoint.origin, token, onFrame, onStatus, onTelemetry, generation, sequence: 0, connected: false, everConnected: false,
+      frame: null, freshUntil: 0, interval: pace, retry: 0, lostAt: 0, resync: false, paused: false, cameraRun: '',
+      telemetryChecked: false, telemetry: false, telemetryTimer: null, telemetrySeq: -1 };
     session = current;
     notify(current, 'connecting');
     try { await pull(current); if (session === current) schedule(current); }
@@ -176,6 +229,7 @@
     if (!current || current.paused) return;
     current.paused = true;
     clearTimeout(current.timer);
+    clearTimeout(current.telemetryTimer);
     current.controller?.abort();
     dropFrame(current);
     notify(current, 'paused');
@@ -186,6 +240,7 @@
     current.paused = false; current.resync = true; current.retry = 0; current.lostAt = clock();
     notify(current, 'reconnecting', 'resumed');
     schedule(current, 0);
+    if (current.telemetry) scheduleTelemetry(current, 0);
   }
   // What the camera reports about itself, for the connection status line. Display only.
   async function describe() {
@@ -205,6 +260,7 @@
       const raw = JSON.parse(body), info = {};
       for (const key of ['model', 'os', 'backend']) if (typeof raw[key] === 'string') info[key] = raw[key].replace(/[^\x20-\x7e]/g, '').slice(0, 80);
       for (const key of ['width', 'height', 'fps']) if (Number.isFinite(raw[key]) && raw[key] > 0 && raw[key] < 10000) info[key] = raw[key];
+      if (raw.telemetry === true) info.telemetry = true;
       return info;
     } catch { return null; }
     finally { clearTimeout(timeout); }

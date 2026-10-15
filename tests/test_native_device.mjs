@@ -42,7 +42,7 @@ test('device voice and recognizer calls are bounded and report plain results', a
     listen: async options => { calls.push(['listen', options]); if (options.language === 'en-US') throw coded('permission'); return { text: 'x'.repeat(900) }; },
   });
   assert.equal(await device.speak('হ্যালো', 'bn', 1.2), true);
-  assert.deepEqual([calls[0][0], { ...calls[0][1] }], ['speak', { text: 'হ্যালো', lang: 'bn', rate: 1.2 }]);
+  assert.deepEqual([calls[0][0], { ...calls[0][1] }], ['speak', { text: 'হ্যালো', lang: 'bn', rate: 1.2, onDeviceOnly: true }]);
   assert.equal(await device.speak('y'.repeat(9000), 'fr', 'fast'), true);
   assert.equal(calls[1][1].text.length, 4000); assert.equal(calls[1][1].lang, 'en'); assert.equal(calls[1][1].rate, 1);
   assert.equal(await device.speak('cut', 'en'), false); assert.equal(await device.speak('fail', 'en'), false);
@@ -52,6 +52,72 @@ test('device voice and recognizer calls are bounded and report plain results', a
   await assert.rejects(device.listen('en-US'), { code: 'permission' });
   device.stopSpeaking(); device.stopListening();   // neither may throw or leave an unhandled rejection
   await new Promise(resolve => setImmediate(resolve));
+});
+
+test('native speech defaults to on-device processing and only explicit false permits an online engine', async () => {
+  const calls = [];
+  const device = bridge({
+    speak: async options => { calls.push(['speak', options]); return { completed: true }; },
+    listen: async options => { calls.push(['listen', options]); if (options.onDeviceOnly) throw coded('on_device_unavailable'); return { text: 'hello' }; },
+  });
+  for (const options of [undefined, null, {}, { onDeviceOnly: true }, { onDeviceOnly: 'false' }, { onDeviceOnly: 0 }]) {
+    await assert.rejects(device.listen('bn-BD', options), { code: 'on_device_unavailable' });
+    assert.equal(calls.at(-1)[1].onDeviceOnly, true);
+    assert.equal(await device.speak('hello', 'en', 1, options), true);
+    assert.equal(calls.at(-1)[1].onDeviceOnly, true);
+  }
+  assert.equal(await device.listen('en-US', { onDeviceOnly: false }), 'hello');
+  assert.equal(calls.at(-1)[1].onDeviceOnly, false);
+  await device.speak('hello', 'en', 1, { onDeviceOnly: false });
+  assert.equal(calls.at(-1)[1].onDeviceOnly, false);
+  const unavailable = bridge({ speak: async () => { throw coded('voice_language_unavailable'); }, listen: async () => { throw coded('language_unavailable'); } });
+  assert.equal(await unavailable.speak('বাংলা', 'bn', 1), false);
+  await assert.rejects(unavailable.listen('bn-BD'), { code: 'language_unavailable' });
+});
+
+test('Android local speech requires the on-device recognizer and a non-network installed voice', () => {
+  const plugin = read('android/app/src/main/java/com/astha/companion/AsthaNativePlugin.java');
+  const assistant = read('android/app/src/main/java/com/astha/companion/AsthaMessageAssistant.java');
+  const localVoice = between(plugin, 'static Voice installedLocalVoice', '\n    @PluginMethod');
+  assert.match(localVoice, /candidate\.isNetworkConnectionRequired\(\)/);
+  assert.match(localVoice, /KEY_FEATURE_NOT_INSTALLED/);
+  const speak = between(plugin, 'public void speak(PluginCall call)', '\n    @PluginMethod');
+  assert.match(speak, /call\.getBoolean\("onDeviceOnly", true\)/);
+  assert.match(speak, /if \(onDeviceOnly\) \{\s*Voice chosen = installedLocalVoice\(voice, wanted\)/);
+  assert.match(speak, /voice\.setVoice\(chosen\) != TextToSpeech\.SUCCESS/);
+  const listen = between(plugin, 'private void startRecognition(SpeechInputRequests.Request<PluginCall> request)', '\n    @PluginMethod');
+  assert.match(listen, /call\.getBoolean\("onDeviceOnly", true\)/);
+  assert.match(listen, /onDeviceOnly && \(Build\.VERSION\.SDK_INT < Build\.VERSION_CODES\.S \|\| !SpeechRecognizer\.isOnDeviceRecognitionAvailable/);
+  assert.match(listen, /if \(onDeviceOnly\) \{\s*if \(Build\.VERSION\.SDK_INT >= Build\.VERSION_CODES\.S\) requestRecognizer = SpeechRecognizer\.createOnDeviceSpeechRecognizer\(context\);\s*else \{ finishListening\(request, null, "on_device_unavailable"\); return; \}\s*\} else requestRecognizer = SpeechRecognizer\.createSpeechRecognizer\(context\)/);
+  assert.match(listen, /checkRecognitionSupport/); assert.match(listen, /getInstalledOnDeviceLanguages/);
+  assert.match(listen, /"language_unavailable"/); assert.match(listen, /"recognition_timeout"/);
+  assert.match(listen, /!speechRequests\.mayStart\(request, foregroundForSpeech\(\)\) \|\| recognizer != requestRecognizer/);
+  assert.doesNotMatch(listen, /triggerModelDownload|EXTRA_PREFER_OFFLINE/);
+  const background = between(assistant, 'private void listen()', '\n    private void stopListening()');
+  assert.match(background, /Build\.VERSION\.SDK_INT < Build\.VERSION_CODES\.S/);
+  assert.match(background, /SpeechRecognizer\.isOnDeviceRecognitionAvailable/);
+  assert.match(background, /SpeechRecognizer\.createOnDeviceSpeechRecognizer\(this\)/);
+  assert.doesNotMatch(assistant, /SpeechRecognizer\.createSpeechRecognizer|voice\.setLanguage/);
+  assert.match(assistant, /AsthaNativePlugin\.installedLocalVoice/);
+  assert.match(assistant, /voiceReady = chosen != null && voice\.setVoice\(chosen\) == TextToSpeech\.SUCCESS/);
+  assert.match(background, /onDeviceInputUnavailable\(\)/);
+  assert.match(background, /draft = ""/);
+});
+
+test('Android pending permissions and queued recognition use a cancellable request identity', () => {
+  const plugin = read('android/app/src/main/java/com/astha/companion/AsthaNativePlugin.java');
+  const start = between(plugin, 'public void listen(PluginCall call)', '\n    @PermissionCallback');
+  assert(start.indexOf('speechRequests.begin(call)') < start.indexOf('recognitionHandler.post'), 'identity exists before queuing or prompting');
+  assert.match(start, /speechRequests\.awaitPermission\(change\.request\)/);
+  const permission = between(plugin, 'private void microphoneResult', '\n    private boolean foregroundForSpeech');
+  assert.match(permission, /speechRequests\.permissionResult\(call\)/);
+  assert.match(permission, /if \(request == null\) return/);
+  assert.match(permission, /speechRequests\.mayStart\(request, foregroundForSpeech\(\)\)\)/);
+  const cancel = between(plugin, 'private void cancelSpeechInput()', '\n    private void releaseRecognizer');
+  assert(cancel.indexOf('speechRequests.cancel()') < cancel.indexOf('recognitionHandler.post'), 'invalidation precedes queued cleanup');
+  for (const method of ['handleOnPause()', 'handleOnDestroy()', 'stopListening(PluginCall call)']) assert.match(between(plugin, method, '\n    }'), /cancelSpeechInput\(\)/);
+  assert.match(between(plugin, 'private boolean foregroundForSpeech()', '\n    }'), /AsthaMessageAssistant\.appVisible[\s\S]*!getActivity\(\)\.isFinishing\(\)[\s\S]*!getActivity\(\)\.isDestroyed\(\)/);
+  assert(fs.existsSync(new URL('../android/app/src/test/java/com/astha/companion/SpeechInputRequestsTest.java', import.meta.url)), 'request lifecycle has executable JVM tests');
 });
 
 function screenHarness({ consent = false, serviceEnabled = false, text = 'Inbox\nRahim: See you at 5', truncated = false, native = true } = {}) {
@@ -189,21 +255,36 @@ test('in the Android app one tap listens through the device recognizer and handl
   // The slice ends inside toggleListening, so close it for the test.
   const source = between(offlineSource, '// The Android app has no browser speech recognition', '  const SR = window.SpeechRecognition') + '}';
   const run = listen => {
-    const queries = [], spoken = [], captions = [], stops = [];
+    const queries = [], spoken = [], captions = [], stops = [], fallbacks = [], requests = [];
     const context = vm.createContext({ console, Promise, state: { listening: false }, privacyMode: false, privacyTransition: false,
-      reader: { active: false }, OfflineEar: { active: false }, VoiceEngine: { stop() {} }, pauseReader() {}, playEarcon() {}, sttLang: () => 'bn-BD', t: key => key,
+      remoteProcessingAllowed: () => true,
+      reader: { active: false }, OfflineEar: { active: false, wanted: () => false, listenAndHandle: reason => fallbacks.push(reason) }, VoiceEngine: { stop() {} }, pauseReader() {}, playEarcon() {}, sttLang: () => 'bn-BD', t: key => key,
       $: () => ({ setAttribute() {}, classList: { add() {}, remove() {} }, textContent: '' }),
       setCaption: (...args) => captions.push(args), announce: (en, bn) => spoken.push([en, bn]), handleQuery: text => queries.push(text),
-      window: { AsthaNative: { canListen: true, listen, stopListening: () => stops.push(true) } } });
+      window: { AsthaNative: { canListen: true, listen: (...args) => { requests.push(args); return listen(...args); }, stopListening: () => stops.push(true) } } });
     context.stopListening = () => { context.state.listening = false; };
     vm.runInContext(source + '\nglobalThis.toggle = toggleListening;', context);
-    return { context, queries, spoken, captions, stops };
+    return { context, queries, spoken, captions, stops, fallbacks, requests };
   };
   const settle = () => new Promise(resolve => setImmediate(resolve));
 
   const heard = run(async language => { assert.equal(language, 'bn-BD'); return '  আমার চশমা কোথায়  '; });
   heard.context.toggle(); assert.equal(heard.context.state.listening, true);
   await settle(); assert.deepEqual(heard.queries, ['আমার চশমা কোথায়']); assert.equal(heard.context.state.listening, false);
+  assert.equal(heard.requests[0][1].onDeviceOnly, false, 'online recognition requires permitted online processing');
+
+  for (const code of ['on_device_unavailable', 'language_unavailable']) {
+    const local = run(async () => { throw coded(code); });
+    local.context.remoteProcessingAllowed = () => false;
+    local.context.toggle(); await settle();
+    assert.equal(local.requests[0][1].onDeviceOnly, true);
+    assert.deepEqual(local.fallbacks, ['native_unavailable']);
+    assert.deepEqual(local.queries, []);
+  }
+  const preferred = run(async () => 'hello');
+  preferred.context.OfflineEar.wanted = () => true;
+  preferred.context.toggle(); await settle();
+  assert.equal(preferred.requests[0][1].onDeviceOnly, true, 'the local voice preference applies even after online consent');
 
   const silent = run(async () => ''); silent.context.toggle(); await settle();
   assert.deepEqual(silent.queries, []); assert.match(silent.captions.at(-1)[1], /did not hear anything/);
@@ -260,7 +341,7 @@ test('Android guardrails: screen reading is opt-in, read-only, bound by the syst
   // Messages go through Android's chooser. ASTHA cannot address, send, call or text.
   for (const forbidden of ['ACTION_SENDTO', 'ACTION_CALL', 'ACTION_DIAL', 'SmsManager', 'smsto:', 'tel:', 'EXTRA_EMAIL', 'EXTRA_PHONE_NUMBER', 'setPackage']) assert.doesNotMatch(plugin, new RegExp(forbidden), forbidden);
   assert.match(between(plugin, 'public void shareText(PluginCall call)', '\n    }\n'), /Intent\.createChooser\(send, null\)/);
-  assert.match(between(plugin, 'protected void handleOnPause()', '\n    }\n'), /finishListening/, 'the recognizer stops when the app leaves the foreground');
+  assert.match(between(plugin, 'protected void handleOnPause()', '\n    }\n'), /cancelSpeechInput/, 'the recognizer stops when the app leaves the foreground');
   // App lookup uses launcher visibility, not blanket package access.
   assert.match(manifest, /<action android:name="android\.intent\.action\.MAIN" \/>\s*<category android:name="android\.intent\.category\.LAUNCHER" \/>/);
   assert.match(activity, /registerPlugin\(AsthaNativePlugin\.class\);\s*super\.onCreate/);

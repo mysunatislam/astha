@@ -94,8 +94,9 @@ const DepthEngine = {
     return this.loading;
   },
   // Runs the model on a small copy of the frame and stores a nearness map (0 = farthest, 1 = nearest).
-  async run(frame) {
-    if (this.status !== 'ready' || this.busy || !frame) return this.last;
+  async run(frame, current = captureLocalActionGuard()) {
+    if (!current()) return null;
+    if (this.status !== 'ready' || this.busy || !frame) return this.fresh(Infinity);
     this.busy = true; const t0 = Date.now();
     try {
       const s = this.size / Math.max(frame.width, frame.height);
@@ -105,6 +106,7 @@ const DepthEngine = {
       const d = cx.getImageData(0, 0, w, h);
       const img = new this.RawImage(new Uint8ClampedArray(d.data), w, h, 4);
       const out = await this.pipe(img);
+      if (!current()) return null;
       const tensor = out.predicted_depth;
       const dims = tensor.dims, H = dims[dims.length - 2], W = dims[dims.length - 1];
       const raw = tensor.data;
@@ -117,15 +119,17 @@ const DepthEngine = {
       const near = new Float32Array(raw.length);
       for (let i = 0; i < raw.length; i++) near[i] = Math.min(1, Math.max(0, (raw[i] - lo) / span));
       this.last = { near, w: W, h: H, at: Date.now(), fw: frame.width, fh: frame.height };
+      this.lastCurrent = current;
       this.lastAt = this.last.at; this.failures = 0; this.lastMs = this.lastAt - t0;
       return this.last;
     } catch (e) {
+      if (!current() || e.cancelled) return null;
       this.failures++; console.warn('depth run', e);
       if (this.failures >= 3) { setEngineState('depth', 'error'); }
       return null;
     } finally { this.busy = false; }
   },
-  fresh(maxAgeMs = 3000) { return this.last && Date.now() - this.last.at <= maxAgeMs ? this.last : null; },
+  fresh(maxAgeMs = 3000) { return this.last && (!this.lastCurrent || this.lastCurrent()) && Date.now() - this.last.at <= maxAgeMs ? this.last : null; },
   // Slow phones get a slower cadence, so depth never starves the detector or the recogniser.
   due(baseMs) { return Date.now() - this.lastAt > Math.max(baseMs, this.lastMs * 2.5); },
   // Median nearness inside the inner half of a box (frame coordinates), or null.
@@ -153,7 +157,9 @@ const DepthEngine = {
 // ---- Per-object geometry: distance band, proximity, nearness ----
 function annotateGeometry(o, frame, depth) {
   o.flags = {}; o.rel = [];
-  o.distM = null; o.distLower = false; o.near01 = null;
+  // distMeasured is always written: the world model merges detections, and a stale "measured"
+  // flag must never label a later image estimate.
+  o.distM = null; o.distLower = false; o.near01 = null; o.distMeasured = false;
   if (!o.bbox) return;
   const est = distanceFromSize(o, frame);
   if (est) { o.distM = Math.round(est.m * 10) / 10; o.distLower = !!est.lower; o.distWeak = !!est.weak; }
@@ -161,6 +167,50 @@ function annotateGeometry(o, frame, depth) {
   // Proximity band from distance when we have it (the box-area rule stays as the fallback).
   if (o.distM != null && !o.distWeak) o.prox = o.distM <= 1.0 ? 'very_close' : o.distM <= 2.5 ? 'near' : 'far';
   else if (o.near01 != null && o.prox == null) o.prox = o.near01 >= 0.8 ? 'very_close' : o.near01 >= 0.5 ? 'near' : 'far';
+}
+
+// ---- Measured distance from the ultrasonic sensor beside the paired Pi camera ----
+// The HC-SR04 reports the nearest surface in a beam about 15 degrees wide. Mounted beside the
+// Pi camera and facing the same way (the mount must keep this), that beam is the centre of
+// the camera's 62 x 49 degree view: roughly the middle fifth across and the middle third down.
+const ULTRASONIC_BEAM = { x0: 0.39, x1: 0.61, y0: 0.35, y1: 0.65 };
+function inBeam(o, frame) {
+  if (!o.bbox) return false;
+  const [x, y, w, h] = o.bbox;
+  return x / frame.width < ULTRASONIC_BEAM.x1 && (x + w) / frame.width > ULTRASONIC_BEAM.x0 &&
+    y / frame.height < ULTRASONIC_BEAM.y1 && (y + h) / frame.height > ULTRASONIC_BEAM.y0;
+}
+// Gives the measurement to the object it most likely came from. An object whose own size
+// estimate disagrees badly cannot take it: the echo then came from something else, such as a
+// nearer thing the detector does not know or the floor. Returns what is straight ahead.
+function applyMeasuredDistance(objs, frame, reading) {
+  if (!reading || !reading.measured || !Number.isFinite(reading.metres)) return null;
+  const m = reading.metres;
+  let best = null;
+  for (const o of objs) {
+    if (!inBeam(o, frame) || (o.flags && (o.flags.onScreen || o.flags.picture))) continue;
+    let gap;
+    if (o.distM == null || o.distWeak) {
+      // No usable estimate: only the object right in the middle of the beam can take it.
+      const [x, y, w, h] = o.bbox;
+      if (!(x <= frame.width / 2 && x + w >= frame.width / 2 && y <= frame.height / 2 && y + h >= frame.height / 2)) continue;
+      gap = 1;
+    } else if (o.distLower) {
+      if (m > o.distM * 1.2) continue;   // the box is cut by the frame edge: it is at most distM away
+      gap = 0.5;
+    } else {
+      const ratio = m / o.distM;
+      if (ratio < 0.5 || ratio > 2) continue;
+      gap = Math.abs(Math.log(ratio));
+    }
+    if (!best || gap < best.gap) best = { o, gap };
+  }
+  if (best) {
+    const o = best.o;
+    o.distM = Math.round(m * 100) / 100; o.distMeasured = true; o.distLower = false; o.distWeak = false;
+    o.prox = m <= 1.0 ? 'very_close' : m <= 2.5 ? 'near' : 'far';
+  }
+  return { metres: m, object: best ? best.o : null };
 }
 
 // ---- Scene graph: what is on what, who is on a screen, what kind of room ----
@@ -255,7 +305,10 @@ function perceptionHook(objs, frame, opts = {}) {
   for (const o of objs) annotateGeometry(o, frame, depth);
   const graph = buildSceneGraph(objs, frame);
   applyRules(objs, graph, frame);
-  state.scene = Object.assign(graph, { frameW: frame.width, frameH: frame.height, hasDepth: !!depth });
+  // Only pictures from the paired Pi camera share the sensor's point of view.
+  const reading = state.source === 'pi' && typeof AsthaSensors !== 'undefined' ? AsthaSensors.measured('front') : null;
+  const ahead = applyMeasuredDistance(objs, frame, reading);
+  state.scene = Object.assign(graph, { frameW: frame.width, frameH: frame.height, hasDepth: !!depth, ahead, at: Date.now() });
   if (opts.noDepthKick) return;
   // Keep the depth map warm while the camera runs; load it lazily once the recogniser is in.
   const now = Date.now();
@@ -267,9 +320,18 @@ function perceptionHook(objs, frame, opts = {}) {
 const NUM_EN = ['zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen'];
 const NUM_BN = ['শূন্য', 'এক', 'দুই', 'তিন', 'চার', 'পাঁচ', 'ছয়', 'সাত', 'আট', 'নয়', 'দশ', 'এগারো', 'বারো', 'তেরো', 'চৌদ্দ', 'পনেরো'];
 function numWord(n, bn) { const arr = bn ? NUM_BN : NUM_EN; return n < arr.length ? arr[n] : (bn ? String(n).replace(/\d/g, d => '০১২৩৪৫৬৭৮৯'[d]) : String(n)); }
+// A distance the sensor measured is said as a number and called measured; everything from
+// the picture stays "about", so the two can never be confused.
+function measuredPhrase(m, bn) {
+  const digits = value => String(value).replace(/\d/g, d => '০১২৩৪৫৬৭৮৯'[d]);
+  if (m < 1) { const cm = Math.round(m * 100); return bn ? `সেন্সরে মাপা ${digits(cm)} সেন্টিমিটার দূরে` : `measured at ${cm} centimetres`; }
+  const v = (Math.round(m * 10) / 10).toFixed(1);
+  return bn ? `সেন্সরে মাপা ${digits(v)} মিটার দূরে` : `measured at ${v} metres`;
+}
 // Returns '' when nothing sensible can be said.
 function distPhrase(o, bn) {
   if (!o) return '';
+  if (o.distMeasured && o.distM != null) return measuredPhrase(o.distM, bn);
   if (o.distM != null && !o.distWeak) {
     const m = o.distM;
     if (o.distLower || m < 0.75) return bn ? 'হাতের নাগালে' : 'within arm\'s reach';
@@ -289,7 +351,7 @@ function distPhrase(o, bn) {
   return '';
 }
 function distMetresText(o, bn) { // short form for guidance: "about 40 centimetres", "about one metre"
-  if (!o || o.distM == null) return distPhrase(o, bn);
+  if (!o || o.distM == null || o.distMeasured) return distPhrase(o, bn);
   const m = o.distM;
   if (m < 1) { const cm = Math.max(10, Math.round(m * 10) * 10); return bn ? `প্রায় ${String(cm).replace(/\d/g, d => '০১২৩৪৫৬৭৮৯'[d])} সেন্টিমিটার` : `about ${cm} centimetres`; }
   return distPhrase(o, bn);
@@ -412,12 +474,17 @@ function sceneSummary(opts = {}) {
 function describeScene(skipCloud, forceDetailed) {
   if (withCamera(describeScene)) return;
   if (typeof cloudReady === 'function' && cloudReady() && !skipCloud) return cloudDescribe();
-  withBusy(t('analyzing_title'), async () => {
-    if (!(await ensureVisionModels())) return;
+  const current = captureLocalActionGuard();
+  if (!current()) return;
+  return withBusy(t('analyzing_title'), async () => {
+    try {
+    if (!(await ensureVisionModels()) || !current()) return;
     const frame = captureFrame(640); if (!frame) return;
     const [cocoObjs, clip] = await Promise.all([runCoco(frame), runClipZones(frame)]);
-    if (DepthEngine.status === 'ready') { try { await DepthEngine.run(frame); } catch (e) {} }
+    if (!current()) return;
+    if (DepthEngine.status === 'ready') { try { await DepthEngine.run(frame, current); } catch (e) {} }
     else if (DepthEngine.status === 'idle' && DepthEngine.wanted()) DepthEngine.load().catch(() => {});
+    if (!current()) return;
     if (typeof trackMotion === 'function' && state.source === 'camera') trackMotion(cocoObjs, frame);
     perceptionHook(cocoObjs, frame, { noDepthKick: true, depthMaxAge: 60000 });
     state.lastCocoPreds = cocoObjs; state.lastClipHits = clip.hits.map(h => Object.assign(h, { at: Date.now() }));
@@ -430,6 +497,7 @@ function describeScene(skipCloud, forceDetailed) {
     playEarcon('confirm'); speak(s.en, s.bn); haptic('CONFIRM');
     if (typeof heartPointAt === 'function') heartPointAt(objs[0]);
     logEvent(t('log_describe', { n: objs.length }));
+    } catch (e) { if (e.cancelled || !current()) return; throw e; }
   });
 }
 
@@ -440,6 +508,15 @@ function answerHowFar(query) {
   const vm = noun ? findVocabMatch(noun) : null;
   const objs = worldSorted();
   let o = vm ? objs.find(x => x.id === vm.id || x.origId === vm.id) : null;
+  // "How far is it?" with the Pi's distance sensor: what is straight ahead, measured.
+  const ahead = !vm && state.source === 'pi' && typeof AsthaSensors !== 'undefined' ? AsthaSensors.measured('front') : null;
+  if (ahead) {
+    // The newest scene says what the echo came from; the number is the reading of this moment.
+    const scene = state.scene || {};
+    const hit = scene.ahead && scene.ahead.object && Date.now() - (scene.at || 0) <= 2000 ? scene.ahead.object : null;
+    if (hit) return announce(`The ${objLabel(hit)} straight ahead is ${measuredPhrase(ahead.metres, false)}.`, `সোজা সামনের ${objLabelBn(hit)} ${measuredPhrase(ahead.metres, true)}।`, 'vision');
+    return announce(`Something straight ahead is ${measuredPhrase(ahead.metres, false)}.`, `সোজা সামনে কিছু একটা আছে, ${measuredPhrase(ahead.metres, true)}।`, 'vision');
+  }
   if (!o && !vm) o = objs.filter(x => x.distM != null || x.near01 != null).sort((a, b) => (a.distM ?? 99) - (b.distM ?? 99))[0];
   if (!o) return announce(vm ? `I do not see ${withArticle(vm.en, !!vm.pl)} right now.` : 'I cannot judge a distance yet. Point the camera at the thing.', vm ? `এখন ${vm.bn} দেখতে পাচ্ছি না।` : 'এখনো দূরত্ব বুঝতে পারছি না। জিনিসটির দিকে ক্যামেরা ধরুন।', 'vision');
   const d = distPhrase(o, false), dB = distPhrase(o, true);

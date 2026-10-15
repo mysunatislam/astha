@@ -6,6 +6,8 @@ import vm from 'node:vm';
 const offline = fs.readFileSync(new URL('../tools/offline.js', import.meta.url), 'utf8');
 const agent = fs.readFileSync(new URL('../tools/agent.js', import.meta.url), 'utf8');
 const moduleSource = fs.readFileSync(new URL('../tools/module.js', import.meta.url), 'utf8');
+const base = fs.readFileSync(new URL('../tools/base.html', import.meta.url), 'utf8');
+const localGuard = base.slice(base.indexOf('function captureLocalActionGuard()'), base.indexOf('async function withBusy('));
 const extractTarget = moduleSource.slice(moduleSource.indexOf('function extractTargetItemFromQuery('), moduleSource.indexOf('function findVocabMatch('));
 const VOCAB = [
   { id: 'wallet', en: 'wallet', bn: 'মানিব্যাগ', al: ['purse'] },
@@ -18,7 +20,7 @@ function harness() {
     window: { ASTHA_ACCOUNT_ID: 'spatial-account-a', ASTHA_LOCAL_ACCOUNT_ID: 'spatial-account-a' },
     state: { memory: [], spatialHome: [], log: [], currentRoom: 'Inferred room' },
     localStorage: { getItem: key => backing.get(key) ?? null, setItem: (key, value) => backing.set(key, value), removeItem: key => backing.delete(key) },
-    privacyMode: false, privacyTransition: false, navigator: { onLine: false },
+    privacyMode: false, privacyTransition: false, navigator: { onLine: false }, document: { hidden: false },
     engine: { coco: {}, clip: { status: 'idle' }, ocr: {} }, DepthEngine: { status: 'idle' },
     VOCAB_BY_ID: Object.fromEntries(VOCAB.map(item => [item.id, item])),
     crypto: { randomUUID: () => 'spatial-local-note' }, console: { warn() {}, log() {} },
@@ -36,7 +38,7 @@ function harness() {
     label: id => id, labelBn: id => id, objLabel: object => object.id, objLabelBn: object => object.id,
   };
   vm.createContext(context);
-  vm.runInContext(extractTarget + offline + '\nglobalThis.spatial = { findItems, memoryRecallText, handleOnDevicePlacement, Seeker };', context);
+  vm.runInContext(localGuard + extractTarget + offline + '\nglobalThis.spatial = { findItems, memoryRecallText, handleOnDevicePlacement, Seeker };', context);
   context.spatial.Seeker.start = (...args) => searches.push(args);
   return { context, ...context.spatial, messages, questions, searches, requests, backing };
 }

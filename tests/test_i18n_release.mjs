@@ -160,9 +160,9 @@ test('Bangla yes and no answer a confirmation, and Bangla stop and camera comman
   // A longer word that merely starts with the same letters is not an answer.
   context.ask('Open it?', 'খুলব?', () => outcomes.push('yes'), () => outcomes.push('no'));
   for (const reply of ['নাম কী', 'november', 'okra']) assert.equal(context.answer(reply), false, reply);
-  const stop = vm.runInNewContext(/const STOP_TALKING_REGEX = (\/.*\/i);/.exec(script)[1]);
-  for (const phrase of ['থামো', 'আস্থা থামো', 'stop talking', 'please be quiet']) assert.equal(stop.test(phrase), true, phrase);
-  for (const phrase of ['unstoppable', 'থামোনা']) assert.equal(stop.test(phrase), false, phrase);
+  const stop = vm.runInNewContext(slice('const STOP_TALKING_REGEX =', 'const SiriVoice =') + '\nisSpeechStopCommand;');
+  for (const phrase of ['থামো', 'আস্থা থামো', 'stop talking', 'please be quiet']) assert.equal(stop(phrase), true, phrase);
+  for (const phrase of ['unstoppable', 'থামোনা', 'read the bus stop sign']) assert.equal(stop(phrase), false, phrase);
   const camera = new RegExp(/if \(\/((?:[^\/\\\n]|\\.)*start camera(?:[^\/\\\n]|\\.)*)\/i\.test\(q\)\)/.exec(script)[1], 'i');
   assert.equal(camera.test('ক্যামেরা চালু করো'), true); assert.equal(camera.test('start camera'), true);
 });

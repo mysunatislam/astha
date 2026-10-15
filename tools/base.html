@@ -970,6 +970,17 @@
         <span class="empty-note" id="seen-empty" data-i18n="seen_none">nothing yet</span>
       </div>
 
+      <details id="vision-debug" class="card">
+        <summary data-i18n="debug_title">Vision diagnostics</summary>
+        <p class="help" data-i18n="debug_help">The preview and boxes above use actual model results. Scores are model scores, not verified accuracy. Timing is collected only while this panel is open and stays on this device.</p>
+        <dl aria-live="off">
+          <dt data-i18n="debug_perception">Object detection</dt><dd id="debug-perception" data-i18n="debug_unmeasured">Not measured</dd>
+          <dt data-i18n="debug_reasoning">Online reasoning</dt><dd id="debug-reasoning" data-i18n="debug_unmeasured">Not measured</dd>
+          <dt data-i18n="debug_speech">Speech request to first audio event</dt><dd id="debug-speech" data-i18n="debug_unmeasured">Not measured</dd>
+        </dl>
+        <p class="help" data-i18n="debug_limits">These are separate stage timings, not end-to-end response time. Native first-audio timing, wake-word and transcription timing are not measured here. No result is shown until that stage runs.</p>
+      </details>
+
       <!-- High-Contrast Action Grid -->
       <div class="actions">
         <button class="action primary" onclick="describeScene()">
@@ -1853,6 +1864,7 @@ function activeSourceEl() {
 function showSource(kind) {
   state.source = kind;
   state.sourceEpoch = (state.sourceEpoch || 0) + 1;
+  if (typeof AsthaDiagnostics !== 'undefined') AsthaDiagnostics.setSourceEpoch(state.sourceEpoch);
   if (typeof AsthaExperience !== 'undefined') AsthaExperience.invalidate();
   if ($('pi-preview')) $('pi-preview').hidden = kind !== 'pi';
   state.lastCocoPreds = []; state.lastClipHits = []; showHazard(false);
@@ -2211,7 +2223,15 @@ function captureFrame(maxW = 640) {
 async function runCoco(frame) {
   if (engine.coco.status !== 'ready' || !engine.coco.model) return [];
   const confThresh = (engine.coco.type === 'yolo26n') ? 0.38 : 0.50;
-  const preds = await engine.coco.model.detect(frame, 12, confThresh);
+  const timing = typeof AsthaDiagnostics !== 'undefined' ? AsthaDiagnostics.start('perception', { sourceEpoch: state.sourceEpoch || 0 }) : null;
+  let preds;
+  try {
+    preds = await engine.coco.model.detect(frame, 12, confThresh);
+    if (typeof AsthaDiagnostics !== 'undefined') AsthaDiagnostics.finish(timing, 'success');
+  } catch (error) {
+    if (typeof AsthaDiagnostics !== 'undefined') AsthaDiagnostics.finish(timing, 'error');
+    throw error;
+  }
   const area = frame.width * frame.height;
   return preds.filter(p => p.score >= confThresh && COCO_TO_ID[p.class]).map(p => ({
     id: COCO_TO_ID[p.class],
@@ -2490,6 +2510,19 @@ function showHazard(on) { $('hazard').hidden = !on; }
 /* =====================================================================
    11. Core Actions (Describe, Identify, OCR, Find, Shield)
    ===================================================================== */
+// A local model cannot always abort its inference. Discard its late result instead.
+function captureLocalActionGuard() {
+  const generation = typeof AsthaCancellation !== 'undefined' ? AsthaCancellation.generation : 0;
+  const source = state.source, epoch = state.sourceEpoch || 0;
+  const account = window.ASTHA_ACCOUNT_ID || null;
+  const owner = typeof LocalStore !== 'undefined' ? LocalStore.KEY : null;
+  const privateAtStart = privacyMode;
+  return () => (typeof AsthaCancellation === 'undefined' || AsthaCancellation.generation === generation)
+    && state.source === source && (state.sourceEpoch || 0) === epoch
+    && (window.ASTHA_ACCOUNT_ID || null) === account
+    && (typeof LocalStore === 'undefined' || LocalStore.KEY === owner)
+    && privacyMode === privateAtStart && !privacyTransition && !document.hidden;
+}
 async function withBusy(title, fn) {
   if (state.busy) {
     if (Date.now() - (state.busyStartedAt || 0) > 6000) {
@@ -2499,6 +2532,8 @@ async function withBusy(title, fn) {
       return;
     }
   }
+  const busyToken = Symbol('busy-operation');
+  state.busyToken = busyToken;
   state.busy = true;
   state.busyStartedAt = Date.now();
   stopLiveLoop();
@@ -2510,21 +2545,27 @@ async function withBusy(title, fn) {
       new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 7000))
     ]);
   } catch (e) {
+    if (e.cancelled || state.busyToken !== busyToken) return;
     console.error(e);
     if (e.message !== 'timeout') announce(t('models_failed'), tBn('models_failed'));
   } finally {
-    state.busy = false;
-    $('companion-main').setAttribute('aria-busy', 'false');
-    if (['camera', 'pi'].includes(state.source) && (!window.reading || !reading.active)) startLiveLoop();
+    if (state.busyToken === busyToken) {
+      state.busyToken = null;
+      state.busy = false;
+      $('companion-main').setAttribute('aria-busy', 'false');
+      if (['camera', 'pi'].includes(state.source) && (!window.reading || !reading.active)) startLiveLoop();
+    }
   }
 }
 
 async function analyzeStill(opts = {}) {
+  const current = captureLocalActionGuard();
+  if (!current()) return null;
   const epoch = state.sourceEpoch;
   const frame = captureFrame(640);
   if (!frame) return null;
   const [cocoObjs, clip] = await Promise.all([runCoco(frame), runClipZones(frame)]);
-  if (epoch !== state.sourceEpoch) return null;
+  if (!current() || epoch !== state.sourceEpoch) return null;
   state.lastCocoPreds = cocoObjs; state.lastClipHits = clip.hits.map(h => Object.assign(h, { at: Date.now() }));
   state.world.clear();
   ingest(cocoObjs.concat(clip.hits), 1e9);
@@ -2767,14 +2808,19 @@ function identifyObject() {
    ===================================================================== */
 function readText() {
   if (!state.source) { setCaption(t('ready_title'), t('need_source'), 'ocr', null, tBn('need_source')); speak(t('need_source'), tBn('need_source')); return; }
-  withBusy(t('reading_title'), async () => {
+  const stillWanted = captureLocalActionGuard();
+  return withBusy(t('reading_title'), async () => {
+    if (!stillWanted()) return;
     setCaption(t('reading_title'), t('ocr_loading'), 'ocr', 'busy', tBn('ocr_loading'));
     let worker;
-    try { worker = await ensureOcr(); } catch (e) { setCaption(t('reading_title'), t('ocr_failed'), 'ocr', 'danger', tBn('ocr_failed')); speak(t('ocr_failed'), tBn('ocr_failed')); return; }
+    try { worker = await ensureOcr(); } catch (e) { if (!stillWanted() || e.cancelled) return; setCaption(t('reading_title'), t('ocr_failed'), 'ocr', 'danger', tBn('ocr_failed')); speak(t('ocr_failed'), tBn('ocr_failed')); return; }
+    if (!stillWanted()) return;
     const frame = captureFrame(1280);
     setCaption(t('reading_title'), t('ocr_working'), 'ocr', 'busy', tBn('ocr_working'));
     speak(t('ocr_working'), tBn('ocr_working'));
-    const { data } = await worker.recognize(frame);
+    let data;
+    try { ({ data } = await worker.recognize(frame)); } catch (e) { if (!stillWanted() || e.cancelled) return; throw e; }
+    if (!stillWanted()) return;
     const lines = (data.lines || []).filter(l => l.confidence >= 55).map(l => l.text.replace(/\s+/g, ' ').trim())
       .filter(l => { const letters = l.replace(/[^\p{L}\p{N}]/gu, '').length; return letters >= 2 && letters / l.length >= 0.5; });
     const text = lines.join('\n');
@@ -2814,7 +2860,9 @@ function toggleShield() {
 
 function safetyCheck(silentIfClear) {
   if (!state.source) { setCaption(t('agent_safety'), t('need_source'), 'safety', null, tBn('need_source')); speak(t('need_source'), tBn('need_source')); return; }
+  const current = captureLocalActionGuard();
   const run = () => {
+    if (!current()) return;
     const hz = worldSorted().filter(isHazard);
     if (hz.length) {
       const o = hz[0];
@@ -2836,7 +2884,11 @@ function safetyCheck(silentIfClear) {
     }
   };
   if (state.source === 'camera' || state.world.size) run();
-  else withBusy(t('analyzing_title'), async () => { if (await ensureVisionModels()) { await analyzeStill(); run(); } });
+  else return withBusy(t('analyzing_title'), async () => {
+    if (!current() || !(await ensureVisionModels()) || !current()) return;
+    await analyzeStill();
+    if (current()) run();
+  });
 }
 
 /* =====================================================================
@@ -3114,7 +3166,7 @@ function handleQuery(query) {
       return AsthaAgent.run(query);
     }
   }
-  if (/(?:^|[^A-Za-z0-9_\u0980-\u09FF])(stop|stop talking|cancel|quiet|be quiet|shut up|silence|pause|enough|halt|বন্ধ করো|থামো|চুপ|চুপ কর|চুপ করো|থামুন|কথা বন্ধ|পড়া বন্ধ|স্টপ|thamo|chup|bondho koro)(?![A-Za-z0-9_\u0980-\u09FF])/i.test(q)) {
+  if (isSpeechStopCommand(q) || /^cancel[.!?।\s]*$/i.test(q)) {
     if (typeof reading !== 'undefined' && reading.active) return stopReading(true);
     return stopAllSpeech();
   }
