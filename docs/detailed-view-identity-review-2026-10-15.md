@@ -18,6 +18,10 @@ It adds no model, provider, database migration or Android permission.
 - The final integrated check passed all 469 regressions, JavaScript syntax checks and
   reproducible web generation. Independent native policy/request-lifecycle compilation
   and tests passed 8/8 before the Android release build.
+- Release lint caught a channel API guard that it could not establish for Android
+  7 (API 24/25). The correction returns after the global notification check on those
+  versions; channel creation/importance checks remain inside the explicit API 26+
+  path. This preserves the minimum SDK instead of suppressing lint or raising it.
 - An isolated headless Chrome run exercised the generated app at desktop and mobile
   widths, verified the exact English greeting, and checked the Devices entry and
   Bangla layout without horizontal overflow. Opening Detailed view requested neither

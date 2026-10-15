@@ -132,7 +132,8 @@ public class AsthaMessageAssistant extends Service {
             if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) return false;
             NotificationManager manager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
             if (manager == null) return false;
-            NotificationChannel channel = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O ? manager.getNotificationChannel(CHANNEL) : null;
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return true;
+            NotificationChannel channel = manager.getNotificationChannel(CHANNEL);
             return channel == null || channel.getImportance() != NotificationManager.IMPORTANCE_NONE;
         } catch (RuntimeException unavailable) { return false; }
     }
