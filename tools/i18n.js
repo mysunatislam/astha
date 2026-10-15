@@ -45,5 +45,6 @@ function refreshStateLabels() {
   if (typeof AsthaScreenAccess !== 'undefined') AsthaScreenAccess.refreshLabels();
   if (typeof AsthaMessages !== 'undefined') AsthaMessages.refreshLabels();
   if (typeof AsthaDiagnosticsUI !== 'undefined') AsthaDiagnosticsUI.render();
+  if (typeof AsthaVisionDetails !== 'undefined') AsthaVisionDetails.render(true);
   if (typeof window.ASTHA_RENDER_ACCOUNT === 'function') window.ASTHA_RENDER_ACCOUNT();
 }

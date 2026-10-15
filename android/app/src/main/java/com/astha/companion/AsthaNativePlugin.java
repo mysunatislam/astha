@@ -68,6 +68,7 @@ public class AsthaNativePlugin extends Plugin {
     private final Map<String, PluginCall> speaking = new ConcurrentHashMap<>();
     private SpeechRecognizer recognizer;
     private final SpeechInputRequests<PluginCall> speechRequests = new SpeechInputRequests<>();
+    private final SpeechInputRequests<PluginCall> backgroundRequests = new SpeechInputRequests<>();
     private SpeechInputRequests.Request<PluginCall> recognizerRequest;
     private final Handler recognitionHandler = new Handler(Looper.getMainLooper());
     private Runnable recognitionLimit;
@@ -77,11 +78,13 @@ public class AsthaNativePlugin extends Plugin {
         AsthaMessageAssistant.appVisible = true;
         if (messageConsent()) AsthaNotificationListener.deliverTo(this::forwardMessage);
         // Turned on earlier by the user: start it again now that ASTHA is on screen.
-        if (messageConsent() && backgroundWanted() && getPermissionState("microphone") == PermissionState.GRANTED) {
+        if (messageConsent() && backgroundWanted()) {
             try {
+                if (backgroundStartError() != null) throw new IllegalStateException();
                 AsthaMessageAssistant.start(getContext(), preferences().getString(AsthaMessageAssistant.LANGUAGE, "en"));
             } catch (RuntimeException refused) {
-                // The status line then reports that it is not running.
+                preferences().edit().putBoolean(AsthaMessageAssistant.BACKGROUND, false).apply();
+                AsthaMessageAssistant.stop(getContext());
             }
         }
         voice = new TextToSpeech(getContext().getApplicationContext(), status -> {
@@ -117,6 +120,7 @@ public class AsthaNativePlugin extends Plugin {
     @Override
     protected void handleOnPause() {
         AsthaMessageAssistant.appVisible = false;
+        cancelBackgroundEnable();
         // The page never listens while it is in the background; only the assistant may, if on.
         cancelSpeechInput();
     }
@@ -124,6 +128,7 @@ public class AsthaNativePlugin extends Plugin {
     @Override
     protected void handleOnDestroy() {
         AsthaMessageAssistant.appVisible = false;
+        cancelBackgroundEnable();
         AsthaNotificationListener.deliverTo(null);
         if (voice != null) voice.shutdown();
         cancelSpeechInput();
@@ -486,6 +491,7 @@ public class AsthaNativePlugin extends Plugin {
         boolean granted = Boolean.TRUE.equals(call.getBoolean("granted", false));
         preferences().edit().putBoolean(MESSAGE_CONSENT, granted).apply();
         if (!granted) {
+            cancelBackgroundEnable();
             preferences().edit().putBoolean(AsthaMessageAssistant.BACKGROUND, false).apply();
             AsthaMessageAssistant.stop(getContext());
             AsthaNotificationListener.clear();
@@ -505,6 +511,7 @@ public class AsthaNativePlugin extends Plugin {
         boolean enabled = Boolean.TRUE.equals(call.getBoolean("enabled", false));
         preferences().edit().putString(AsthaMessageAssistant.LANGUAGE, "bn".equals(call.getString("lang", "en")) ? "bn" : "en").apply();
         if (!enabled) {
+            cancelBackgroundEnable();
             preferences().edit().putBoolean(AsthaMessageAssistant.BACKGROUND, false).apply();
             AsthaMessageAssistant.stop(getContext());
             call.resolve();
@@ -514,35 +521,69 @@ public class AsthaNativePlugin extends Plugin {
             call.reject("Message help has not been turned on in ASTHA.", "consent_required");
             return;
         }
+        SpeechInputRequests.Change<PluginCall> change = backgroundRequests.begin(call);
+        finishBackground(change.previous, "cancelled");
+        // An unfinished/replaced enable attempt cannot leave a previous service authorized.
+        preferences().edit().putBoolean(AsthaMessageAssistant.BACKGROUND, false).apply();
+        AsthaMessageAssistant.stop(getContext());
+        if (!foregroundForSpeech()) { finishBackground(change.request, "foreground_required"); return; }
+        if (!notificationAccessEnabled()) { finishBackground(change.request, "service_disabled"); return; }
         // It needs the microphone for the answer, and shows a notification while it runs.
         List<String> needed = new ArrayList<>();
         if (getPermissionState("microphone") != PermissionState.GRANTED) needed.add("microphone");
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU && getPermissionState("notifications") != PermissionState.GRANTED) needed.add("notifications");
         if (!needed.isEmpty()) {
-            requestPermissionForAliases(needed.toArray(new String[0]), call, "backgroundPermissionResult");
+            if (backgroundRequests.awaitPermission(change.request)) {
+                requestPermissionForAliases(needed.toArray(new String[0]), call, "backgroundPermissionResult");
+            }
             return;
         }
-        startBackground(call);
+        startBackground(change.request);
     }
 
     @PermissionCallback
     private void backgroundPermissionResult(PluginCall call) {
-        if (getPermissionState("microphone") != PermissionState.GRANTED) {
-            call.reject("Microphone permission was not granted.", "permission");
-            return;
-        }
-        startBackground(call);
+        SpeechInputRequests.Request<PluginCall> request = backgroundRequests.permissionResult(call);
+        if (request != null) startBackground(request);
     }
 
-    private void startBackground(PluginCall call) {
-        try {
-            AsthaMessageAssistant.start(getContext(), preferences().getString(AsthaMessageAssistant.LANGUAGE, "en"));
-        } catch (RuntimeException refused) {
-            call.reject("Android did not let ASTHA keep running.", "not_started");
-            return;
-        }
-        preferences().edit().putBoolean(AsthaMessageAssistant.BACKGROUND, true).apply();
-        call.resolve();
+    private String backgroundStartError() {
+        return AsthaMessageAssistant.startError(getContext(), foregroundForSpeech());
+    }
+
+    private void finishBackground(SpeechInputRequests.Request<PluginCall> request, String error) {
+        if (request == null || !backgroundRequests.complete(request)) return;
+        if (error == null) request.call.resolve();
+        else request.call.reject("Locked-phone message help was not enabled.", error);
+    }
+
+    private void cancelBackgroundEnable() {
+        SpeechInputRequests.Request<PluginCall> previous = backgroundRequests.cancel();
+        if (previous == null) return; // A successfully enabled service may continue when the screen locks.
+        preferences().edit().putBoolean(AsthaMessageAssistant.BACKGROUND, false).apply();
+        AsthaMessageAssistant.stop(getContext());
+        finishBackground(previous, "cancelled");
+    }
+
+    private void startBackground(SpeechInputRequests.Request<PluginCall> request) {
+        recognitionHandler.post(() -> {
+            synchronized (backgroundRequests) {
+                if (!backgroundRequests.mayStart(request, true)) { finishBackground(request, "cancelled"); return; }
+                String error = backgroundStartError();
+                if (error != null) { finishBackground(request, error); return; }
+                // onStartCommand may run before this method returns: authorize first, then start.
+                preferences().edit().putBoolean(AsthaMessageAssistant.BACKGROUND, true).apply();
+                try {
+                    AsthaMessageAssistant.start(getContext(), preferences().getString(AsthaMessageAssistant.LANGUAGE, "en"));
+                } catch (RuntimeException refused) {
+                    preferences().edit().putBoolean(AsthaMessageAssistant.BACKGROUND, false).apply();
+                    AsthaMessageAssistant.stop(getContext());
+                    finishBackground(request, "not_started");
+                    return;
+                }
+                finishBackground(request, null);
+            }
+        });
     }
 
     @PluginMethod
