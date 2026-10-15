@@ -1,5 +1,16 @@
 {
  "strings": {
+  "debug_title": ["Vision diagnostics", "দৃষ্টি শনাক্তকরণের পরীক্ষা"],
+  "debug_help": ["The preview and boxes above use actual model results. Scores are model scores, not verified accuracy. Timing is collected only while this panel is open and stays on this device.", "উপরের ছবি ও বক্সে মডেলের আসল ফল দেখানো হয়। স্কোর হলো মডেলের স্কোর, যাচাইকৃত নির্ভুলতা নয়। শুধু এই অংশ খোলা থাকলে সময় মাপা হয় এবং তথ্য এই ডিভাইসেই থাকে।"],
+  "debug_perception": ["Object detection", "বস্তু শনাক্তকরণ"],
+  "debug_reasoning": ["Online reasoning", "অনলাইন বিশ্লেষণ"],
+  "debug_speech": ["Speech request to first audio event", "কথা বলার অনুরোধ থেকে প্রথম অডিও সংকেত"],
+  "debug_limits": ["These are separate stage timings, not end-to-end response time. Native first-audio timing, wake-word and transcription timing are not measured here. No result is shown until that stage runs.", "এগুলো আলাদা ধাপের সময়, সম্পূর্ণ উত্তরের সময় নয়। অ্যাপের স্থানীয় কণ্ঠের প্রথম অডিও, জাগানোর শব্দ ও কথার প্রতিলিপির সময় এখানে মাপা হয় না। ধাপটি চালানোর আগে কোনো ফল দেখানো হয় না।"],
+  "debug_unmeasured": ["Not measured", "এখনও মাপা হয়নি"],
+  "debug_running": ["Measuring…", "সময় মাপা হচ্ছে…"],
+  "debug_cancelled": ["Cancelled", "বাতিল করা হয়েছে"],
+  "debug_failed": ["Failed or start event not reported", "ব্যর্থ হয়েছে বা শুরুর সংকেত পাওয়া যায়নি"],
+  "debug_ms": ["{ms} ms", "{ms} মিলিসেকেন্ড"],
   "skip_link": [
    "Skip to companion",
    "সরাসরি সহায়কে যান"

@@ -9,12 +9,17 @@ import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.provider.Settings;
 import android.speech.RecognitionListener;
+import android.speech.RecognitionSupport;
+import android.speech.RecognitionSupportCallback;
 import android.speech.RecognizerIntent;
 import android.speech.SpeechRecognizer;
 import android.speech.tts.TextToSpeech;
 import android.speech.tts.UtteranceProgressListener;
+import android.speech.tts.Voice;
 
 import androidx.core.app.NotificationManagerCompat;
 
@@ -62,7 +67,10 @@ public class AsthaNativePlugin extends Plugin {
     private volatile boolean voiceReady;
     private final Map<String, PluginCall> speaking = new ConcurrentHashMap<>();
     private SpeechRecognizer recognizer;
-    private PluginCall listening;
+    private final SpeechInputRequests<PluginCall> speechRequests = new SpeechInputRequests<>();
+    private SpeechInputRequests.Request<PluginCall> recognizerRequest;
+    private final Handler recognitionHandler = new Handler(Looper.getMainLooper());
+    private Runnable recognitionLimit;
 
     @Override
     public void load() {
@@ -110,7 +118,7 @@ public class AsthaNativePlugin extends Plugin {
     protected void handleOnPause() {
         AsthaMessageAssistant.appVisible = false;
         // The page never listens while it is in the background; only the assistant may, if on.
-        getActivity().runOnUiThread(() -> finishListening("", null));
+        cancelSpeechInput();
     }
 
     @Override
@@ -118,7 +126,7 @@ public class AsthaNativePlugin extends Plugin {
         AsthaMessageAssistant.appVisible = false;
         AsthaNotificationListener.deliverTo(null);
         if (voice != null) voice.shutdown();
-        getActivity().runOnUiThread(this::releaseRecognizer);
+        cancelSpeechInput();
     }
 
     private void finishSpeaking(String id, boolean completed) {
@@ -135,6 +143,27 @@ public class AsthaNativePlugin extends Plugin {
 
     // ---- Speech output ---------------------------------------------------------------
 
+    // Shared with the locked-phone assistant: a language being available does not
+    // prove its voice is installed or that synthesis stays off the network.
+    static Voice installedLocalVoice(TextToSpeech engine, Locale... wanted) {
+        if (engine == null || engine.getVoices() == null) return null;
+        for (Locale locale : wanted) {
+            for (Voice candidate : engine.getVoices()) {
+                if (candidate == null || candidate.isNetworkConnectionRequired() ||
+                    candidate.getFeatures() != null && candidate.getFeatures().contains(TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED)) continue;
+                if (locale.equals(candidate.getLocale())) return candidate;
+            }
+        }
+        for (Locale locale : wanted) {
+            for (Voice candidate : engine.getVoices()) {
+                if (candidate == null || candidate.isNetworkConnectionRequired() ||
+                    candidate.getFeatures() != null && candidate.getFeatures().contains(TextToSpeech.Engine.KEY_FEATURE_NOT_INSTALLED)) continue;
+                if (locale.getLanguage().equals(candidate.getLocale().getLanguage())) return candidate;
+            }
+        }
+        return null;
+    }
+
     @PluginMethod
     public void speak(PluginCall call) {
         String text = call.getString("text", "");
@@ -146,19 +175,27 @@ public class AsthaNativePlugin extends Plugin {
         Locale[] wanted = "bn".equals(call.getString("lang", "en"))
             ? new Locale[] { new Locale("bn", "BD"), new Locale("bn", "IN"), new Locale("bn") }
             : new Locale[] { Locale.US, Locale.UK, Locale.ENGLISH };
-        Locale locale = null;
-        for (Locale candidate : wanted) {
-            if (voice.isLanguageAvailable(candidate) >= TextToSpeech.LANG_AVAILABLE) {
-                locale = candidate;
-                break;
+        boolean onDeviceOnly = !Boolean.FALSE.equals(call.getBoolean("onDeviceOnly", true));
+        if (onDeviceOnly) {
+            Voice chosen = installedLocalVoice(voice, wanted);
+            if (chosen == null || voice.setVoice(chosen) != TextToSpeech.SUCCESS) {
+                call.reject("No installed offline voice is available for this language.", "voice_language_unavailable");
+                return;
+            }
+        } else {
+            Locale locale = null;
+            for (Locale candidate : wanted) {
+                if (voice.isLanguageAvailable(candidate) >= TextToSpeech.LANG_AVAILABLE) {
+                    locale = candidate;
+                    break;
+                }
+            }
+            if (locale == null || voice.setLanguage(locale) < TextToSpeech.LANG_AVAILABLE) {
+                call.reject("The device has no voice for this language.", "voice_language_unavailable");
+                return;
             }
         }
-        if (locale == null) {
-            call.reject("The device has no voice for this language.", "voice_language_unavailable");
-            return;
-        }
         Float rate = call.getFloat("rate", 1f);
-        voice.setLanguage(locale);
         voice.setSpeechRate(Math.max(0.5f, Math.min(2f, rate == null ? 1f : rate)));
         // A new sentence replaces the one being spoken; the replaced call reports it did not finish.
         finishAllSpeaking();
@@ -178,32 +215,61 @@ public class AsthaNativePlugin extends Plugin {
 
     @PluginMethod
     public void listen(PluginCall call) {
-        if (getPermissionState("microphone") != PermissionState.GRANTED) {
-            requestPermissionForAlias("microphone", call, "microphoneResult");
-            return;
-        }
-        startRecognition(call);
+        SpeechInputRequests.Change<PluginCall> change = speechRequests.begin(call);
+        recognitionHandler.post(() -> {
+            finishListening(change.previous, "", null);
+            if (!speechRequests.mayStart(change.request, foregroundForSpeech())) {
+                finishListening(change.request, "", null);
+                return;
+            }
+            if (getPermissionState("microphone") != PermissionState.GRANTED) {
+                if (speechRequests.awaitPermission(change.request)) requestPermissionForAlias("microphone", call, "microphoneResult");
+                return;
+            }
+            startRecognition(change.request);
+        });
     }
 
     @PermissionCallback
     private void microphoneResult(PluginCall call) {
-        if (getPermissionState("microphone") == PermissionState.GRANTED) startRecognition(call);
-        else call.reject("Microphone permission was not granted.", "permission");
+        SpeechInputRequests.Request<PluginCall> request = speechRequests.permissionResult(call);
+        if (request == null) return; // Stop, pause, destruction or replacement already owns cleanup.
+        recognitionHandler.post(() -> {
+            if (!speechRequests.mayStart(request, foregroundForSpeech())) finishListening(request, "", null);
+            else if (getPermissionState("microphone") == PermissionState.GRANTED) startRecognition(request);
+            else finishListening(request, null, "permission");
+        });
+    }
+
+    private boolean foregroundForSpeech() {
+        return AsthaMessageAssistant.appVisible && getActivity() != null &&
+            !getActivity().isFinishing() && !getActivity().isDestroyed();
+    }
+
+    private void cancelSpeechInput() {
+        // Invalidate synchronously, before queued main-thread work or a permission
+        // callback can start the old (possibly online) recognizer.
+        SpeechInputRequests.Request<PluginCall> previous = speechRequests.cancel();
+        recognitionHandler.post(() -> finishListening(previous, "", null));
     }
 
     private void releaseRecognizer() {
+        if (recognitionLimit != null) recognitionHandler.removeCallbacks(recognitionLimit);
+        recognitionLimit = null;
         if (recognizer != null) {
-            recognizer.cancel();
-            recognizer.destroy();
+            SpeechRecognizer previous = recognizer;
             recognizer = null;
+            recognizerRequest = null;
+            previous.cancel();
+            previous.destroy();
         }
     }
 
-    private void finishListening(String text, String errorCode) {
-        PluginCall call = listening;
-        listening = null;
-        releaseRecognizer();
-        if (call == null) return;
+    private void finishListening(SpeechInputRequests.Request<PluginCall> request, String text, String errorCode) {
+        if (request == null) return;
+        if (recognizerRequest == request) releaseRecognizer();
+        if (!speechRequests.complete(request)) return;
+        PluginCall call = request.call;
         if (errorCode != null) {
             call.reject("Speech recognition did not complete.", errorCode);
             return;
@@ -213,31 +279,52 @@ public class AsthaNativePlugin extends Plugin {
         call.resolve(result);
     }
 
-    private void startRecognition(PluginCall call) {
+    private void startRecognition(SpeechInputRequests.Request<PluginCall> request) {
+        PluginCall call = request.call;
         String language = call.getString("language", "bn-BD");
-        getActivity().runOnUiThread(() -> {
-            Context context = getContext();
-            if (!SpeechRecognizer.isRecognitionAvailable(context)) {
-                call.reject("This device has no speech recognizer.", "recognizer_unavailable");
+        boolean onDeviceOnly = !Boolean.FALSE.equals(call.getBoolean("onDeviceOnly", true));
+        recognitionHandler.post(() -> {
+            if (!speechRequests.mayStart(request, foregroundForSpeech())) {
+                finishListening(request, "", null);
                 return;
             }
-            // Only one request listens at a time; an earlier one ends without a result.
-            finishListening("", null);
-            listening = call;
-            recognizer = SpeechRecognizer.createSpeechRecognizer(context);
+            Context context = getContext();
+            if (onDeviceOnly && (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || !SpeechRecognizer.isOnDeviceRecognitionAvailable(context))) {
+                finishListening(request, null, "on_device_unavailable");
+                return;
+            }
+            if (!onDeviceOnly && !SpeechRecognizer.isRecognitionAvailable(context)) {
+                finishListening(request, null, "recognizer_unavailable");
+                return;
+            }
+            final SpeechRecognizer requestRecognizer;
+            try {
+                if (onDeviceOnly) {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) requestRecognizer = SpeechRecognizer.createOnDeviceSpeechRecognizer(context);
+                    else { finishListening(request, null, "on_device_unavailable"); return; }
+                } else requestRecognizer = SpeechRecognizer.createSpeechRecognizer(context);
+            } catch (RuntimeException unavailable) {
+                finishListening(request, null, onDeviceOnly ? "on_device_unavailable" : "recognizer_unavailable");
+                return;
+            }
+            recognizer = requestRecognizer;
+            recognizerRequest = request;
             recognizer.setRecognitionListener(new RecognitionListener() {
                 @Override
                 public void onResults(Bundle results) {
+                    if (!speechRequests.mayStart(request, foregroundForSpeech()) || recognizer != requestRecognizer) return;
                     ArrayList<String> heard = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
-                    finishListening(heard == null || heard.isEmpty() ? "" : heard.get(0), null);
+                    finishListening(request, heard == null || heard.isEmpty() ? "" : heard.get(0), null);
                 }
 
                 @Override
                 public void onError(int error) {
-                    if (error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT) finishListening("", null);
-                    else if (error == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) finishListening(null, "permission");
-                    else if (error == SpeechRecognizer.ERROR_NETWORK || error == SpeechRecognizer.ERROR_NETWORK_TIMEOUT) finishListening(null, "network");
-                    else finishListening(null, "recognition_failed");
+                    if (!speechRequests.mayStart(request, foregroundForSpeech()) || recognizer != requestRecognizer) return;
+                    if (error == SpeechRecognizer.ERROR_NO_MATCH || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT) finishListening(request, "", null);
+                    else if (error == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) finishListening(request, null, "permission");
+                    else if (error == SpeechRecognizer.ERROR_NETWORK || error == SpeechRecognizer.ERROR_NETWORK_TIMEOUT) finishListening(request, null, "network");
+                    else if (error == SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED || error == SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE) finishListening(request, null, "language_unavailable");
+                    else finishListening(request, null, "recognition_failed");
                 }
 
                 @Override
@@ -266,16 +353,43 @@ public class AsthaNativePlugin extends Plugin {
             intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, language);
             intent.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1);
             intent.putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, context.getPackageName());
-            recognizer.startListening(intent);
+            Runnable begin = () -> {
+                if (!speechRequests.mayStart(request, foregroundForSpeech()) || recognizer != requestRecognizer) return;
+                try { requestRecognizer.startListening(intent); }
+                catch (RuntimeException unavailable) { finishListening(request, null, "recognition_failed"); }
+            };
+            // A broken service must not keep a microphone request pending forever,
+            // including while an optional language-support query is outstanding.
+            recognitionLimit = () -> finishListening(request, null, "recognition_timeout");
+            recognitionHandler.postDelayed(recognitionLimit, 20000);
+            if (onDeviceOnly && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                try {
+                    requestRecognizer.checkRecognitionSupport(intent, context.getMainExecutor(), new RecognitionSupportCallback() {
+                        @Override
+                        public void onSupportResult(RecognitionSupport support) {
+                            if (!speechRequests.mayStart(request, foregroundForSpeech()) || recognizer != requestRecognizer) return;
+                            boolean installed = support.getInstalledOnDeviceLanguages().stream().anyMatch(language::equalsIgnoreCase);
+                            if (installed) begin.run(); else finishListening(request, null, "language_unavailable");
+                        }
+
+                        @Override
+                        public void onError(int error) {
+                            if (!speechRequests.mayStart(request, foregroundForSpeech()) || recognizer != requestRecognizer) return;
+                            // Older on-device providers may not implement this optional
+                            // query. The selected engine is still strictly on-device.
+                            if (error == SpeechRecognizer.ERROR_CANNOT_CHECK_SUPPORT) begin.run();
+                            else finishListening(request, null, error == SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED || error == SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE ? "language_unavailable" : "recognition_failed");
+                        }
+                    });
+                } catch (RuntimeException unsupportedQuery) { begin.run(); }
+            } else begin.run();
         });
     }
 
     @PluginMethod
     public void stopListening(PluginCall call) {
-        getActivity().runOnUiThread(() -> {
-            finishListening("", null);
-            call.resolve();
-        });
+        cancelSpeechInput();
+        call.resolve();
     }
 
     // ---- Opening an app or the share sheet, each time the user asks ---------------------

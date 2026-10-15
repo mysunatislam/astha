@@ -61,6 +61,17 @@ function deadlineSignal(timeoutMs, callerSignal) {
   return controller.signal;
 }
 
+// Cancels requests already in flight; it does not revoke permission for the next request.
+const AsthaCancellation = {
+  generation: 0,
+  controllers: new Set(),
+  cancel() {
+    this.generation++;
+    for (const controller of this.controllers) controller.abort();
+    this.controllers.clear();
+  },
+};
+
 const VoiceEchoFilter = {
   recentUtterances: [], // array of { text, words, time }
   recordMachineSpeech(text) {
@@ -103,6 +114,12 @@ const VoiceEngine = {
   lastSpokeAt: 0,
   _currentResolve: null,
   requestController: null, generation: 0,
+  _speechTiming: null,
+  _finishSpeechTiming(outcome, token = this._speechTiming) {
+    if (token !== this._speechTiming) return;
+    if (typeof AsthaDiagnostics !== 'undefined') AsthaDiagnostics.finish(this._speechTiming, outcome);
+    this._speechTiming = null;
+  },
   criticalUntil: 0, _criticalDone: null, _endCritical: null, _criticalToken: 0,
   get speaking() {
     if (this.mode === 'audio') return !!this.audioEl && !this.audioEl.paused && !this.audioEl.ended;
@@ -117,6 +134,7 @@ const VoiceEngine = {
   // Ordinary speech replaces ordinary speech. Only the user (Stop, voice off) or a newer
   // alert ends a hazard alert early; anything else waits for it in speak().
   stop(user = false) {
+    this._finishSpeechTiming('cancel');
     this.generation++;
     if (this.requestController) { this.requestController.abort(); this.requestController = null; }
     if (!user && this.criticalUntil > Date.now()) return;
@@ -180,6 +198,8 @@ const VoiceEngine = {
     if (!state.audio || !text) return false;
     // Let a hazard alert finish. A newer sentence that arrives meanwhile replaces this one.
     if (this._criticalDone) { await this._criticalDone; if (generation !== this.generation) return false; }
+    const speechTiming = typeof AsthaDiagnostics !== 'undefined' ? AsthaDiagnostics.start('speech', { sourceEpoch: state.sourceEpoch || 0 }) : null;
+    this._speechTiming = speechTiming;
     VoiceEchoFilter.recordMachineSpeech(text);
     this.lastSpokeAt = Date.now();
     const voiceKey = lang === 'bn' ? 'bn-female' : 'en-female';
@@ -211,12 +231,13 @@ const VoiceEngine = {
           this._currentResolve = resolve;
           audio.onended = () => { this.lastSpokeAt = Date.now(); resolve(true); };
           audio.onerror = () => { this.lastSpokeAt = Date.now(); resolve(false); };
+          audio.onplaying = () => { if (generation === this.generation) this._finishSpeechTiming('success', speechTiming); };
           audio.play().catch(() => resolve(false));
         });
         this._currentResolve = null;
         if (this.audioEl === audio) { this.mode = null; this.audioEl = null; }
         this.lastSpokeAt = Date.now();
-        if (ok) { if (lang === 'bn') this._banglaVoiced(true); return true; }
+        if (ok) { this._finishSpeechTiming('error', speechTiming); if (lang === 'bn') this._banglaVoiced(true); return true; }
         // fall through to the browser voice if playback itself failed
       }
     } catch (e) { /* offline, signed out, or the server is down: use the local voice instead */ }
@@ -224,7 +245,9 @@ const VoiceEngine = {
     // The Android WebView has no speech synthesis; the app supplies the device voice instead.
     const u = window.speechSynthesis && this._deviceVoice(lang) ? makeUtterance(sanitizeForSpeech(text), lang) : null;
     if (!u) {
-      const spoken = await this._speakOnDevice(text, lang, generation);
+      // The native bridge reports completion, not first audio; do not invent that timing.
+      this._finishSpeechTiming('error', speechTiming);
+      const spoken = await this._speakOnDevice(text, lang, generation, local || !remoteProcessingAllowed());
       if (spoken && lang === 'bn') this._banglaVoiced(true);
       if (spoken || generation !== this.generation || !fallback) return spoken;
       return this.speak(this._withoutBangla(fallback), fallback.lang, { local: true });
@@ -234,19 +257,21 @@ const VoiceEngine = {
       this._currentResolve = resolve;
       u.onend = () => { this.lastSpokeAt = Date.now(); resolve(true); };
       u.onerror = () => { this.lastSpokeAt = Date.now(); resolve(false); };
+      u.onstart = () => { if (generation === this.generation) this._finishSpeechTiming('success', speechTiming); };
       window.speechSynthesis.speak(u);
     });
     this._currentResolve = null;
     if (this.mode === 'synth') this.mode = null;
     this.lastSpokeAt = Date.now();
+    this._finishSpeechTiming('error', speechTiming);
     if (ok && lang === 'bn') this._banglaVoiced(true);
     return ok;
   },
-  async _speakOnDevice(text, lang, generation) {
+  async _speakOnDevice(text, lang, generation, onDeviceOnly = true) {
     const device = window.AsthaNative;
     if (!device || !device.canSpeak) return false;
     this.mode = 'native';
-    const ok = await device.speak(sanitizeForSpeech(text), lang, Number($('speech-rate') && $('speech-rate').value) || 1);
+    const ok = await device.speak(sanitizeForSpeech(text), lang, Number($('speech-rate') && $('speech-rate').value) || 1, { onDeviceOnly });
     if (generation === this.generation && this.mode === 'native') this.mode = null;
     this.lastSpokeAt = Date.now();
     return ok;
@@ -912,18 +937,20 @@ async function readingTick() {
 }
 function normLine(l) { return l.toLowerCase().replace(/[^\p{L}\p{N}]/gu, ''); }
 async function ocrPage() {
+  const stillWanted = captureLocalActionGuard();
   reading.ocrBusy = true;
   try {
     const worker = await ensureOcr();
+    if (!reading.active || !stillWanted()) return;
     const frame = captureFrame(1024); // ~3 s per page on a laptop CPU with Bangla + English
     let lines = null, explain = null;
-    if (cloudReady()) { try { const r = await cloudReadLines(frame); lines = r.lines; explain = r; } catch (e) { cloudFail(e); } }
+    if (cloudReady()) { try { const r = await cloudReadLines(frame); if (!reading.active || !stillWanted()) return; lines = r.lines; explain = r; } catch (e) { if (e.cancelled || !reading.active || !stillWanted()) return; cloudFail(e); } }
     if (!lines) {
       const { data } = await worker.recognize(frame);
       lines = (data.lines || []).filter(l => l.confidence >= 55).map(l => cleanOcrLine(l.text))
         .filter(l => { const letters = l.replace(/[^\p{L}\p{N}]/gu, '').length; return letters >= 2 && letters / l.length >= 0.5; });
     }
-    if (!reading.active) return;
+    if (!reading.active || !stillWanted()) return;
     reading.explain = explain;
     if (!lines.length) { reading.phase = 'align'; reading.goodStreak = 0; heartSet({ mode: 'bad', label: 'No text found' }); sayGuide('no_text', true); return; }
     const fresh = lines.filter(l => !reading.readLines.has(normLine(l)));
@@ -943,13 +970,19 @@ async function ocrPage() {
       else sayGuide('page_done', true);
     };
     startReader(text);
-  } catch (e) { console.warn('ocrPage', e); reading.phase = 'align'; }
+  } catch (e) { if (e.cancelled || !reading.active || !stillWanted()) return; console.warn('ocrPage', e); reading.phase = 'align'; }
   finally { reading.ocrBusy = false; }
 }
 
-// ---- Voice-Led Siri Engine (Always Listening, Acoustic Echo Filter, Instant Stop) ---
-const STOP_TALKING_REGEX = /(?:^|[^A-Za-z0-9_\u0980-\u09FF])(stop|stop talking|shut up|be quiet|quiet|silence|pause|enough|halt|don't speak|dont speak|stop reading|থামো|চুপ|চুপ কর|চুপ করো|থামুন|কথা বন্ধ|পড়া বন্ধ|বন্ধ করো|স্টপ|thamo|chup|bondho koro|bondho kor)(?![A-Za-z0-9_\u0980-\u09FF])/i;
+// ---- Foreground hands-free listening (only after explicit consent) ---
+// Whole commands only: a bus stop or quoted instructions are not a request to stop.
+const STOP_TALKING_REGEX = /^(?:please\s+)?(?:stop(?: talking| speaking| reading)?|pause|shut up|be quiet|quiet|silence|enough|halt|don'?t (?:speak|talk)|থামো|চুপ|চুপ কর|চুপ করো|থামুন|কথা বন্ধ|পড়া বন্ধ|বন্ধ করো|স্টপ|thamo|chup|bondho koro|bondho kor)(?:\s+please)?[.!?।\s]*$/i;
 const WAKE_RE = /(^|[\s,.!?])(astha|asta|ashtha|aastha|astar|হে আস্থা|আস্থা|আসথা|আস্তা)(?=$|[\s,.!?])/i;
+function isSpeechStopCommand(text) {
+  const command = String(text || '').trim().replace(/[’]/g, "'")
+    .replace(/^(?:hey\s+|হেই\s+)?(?:astha|asta|ashtha|aastha|astar|হে আস্থা|আস্থা|আসথা|আস্তা)[,.!?।\s]+/i, '');
+  return STOP_TALKING_REGEX.test(command);
+}
 
 const SiriVoice = {
   enabled: false, // Hands-free listening requires an explicit user action each session.
@@ -1041,19 +1074,20 @@ const SiriVoice = {
         const currentSpeech = (finalText || interimText).trim();
         if (!currentSpeech) return;
 
-        // 1. INSTANT STOP / BARGE-IN CHECK (Evaluated on BOTH interim and final for <50ms response)
-        if (STOP_TALKING_REGEX.test(currentSpeech)) {
+        // An interim Stop cancels pending answers as well as audio, without a debounce.
+        // A short explicit Stop takes priority over the heuristic echo filter: an alert
+        // itself may contain "stop", and must still be interruptible by the user.
+        if (isSpeechStopCommand(currentSpeech)) {
           clearTimeout(this.speechDebounceTimer);
           this.pendingSpeech = '';
-          if (VoiceEngine.speaking || (typeof reader !== 'undefined' && reader.active) || (typeof reading !== 'undefined' && reading.active)) {
-            VoiceEngine.stop();
-            if (typeof stopReader === 'function') stopReader();
-            if (typeof reading !== 'undefined' && reading.active) stopReading(true);
-            this.lastBargeInAt = Date.now();
-            setCaption(t('agent_voice') || 'Astha', 'Stopped speech.', 'voice', null, 'কথা থামানো হয়েছে।');
-            playEarcon('click');
-            return;
-          }
+          // Browsers often emit the same Stop again as a final result.
+          if (Date.now() - this.lastBargeInAt < 1200) return;
+          this.lastBargeInAt = Date.now();
+          if (/stop reading|পড়া বন্ধ/i.test(currentSpeech) && typeof AsthaExperience !== 'undefined' && AsthaExperience.mode === 'reading') AsthaExperience.setContext('ask', true);
+          stopAllSpeech();
+          setCaption(t('agent_voice') || 'Astha', 'Stopped speech.', 'voice', null, 'কথা থামানো হয়েছে।');
+          playEarcon('click');
+          return;
         }
 
         // If we recently barged in (< 1200ms ago), ignore residual fragments of the stop utterance
@@ -1473,6 +1507,7 @@ async function handleItemPlacementVoice(query) {
   if (privacyMode) return announce('Memory is off in privacy mode.', 'গোপনীয়তা মোডে মেমরি বন্ধ।');
 
   if (withCamera(() => handleItemPlacementVoice(query))) return;
+  const generation = AsthaCancellation.generation;
 
   const rawItem = extractItemFromPlacementSpeech(query);
   const roomsSummary = state.spatialHome.map(r => r.name + ' (' + r.notes + ')').join(' | ');
@@ -1488,11 +1523,13 @@ async function handleItemPlacementVoice(query) {
         }
       }
     } catch (e) {
+      if (e.cancelled || generation !== AsthaCancellation.generation) return;
       console.warn('Cloud placement failed, using on-device placement fallback:', e);
     }
   }
 
   // 2. On-Device Fallback (Without Gemini / Offline)
+  if (generation !== AsthaCancellation.generation) return;
   return handleOnDevicePlacement(query, rawItem);
 }
 
@@ -1905,6 +1942,7 @@ function toggleVideoCalibrationWalk() {
 
 async function videoCalibrationTick() {
   if (!VideoRoomCalib.active || VideoRoomCalib.isProcessing) return;
+  const generation = AsthaCancellation.generation;
   const frame = captureFrame(896);
   if (!frame) return;
   VideoRoomCalib.isProcessing = true;
@@ -1913,6 +1951,7 @@ async function videoCalibrationTick() {
     // 1. Cloud-powered calibration if available
     if (typeof cloudReady === 'function' && cloudReady() && typeof cloudCalibrateVideoFrame === 'function') {
       const r = await cloudCalibrateVideoFrame(frame, VideoRoomCalib.roomName);
+      if (!VideoRoomCalib.active || generation !== AsthaCancellation.generation) return;
       if (r && Array.isArray(r.furniture) && r.furniture.length > 0) {
         let hasNew = false;
         r.furniture.forEach(item => {
@@ -1938,7 +1977,9 @@ async function videoCalibrationTick() {
 
     // 2. On-device fallback room calibration (Without Gemini / Offline)
     await ensureVisionModels();
+    if (!VideoRoomCalib.active || generation !== AsthaCancellation.generation) return;
     const cocoObjs = await runCoco(frame);
+    if (!VideoRoomCalib.active || generation !== AsthaCancellation.generation) return;
     state.lastCocoPreds = cocoObjs;
 
     // Detect furniture objects: table, desk, bed, chair, couch, tv, book

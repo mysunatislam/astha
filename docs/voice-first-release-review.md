@@ -12,8 +12,9 @@ Three words are used precisely here:
   has not been built or connected.
 - **Pending** means it needs a physical device or a person and has not been done.
 
-Nothing in this document has been verified on a physical phone, a Raspberry Pi or a
-Braille controller, and no blind or low-vision person has tested it.
+The Pi camera and ultrasonic telemetry link have the specific hardware checks recorded
+in [the Pi guide](pi-camera.md). The complete phone pairing and spoken-answer flow,
+Braille controller and blind-user evaluation remain pending.
 
 ## How ASTHA decides when to speak
 
@@ -112,7 +113,7 @@ of sight, and it does not change what ASTHA is able to detect.
 | Home, pages, voice navigation, setup, account sync | Tested | `test_experience.mjs`, `test_preferences.mjs`, `test_i18n_release.mjs` (every label has Bangla and English). Viewed in a desktop browser. |
 | Fresh-frame visual questions, continuous reading | Tested with a stand-in model | Real model accuracy pending. |
 | Screen helper on a computer (explain slides, documents, designs, code) | Built | The control and its route exist and were viewed in a desktop browser. Explanation quality depends on the online model and is pending. |
-| Raspberry Pi camera bridge | Simulated | `test_pi_camera.mjs` including the Python handler. No Pi has run it. |
+| Raspberry Pi camera bridge | Hardware link checked; phone pairing pending | The Pi guide records authenticated TLS camera streaming from an actual Pi 4/NoIR camera to a PC. Automated tests also exercise the Python handler. Android release certificate trust and real phone pairing remain pending. |
 | Android device voice and speech recognition | Simulated | `test_native_device.mjs` against a stand-in plugin. The Java compiles and passes lint; it has not run on a phone. |
 | Reading other apps on Android | Simulated | Same. Opt-in twice (ASTHA, then Android). Read-only; cannot tap, type or send. |
 | Six-key Braille controller | Simulated | `test_braille.mjs`. Keyboard practice works in a browser. No controller exists; the Bluetooth transport has only met a stand-in. Android needs a native Bluetooth transport because the WebView has no Web Bluetooth. |

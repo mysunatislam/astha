@@ -1181,6 +1181,17 @@
         <span class="empty-note" id="seen-empty" data-i18n="seen_none">nothing yet</span>
       </div>
 
+      <details id="vision-debug" class="card">
+        <summary data-i18n="debug_title">Vision diagnostics</summary>
+        <p class="help" data-i18n="debug_help">The preview and boxes above use actual model results. Scores are model scores, not verified accuracy. Timing is collected only while this panel is open and stays on this device.</p>
+        <dl aria-live="off">
+          <dt data-i18n="debug_perception">Object detection</dt><dd id="debug-perception" data-i18n="debug_unmeasured">Not measured</dd>
+          <dt data-i18n="debug_reasoning">Online reasoning</dt><dd id="debug-reasoning" data-i18n="debug_unmeasured">Not measured</dd>
+          <dt data-i18n="debug_speech">Speech request to first audio event</dt><dd id="debug-speech" data-i18n="debug_unmeasured">Not measured</dd>
+        </dl>
+        <p class="help" data-i18n="debug_limits">These are separate stage timings, not end-to-end response time. Native first-audio timing, wake-word and transcription timing are not measured here. No result is shown until that stage runs.</p>
+      </details>
+
       <!-- High-Contrast Action Grid -->
       <div class="actions">
         <button class="action primary" onclick="describeScene()">
@@ -2242,6 +2253,7 @@ function activeSourceEl() {
 function showSource(kind) {
   state.source = kind;
   state.sourceEpoch = (state.sourceEpoch || 0) + 1;
+  if (typeof AsthaDiagnostics !== 'undefined') AsthaDiagnostics.setSourceEpoch(state.sourceEpoch);
   if (typeof AsthaExperience !== 'undefined') AsthaExperience.invalidate();
   if ($('pi-preview')) $('pi-preview').hidden = kind !== 'pi';
   state.lastCocoPreds = []; state.lastClipHits = []; showHazard(false);
@@ -2600,7 +2612,15 @@ function captureFrame(maxW = 640) {
 async function runCoco(frame) {
   if (engine.coco.status !== 'ready' || !engine.coco.model) return [];
   const confThresh = (engine.coco.type === 'yolo26n') ? 0.38 : 0.50;
-  const preds = await engine.coco.model.detect(frame, 12, confThresh);
+  const timing = typeof AsthaDiagnostics !== 'undefined' ? AsthaDiagnostics.start('perception', { sourceEpoch: state.sourceEpoch || 0 }) : null;
+  let preds;
+  try {
+    preds = await engine.coco.model.detect(frame, 12, confThresh);
+    if (typeof AsthaDiagnostics !== 'undefined') AsthaDiagnostics.finish(timing, 'success');
+  } catch (error) {
+    if (typeof AsthaDiagnostics !== 'undefined') AsthaDiagnostics.finish(timing, 'error');
+    throw error;
+  }
   const area = frame.width * frame.height;
   return preds.filter(p => p.score >= confThresh && COCO_TO_ID[p.class]).map(p => ({
     id: COCO_TO_ID[p.class],
@@ -2929,6 +2949,19 @@ function showHazard(on) { $('hazard').hidden = !on; }
 /* =====================================================================
    11. Core Actions (Describe, Identify, OCR, Find, Shield)
    ===================================================================== */
+// A local model cannot always abort its inference. Discard its late result instead.
+function captureLocalActionGuard() {
+  const generation = typeof AsthaCancellation !== 'undefined' ? AsthaCancellation.generation : 0;
+  const source = state.source, epoch = state.sourceEpoch || 0;
+  const account = window.ASTHA_ACCOUNT_ID || null;
+  const owner = typeof LocalStore !== 'undefined' ? LocalStore.KEY : null;
+  const privateAtStart = privacyMode;
+  return () => (typeof AsthaCancellation === 'undefined' || AsthaCancellation.generation === generation)
+    && state.source === source && (state.sourceEpoch || 0) === epoch
+    && (window.ASTHA_ACCOUNT_ID || null) === account
+    && (typeof LocalStore === 'undefined' || LocalStore.KEY === owner)
+    && privacyMode === privateAtStart && !privacyTransition && !document.hidden;
+}
 async function withBusy(title, fn) {
   if (state.busy) {
     if (Date.now() - (state.busyStartedAt || 0) > 6000) {
@@ -2938,6 +2971,8 @@ async function withBusy(title, fn) {
       return;
     }
   }
+  const busyToken = Symbol('busy-operation');
+  state.busyToken = busyToken;
   state.busy = true;
   state.busyStartedAt = Date.now();
   stopLiveLoop();
@@ -2949,12 +2984,16 @@ async function withBusy(title, fn) {
       new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 7000))
     ]);
   } catch (e) {
+    if (e.cancelled || state.busyToken !== busyToken) return;
     console.error(e);
     if (e.message !== 'timeout') announce(t('models_failed'), tBn('models_failed'));
   } finally {
-    state.busy = false;
-    $('companion-main').setAttribute('aria-busy', 'false');
-    if (['camera', 'pi'].includes(state.source) && (!window.reading || !reading.active)) startLiveLoop();
+    if (state.busyToken === busyToken) {
+      state.busyToken = null;
+      state.busy = false;
+      $('companion-main').setAttribute('aria-busy', 'false');
+      if (['camera', 'pi'].includes(state.source) && (!window.reading || !reading.active)) startLiveLoop();
+    }
   }
 }
 
@@ -3231,20 +3270,27 @@ function identifyObject(skipCloud) {
    12. Guided Home Layout Calibration Wizard & Spatial Memory
    ===================================================================== */
 function readStillOnce() {
-  withBusy(t('reading_title'), async () => {
+  const stillWanted = captureLocalActionGuard();
+  return withBusy(t('reading_title'), async () => {
+    if (!stillWanted()) return;
     setCaption(t('reading_title'), t('ocr_loading'), 'ocr', 'busy', tBn('ocr_loading'));
     let worker;
-    try { worker = await ensureOcr(); } catch (e) { setCaption(t('reading_title'), t('ocr_failed'), 'ocr', 'danger', tBn('ocr_failed')); speak(t('ocr_failed'), tBn('ocr_failed')); return; }
+    try { worker = await ensureOcr(); } catch (e) { if (!stillWanted() || e.cancelled) return; setCaption(t('reading_title'), t('ocr_failed'), 'ocr', 'danger', tBn('ocr_failed')); speak(t('ocr_failed'), tBn('ocr_failed')); return; }
+    if (!stillWanted()) return;
     const frame = captureFrame(1280);
     setCaption(t('reading_title'), t('ocr_working'), 'ocr', 'busy', tBn('ocr_working'));
     speak(t('ocr_working'), tBn('ocr_working'));
     let lines = null, explain = null;
-    if (cloudReady()) { try { const r = await cloudReadLines(frame); lines = r.lines; explain = r; } catch (e) { cloudFail(e); } }
+    if (cloudReady()) { try { const r = await cloudReadLines(frame); if (!stillWanted()) return; lines = r.lines; explain = r; } catch (e) { if (e.cancelled || !stillWanted()) return; cloudFail(e); } }
+    if (!stillWanted()) return;
     if (!lines) {
-      const { data } = await worker.recognize(frame);
+      let data;
+      try { ({ data } = await worker.recognize(frame)); } catch (e) { if (!stillWanted() || e.cancelled) return; throw e; }
+      if (!stillWanted()) return;
       lines = (data.lines || []).filter(l => l.confidence >= 55).map(l => cleanOcrLine(l.text))
         .filter(l => { const letters = l.replace(/[^\p{L}\p{N}]/gu, '').length; return letters >= 2 && letters / l.length >= 0.5; });
     }
+    if (!stillWanted()) return;
     const text = lines.join('\n');
     if (explain && explain.explainEn) reader.onFinish = () => speak(explain.explainEn, explain.explainBn);
     if (!text) { $('ocr-result').hidden = true; setCaption(t('reading_title'), t('ocr_none'), 'ocr', null, tBn('ocr_none')); speak(t('ocr_none'), tBn('ocr_none')); return; }
@@ -3605,7 +3651,7 @@ function handleQuery(query) {
       return AsthaAgent.run(query);
     }
   }
-  if (/(?:^|[^A-Za-z0-9_\u0980-\u09FF])(stop|stop talking|cancel|quiet|be quiet|shut up|silence|pause|enough|halt|বন্ধ করো|থামো|চুপ|চুপ কর|চুপ করো|থামুন|কথা বন্ধ|পড়া বন্ধ|স্টপ|thamo|chup|bondho koro)(?![A-Za-z0-9_\u0980-\u09FF])/i.test(q)) {
+  if (isSpeechStopCommand(q) || /^cancel[.!?।\s]*$/i.test(q)) {
     if (typeof reading !== 'undefined' && reading.active) return stopReading(true);
     return stopAllSpeech();
   }
@@ -4068,7 +4114,7 @@ function enhancementBoot() {
   document.addEventListener('visibilitychange',()=>{ if(document.hidden){stopListening();stopCamera();} });
 }
 
-const I18N_EXTRA = {"skip_link":["Skip to companion","সরাসরি সহায়কে যান"],"auth_sub":["Your voice-first visual companion. Create an account once; Astha remembers your things and rooms after that.","আপনার কণ্ঠ-নির্ভর দৃষ্টি-সহায়ক। একবার অ্যাকাউন্ট তৈরি করুন; এরপর আস্থা আপনার জিনিসপত্র ও ঘরের কথা মনে রাখবে।"],"auth_action":["Account action","অ্যাকাউন্টের কাজ"],"auth_create":["Create account","অ্যাকাউন্ট তৈরি"],"auth_login":["Log in","প্রবেশ করুন"],"auth_name":["Your name","আপনার নাম"],"auth_phone":["Phone number","ফোন নম্বর"],"auth_passcode":["Passcode (4 to 8 digits)","পাসকোড (৪ থেকে ৮টি সংখ্যা)"],"auth_note":["Your name and phone are used only to sign you back in. Everything Astha remembers stays tied to your account.","আপনার নাম ও ফোন নম্বর শুধু আবার প্রবেশের জন্য ব্যবহৃত হয়। আস্থা যা মনে রাখে তা আপনার অ্যাকাউন্টের সঙ্গেই যুক্ত থাকে।"],"auth_close":["Continue without an account","অ্যাকাউন্ট ছাড়াই চালিয়ে যান"],"theme_title":["Contrast theme Selector","রঙের থিম বাছাই"],"theme_label":["Contrast theme","রঙের থিম"],"theme_navy":["🌊 Navy and cyan","🌊 গাঢ় নীল ও সায়ান"],"theme_mono":["⚪ Monochrome (white on black)","⚪ সাদা-কালো (কালোর ওপর সাদা)"],"theme_yellow":["🟡 Yellow on black (photophobia)","🟡 কালোর ওপর হলুদ (আলোয় অস্বস্তি হলে)"],"font_label":["Font Size","লেখার আকার"],"font_normal":["Text: Standard","লেখা: সাধারণ"],"font_large":["Text: Large","লেখা: বড়"],"font_xlarge":["Text: Extra large","লেখা: খুব বড়"],"voice_delivery":["Voice Delivery","কণ্ঠের ভাষা"],"voice_delivery_title":["Voice Delivery Language","আস্থা যে ভাষায় কথা বলবে"],"voice_en_btn":["Voice: English","কণ্ঠ: English"],"voice_en_title":["Voice output spoken in English","আস্থা ইংরেজিতে কথা বলবে"],"voice_bn_btn":["Voice: বাংলা","কণ্ঠ: বাংলা"],"voice_bn_title":["Voice output spoken in Bangla (বাংলা)","আস্থা বাংলায় কথা বলবে"],"safety_brand":["Astha AI Companion","আস্থা এআই সহায়ক"],"safety_note":["· Experimental visual assistance. Use your usual mobility aid; Astha cannot confirm a safe path. আস্থা নিরাপদ পথ নিশ্চিত করতে পারে না।","· পরীক্ষামূলক দৃষ্টি-সহায়তা। আপনার চলাচলের সহায়ক ব্যবহার করুন; আস্থা নিরাপদ পথ নিশ্চিত করতে পারে না।"],"secure_title":["This page is open on an insecure address.","এই পাতাটি অনিরাপদ ঠিকানায় খোলা হয়েছে।"],"secure_body":["The browser will ask for the microphone and camera every time and may block them. Open the app on localhost or over HTTPS. On Android, use Chrome's port forwarding (chrome://inspect on the computer) so the phone sees localhost, or a Cloudflare tunnel.","ব্রাউজার প্রতিবার মাইক্রোফোন ও ক্যামেরার অনুমতি চাইবে এবং আটকে দিতে পারে। অ্যাপটি localhost অথবা HTTPS ঠিকানায় খুলুন। অ্যান্ড্রয়েডে Chrome-এর পোর্ট ফরওয়ার্ডিং (কম্পিউটারে chrome://inspect) অথবা Cloudflare টানেল ব্যবহার করুন।"],"hf_title":["Keep listening for “Astha, …”","“আস্থা, …” শোনার জন্য মাইক্রোফোন চালু রাখুন"],"engine_mode":["AI Engine Mode","এআই প্রসেসিং মোড"],"engine_mode_title":["Choose online processing or on-device models","অনলাইন প্রসেসিং অথবা ফোনের নিজস্ব মডেল বেছে নিন"],"mode_online":["✨ Online AI","✨ অনলাইন এআই"],"mode_offline":["📱 Offline","📱 অফলাইন"],"speaking_mode":["Speaking mode","কথা বলার ধরন"],"speaking_mode_title":["Auto: speaks up in busy places. Quiet: speaks only when asked.","অটো: ব্যস্ত জায়গায় নিজে থেকে জানায়। শান্ত: শুধু জিজ্ঞাসা করলে বলে।"],"mode_auto":["Auto · busy area","অটো · ব্যস্ত জায়গা"],"mode_quiet":["Quiet · ask me","শান্ত · জিজ্ঞাসা করলে"],"command_label":["Ask Astha in Bangla or English","বাংলা বা ইংরেজিতে আস্থাকে জিজ্ঞাসা করুন"],"command_placeholder":["Type a request, e.g. Where are my glasses?","অনুরোধ লিখুন, যেমন: আমার চশমা কোথায়?"],"command_submit":["Ask Astha","আস্থাকে জিজ্ঞাসা করুন"],"btn_repeat":["Repeat","আবার বলো"],"btn_stop_speaking":["Stop speaking","কথা থামাও"],"btn_voice_commands":["Voice commands","ভয়েস কমান্ড"],"agent_title_label":["Autonomous Agent","স্বয়ংক্রিয় সহায়ক"],"agent_goal":["Goal: ","লক্ষ্য: "],"still_alt":["Visual Source","দৃশ্যের উৎস"],"video_source":["Video source","ভিডিওর উৎস"],"act_agent":["Autonomous task","স্বয়ংক্রিয় কাজ"],"act_agent_desc":["Plan, RAG memory & verify loop","পরিকল্পনা, স্মৃতি খোঁজা ও যাচাই"],"calib_heading":["🏠 Video Home & Room Calibration","🏠 ভিডিও দিয়ে ঘর চেনানো"],"calib_instruction":["Choose a room name, then walk through with your camera. Astha will continuously identify furniture surfaces (dressing table, reading table, bed, chairs) and remember where items are placed.","ঘরের নাম বেছে নিন, তারপর ক্যামেরা নিয়ে ঘরটি ঘুরে দেখান। আস্থা আসবাবপত্র (ড্রেসিং টেবিল, পড়ার টেবিল, বিছানা, চেয়ার) শনাক্ত করবে এবং জিনিসপত্র কোথায় রাখা আছে তা মনে রাখবে।"],"room_name":["Room name","ঘরের নাম"],"room_placeholder":["Reading Room, Bedroom, etc.","পড়ার ঘর, শোবার ঘর ইত্যাদি"],"calib_view_status":["Point camera at room furniture and tap \"Start Video Walkthrough\"","ঘরের আসবাবের দিকে ক্যামেরা ধরে “ভিডিও শুরু করুন” চাপুন"],"calib_landmarks":["Detected Furniture & Landmarks in this Room:","এই ঘরে শনাক্ত হওয়া আসবাব ও চিহ্ন:"],"calib_none":["None detected yet. Walk through room with camera.","এখনও কিছু শনাক্ত হয়নি। ক্যামেরা নিয়ে ঘরটি ঘুরে দেখান।"],"calib_save":["✓ Save Calibrated Room","✓ ঘরটি সংরক্ষণ করুন"],"cancel":["Cancel","বাতিল"],"calib_ready":["Ready to scan","স্ক্যানের জন্য প্রস্তুত"],"calib_start":["🎥 Start Video Walkthrough","🎥 ভিডিও শুরু করুন"],"calib_resume":["🎥 Resume Walkthrough","🎥 আবার শুরু করুন"],"calib_stop":["⏹️ Stop Walkthrough","⏹️ ভিডিও থামান"],"calib_paused":["Walkthrough paused","ভিডিও বিরতিতে"],"calib_scanning":["Walking & scanning room…","ঘর ঘুরে দেখা হচ্ছে…"],"calib_recalibrating":["Recalibrating {room}","{room} আবার চেনানো হচ্ছে"],"ocr_append":["Add this text to reader","এই লেখা পাঠকে যোগ করুন"],"narrate_label":["Auto narrate","নিজে থেকে বর্ণনা"],"reader_title":["Reading transcript","পড়া লেখার প্রতিলিপি"],"reader_help":["Everything Astha reads from the camera is collected here. Say “Astha, read this” or tap “Read to me” to read a book or letter. Pasting text is optional.","ক্যামেরা থেকে আস্থা যা পড়ে তা এখানে জমা হয়। বই বা চিঠি পড়তে বলুন “আস্থা, এটা পড়ো” অথবা “পড়ে শোনাও” চাপুন। লেখা পেস্ট করা ঐচ্ছিক।"],"reader_label":["Transcript","প্রতিলিপি"],"reader_placeholder":["Pages Astha has read will appear here.","আস্থার পড়া পাতাগুলো এখানে দেখা যাবে।"],"reader_again":["Read the transcript again","প্রতিলিপি আবার পড়ো"],"reader_pause":["Pause","বিরতি"],"reader_resume":["Resume","আবার শুরু"],"reader_stop":["Stop","থামাও"],"reader_clear":["Clear text","লেখা মুছুন"],"eye_title":["♥ Astha on your screen","♥ আপনার স্ক্রিনে আস্থা"],"eye_help":["Share your screen and Astha tells you what is on it: a message, a slide, a document, a web page, a design or code. Ask her to read it, explain it, or help you with it. Say “Astha, watch my screen”.","আপনার স্ক্রিন শেয়ার করলে আস্থা বলে দেয় তাতে কী আছে: বার্তা, স্লাইড, নথি, ওয়েব পৃষ্ঠা, নকশা বা কোড। পড়ে শোনাতে, বুঝিয়ে বলতে বা সাহায্য করতে বলুন। বলুন “আস্থা, আমার স্ক্রিন দেখো”।"],"eye_empty":["Screen not shared yet.","স্ক্রিন এখনও শেয়ার করা হয়নি।"],"eye_whats":["What is on my screen?","আমার স্ক্রিনে কী আছে?"],"eye_error":["Explain what is on my screen","স্ক্রিনে কী আছে বুঝিয়ে বলো"],"eye_paste_label":["Or paste any text from your screen","অথবা স্ক্রিনের যেকোনো লেখা পেস্ট করুন"],"eye_paste_placeholder":["Paste text here, then say “Astha, explain this”.","লেখা এখানে পেস্ট করে বলুন “আস্থা, এটা বুঝিয়ে বলো”।"],"focus_text":["Keyboard guidance: name each control as I Tab to it","কিবোর্ড নির্দেশনা: Tab চাপলে প্রতিটি নিয়ন্ত্রণের নাম বলো"],"focus_label":["Keyboard guidance","কিবোর্ড নির্দেশনা"],"eye_note":["Astha can read and explain a shared screen. On an Android phone she can also read other apps and answer your messages; see Devices.","আস্থা শেয়ার করা স্ক্রিন পড়তে ও বুঝিয়ে বলতে পারে। অ্যান্ড্রয়েড ফোনে সে অন্য অ্যাপও পড়তে এবং আপনার বার্তার উত্তর দিতে পারে; ডিভাইস পৃষ্ঠা দেখুন।"],"prefs_title":["Your preferences","আপনার পছন্দ"],"account_open":["Create account or log in","অ্যাকাউন্ট তৈরি বা প্রবেশ"],"sign_out":["Sign out","সাইন আউট"],"data_help":["You can download everything Astha has saved about you, remove your face and voice templates, or delete your account.","আস্থা আপনার সম্পর্কে যা সংরক্ষণ করেছে তা ডাউনলোড করতে, মুখ ও কণ্ঠের নমুনা সরাতে অথবা অ্যাকাউন্ট মুছে ফেলতে পারেন।"],"data_export":["Download my data","আমার তথ্য ডাউনলোড"],"data_forget_bio":["Forget my face and voice","আমার মুখ ও কণ্ঠ ভুলে যাও"],"data_delete":["Delete my account","আমার অ্যাকাউন্ট মুছুন"],"data_delete_warn":["This permanently deletes your Astha account, every saved memory, room note, activity record and personal note, and the copies on this phone. It cannot be undone.","এতে আপনার আস্থা অ্যাকাউন্ট, সংরক্ষিত সব স্মৃতি, ঘরের নোট, কার্যক্রমের রেকর্ড ও ব্যক্তিগত নোট এবং এই ফোনে থাকা কপি স্থায়ীভাবে মুছে যাবে। এটি আর ফেরানো যাবে না।"],"data_delete_pin":["Enter your passcode to confirm","নিশ্চিত করতে আপনার পাসকোড দিন"],"data_delete_confirm":["Delete permanently","স্থায়ীভাবে মুছুন"],"rate_label":["Speaking speed","কথা বলার গতি"],"rate_slower":["Slower","ধীরে"],"rate_normal":["Normal","স্বাভাবিক"],"rate_faster":["Faster","দ্রুত"],"rate_very_fast":["Very fast","খুব দ্রুত"],"desc_label":["Description length","বর্ণনার দৈর্ঘ্য"],"desc_short":["Short","সংক্ষিপ্ত"],"desc_detailed":["Detailed","বিস্তারিত"],"ocr_label":["Reading language","পড়ার ভাষা"],"voice_label":["Astha's voice","আস্থার কণ্ঠ"],"stt_label":["I speak","আমি যে ভাষায় বলি"],"stt_auto":["Same as the voice language","কণ্ঠের ভাষার মতোই"],"stt_bn":["বাংলা (Banglish works too)","বাংলা (বাংলিশও চলবে)"],"hf_help":["Hands-free mode keeps the microphone open in this tab and waits for “Astha, …”. Browser speech recognition may use an online service.","হ্যান্ডস-ফ্রি মোডে এই ট্যাবে মাইক্রোফোন চালু থাকে এবং “আস্থা, …” শোনার অপেক্ষা করে। ব্রাউজারের কণ্ঠ শনাক্তকরণ অনলাইন পরিষেবা ব্যবহার করতে পারে।"],"owner_title":["Owner ID","মালিক শনাক্তকরণ"],"owner_help":["Face and voice matching are experimental convenience controls, not secure authentication. Templates are saved locally for this profile. Camera and microphone access require your browser permission.","মুখ ও কণ্ঠ মেলানো পরীক্ষামূলক সুবিধা মাত্র, নিরাপদ প্রমাণীকরণ নয়। নমুনাগুলো এই প্রোফাইলের জন্য এই ফোনেই সংরক্ষিত থাকে। ক্যামেরা ও মাইক্রোফোনের জন্য ব্রাউজারের অনুমতি লাগবে।"],"owner_face":["Remember my face","আমার মুখ মনে রাখো"],"owner_voice":["Remember my voice (experimental)","আমার কণ্ঠ মনে রাখো (পরীক্ষামূলক)"],"owner_me":["It's me","এটা আমি"],"diag_summary":["Advanced: AI model status","উন্নত: এআই মডেলের অবস্থা"],"memory_item_label":["Object","জিনিস"],"memory_item_placeholder":["Glasses / চশমা","চশমা"],"memory_location_label":["Last seen location","শেষ যেখানে দেখা গেছে"],"memory_location_placeholder":["Bedroom, on the bedside table","শোবার ঘর, বিছানার পাশের টেবিলে"],"memory_submit":["Remember this","এটা মনে রাখো"],"memory_search_label":["Search memories","স্মৃতি খুঁজুন"],"memory_search_placeholder":["Find an object or room","জিনিস বা ঘর খুঁজুন"],"distance_label":["Distance","দূরত্ব"],"api_url_label":["Backend URL","ব্যাকএন্ড ঠিকানা"],"guide_summary":["Voice Commands & Assistant Guide","ভয়েস কমান্ড ও সহায়িকা"],"guide_text":["Always-listening Siri mode: Say “Astha” or ask directly: “What is in front of me?”, “Read this”, “Check clothes”, “Where are my keys?”. Say “Stop talking” to silence instantly.","সবসময় শোনার মোড: “আস্থা” বলুন অথবা সরাসরি জিজ্ঞাসা করুন: “আমার সামনে কী আছে?”, “এটা পড়ো”, “কাপড় দেখো”, “আমার চাবি কোথায়?”। সঙ্গে সঙ্গে থামাতে বলুন “কথা থামাও”।"],"hf_on":["Hands-free: on","হ্যান্ডস-ফ্রি: চালু"],"hf_off":["Hands-free: off","হ্যান্ডস-ফ্রি: বন্ধ"],"privacy_on":["Privacy mode: on","গোপনীয়তা মোড: চালু"],"privacy_off":["Privacy mode: off","গোপনীয়তা মোড: বন্ধ"],"privacy_status_on":["New memories, room notes and activity are not saved while this is on. Existing account data is untouched.","এটি চালু থাকলে নতুন স্মৃতি, ঘরের নোট ও কার্যক্রম সংরক্ষণ হয় না। অ্যাকাউন্টের আগের তথ্য অপরিবর্তিত থাকে।"],"privacy_status_off":["Notes are saved on this browser; account sync needs permission and a connection. Browser notes are not encrypted.","নোট এই ব্রাউজারে সংরক্ষিত হয়; অ্যাকাউন্টের সঙ্গে সমন্বয়ের জন্য অনুমতি ও সংযোগ লাগে। ব্রাউজারের নোট এনক্রিপ্ট করা নয়।"],"owner_lock_on":["Owner lock: on","মালিক লক: চালু"],"owner_lock_off":["Owner lock: off","মালিক লক: বন্ধ"],"eye_start":["Let Astha see my screen","আস্থাকে আমার স্ক্রিন দেখতে দিন"],"eye_stop":["Stop watching my screen","স্ক্রিন দেখা বন্ধ করো"],"eye_idle":["Not watching","দেখছে না"],"reader_ready":["Ready","প্রস্তুত"],"reader_reading":["Reading","পড়ছে"],"reader_paused":["Paused","বিরতিতে"],"reader_stopped":["Stopped","থেমেছে"],"reader_finished":["Finished","শেষ হয়েছে"],"reader_part":["Part {n} of {total}","অংশ {n} / {total}"],"reader_failed":["Speech failed. Try Read all again.","পড়া যায়নি। আবার পড়তে বলুন।"],"reader_no_voice":["No local voice available","এই ফোনে কোনো কণ্ঠ নেই"],"read_stop":["Stop reading","পড়া থামাও"],"source_idle":["Camera off · No image selected","ক্যামেরা বন্ধ · কোনো ছবি বাছাই করা হয়নি"],"source_live":["Live camera · Recognition is experimental","লাইভ ক্যামেরা · শনাক্তকরণ পরীক্ষামূলক"],"source_demo":["Demo photo · Not your surroundings","নমুনা ছবি · আপনার চারপাশ নয়"],"source_photo":["Uploaded photo · Not a live view","আপলোড করা ছবি · লাইভ দৃশ্য নয়"],"eye_watching":["Watching","দেখছে"],"memory_clear_confirm":["Delete all saved object memories and room notes from this phone and your Astha account?","এই ফোন ও আপনার আস্থা অ্যাকাউন্ট থেকে সংরক্ষিত সব জিনিসের স্মৃতি ও ঘরের নোট মুছে ফেলবেন?"],"data_delete_guest":["This is a guest account, so no passcode is needed.","এটি অতিথি অ্যাকাউন্ট, তাই পাসকোড লাগবে না।"],"data_delete_local":["No account is connected. This removes the notes and templates saved on this phone.","কোনো অ্যাকাউন্ট সংযুক্ত নেই। এতে এই ফোনে সংরক্ষিত নোট ও নমুনা মুছে যাবে।"],"owner_face_yes":["Face enrolled","মুখ নিবন্ধিত"],"owner_face_no":["No face yet","মুখ এখনও নেই"],"owner_voice_yes":["voiceprint saved","কণ্ঠের নমুনা আছে"],"owner_voice_no":["no voiceprint","কণ্ঠের নমুনা নেই"],"owner_lock_short_on":["lock on","লক চালু"],"owner_lock_short_off":["lock off","লক বন্ধ"],"owner_verified":["verified {time}","যাচাই হয়েছে {time}"],"owner_unverified":["not verified","যাচাই হয়নি"],"theme_calm":["Mulberry & Apricot","মালবেরি ও অ্যাপ্রিকট"],"ui_display_voice":["Display & voice","পর্দা ও কণ্ঠ"],"ui_more_assistance":["More assistance","আরও সহায়তা"],"ui_try_demo":["Try a demo","নমুনা দেখুন"],"ui_preferences_privacy":["Preferences & privacy","পছন্দ ও গোপনীয়তা"],"ui_activity":["Activity & diagnostics","কার্যকলাপ ও পরীক্ষা"],"ui_hardware_testing":["Hardware testing","হার্ডওয়্যার পরীক্ষা"],"ui_welcome_title":["I’m here with you.","আমি আপনার পাশে আছি।"],"page_home":["Home","হোম"],"page_assessment":["Personal setup","নিজের পছন্দ"],"assessment_intro":["Tell Astha how you would like to be helped. These are preferences, not a medical test, and you can change them at any time.","আস্থা কীভাবে সাহায্য করবে তা জানান। এগুলো আপনার পছন্দ, চিকিৎসা পরীক্ষা নয়; যেকোনো সময় বদলাতে পারবেন।"],"assessment_read":["Read the instructions aloud","নির্দেশনা পড়ে শোনাও"],"assessment_vision":["How much do you rely on vision?","আপনি দৃষ্টির ওপর কতটা নির্ভর করেন?"],"vision_none":["I am blind and use speech or touch","আমি দৃষ্টিহীন; কণ্ঠ বা স্পর্শ ব্যবহার করি"],"vision_low":["I have low vision and prefer larger text","আমার স্বল্পদৃষ্টি; বড় লেখা চাই"],"vision_unspecified":["Prefer not to say","জানাতে চাই না"],"assessment_permissions":["Camera, microphone and online processing each ask for permission when first used. Stop and Privacy mode are always available.","ক্যামেরা, মাইক্রোফোন ও অনলাইন প্রসেসিং প্রথমবার ব্যবহারের সময় আলাদা অনুমতি চাইবে। থামানো ও গোপনীয়তা মোড সবসময় থাকবে।"],"assessment_save":["Save and return home","রেখে হোমে ফিরুন"],"devices_camera":["A clip-on camera or smart glasses connect over your own Wi-Fi with a private pairing code. Images go from the camera to this phone only.","ক্লিপ ক্যামেরা বা স্মার্ট চশমা আপনার নিজের ওয়াই-ফাইয়ে ব্যক্তিগত পেয়ারিং কোড দিয়ে যুক্ত হয়। ছবি ক্যামেরা থেকে শুধু এই ফোনে আসে।"],"braille_title":["Six-key Braille controller","ছয় চাবির ব্রেইল কন্ট্রোলার"],"braille_info":["The wireless controller is not built yet, so nothing can be paired. You can practise its key combinations now on a computer keyboard: F, D and S are dots 1, 2 and 3; J, K and L are dots 4, 5 and 6. Press the keys together and release.","তারবিহীন কন্ট্রোলারটি এখনও তৈরি হয়নি, তাই কিছু জোড়া যাবে না। কম্পিউটারের কীবোর্ডে এর চাবির সমন্বয় অনুশীলন করতে পারেন: F, D ও S হলো ডট ১, ২ ও ৩; J, K ও L হলো ডট ৪, ৫ ও ৬। চাবিগুলো একসঙ্গে চেপে ছেড়ে দিন।"],"screen_control_title":["Other apps and screen control","অন্য অ্যাপ ও স্ক্রিন নিয়ন্ত্রণ"],"screen_control_info":["This version can read a screen you explicitly share. Controlling other apps is not connected yet. Camera permission does not enable it.","আপনি স্পষ্টভাবে শেয়ার করলে এই সংস্করণ স্ক্রিন পড়তে পারে। অন্য অ্যাপ নিয়ন্ত্রণ এখনও যুক্ত হয়নি। ক্যামেরার অনুমতি দিয়ে এটি চালু হয় না।"],"context_road":["Awareness: updates about what is around me","সচেতনতা: আমার চারপাশের খবর"],"nav_label":["Astha pages","আস্থার পৃষ্ঠাসমূহ"],"page_tools":["Camera and tools","ক্যামেরা ও সরঞ্জাম"],"page_memory":["Memories","স্মৃতি"],"page_devices":["Devices","ডিভাইস"],"page_settings":["Settings","সেটিংস"],"state_idle":["What would you like to know?","আপনি কী জানতে চান?"],"state_listening":["Listening…","শুনছি…"],"state_processing":["Working on it…","কাজ করছি…"],"state_speaking":["Speaking…","বলছি…"],"device_camera_off":["No camera is on","কোনো ক্যামেরা চালু নেই"],"device_phone_on":["Phone camera is on","ফোনের ক্যামেরা চালু"],"device_wifi_on":["Your wearable is connected","আপনার পরিধেয় ক্যামেরা যুক্ত"],"device_image":["Looking at a picture you chose","আপনার বাছাই করা ছবি দেখছি"],"vision_light":["I can tell light or large shapes, but not detail","আলো বা বড় আকার বুঝতে পারি, খুঁটিনাটি নয়"],"assessment_language":["Which language should Astha use?","আস্থা কোন ভাষা ব্যবহার করবে?"],"assessment_feedback":["How should Astha answer you?","আস্থা কীভাবে উত্তর দেবে?"],"feedback_detailed":["Speak full descriptions","বিস্তারিত বর্ণনা বলবে"],"feedback_brief":["Speak short answers","সংক্ষেপে উত্তর বলবে"],"feedback_text":["Show text only, without speech","শুধু লেখা দেখাবে, কথা বলবে না"],"assessment_devices":["Which devices do you use with Astha?","আস্থার সঙ্গে কোন ডিভাইস ব্যবহার করেন?"],"assessment_devices_hint":["Choose every one that applies. Leave all empty if you are not sure.","যেগুলো প্রযোজ্য সব বেছে নিন। নিশ্চিত না হলে খালি রাখুন।"],"device_phone":["Smartphone camera","স্মার্টফোনের ক্যামেরা"],"device_glasses":["Smart glasses","স্মার্ট চশমা"],"device_clip":["Clip-on camera","ক্লিপ ক্যামেরা"],"device_braille":["Six-key Braille controller","ছয় চাবির ব্রেইল কন্ট্রোলার"],"assessment_modes":["Do you want Awareness on the home screen?","হোম পর্দায় সচেতনতা চান?"],"assessment_modes_hint":["Answering when you ask is always available.","জিজ্ঞাসা করলে উত্তর দেওয়া সবসময় চালু থাকে।"],"assessment_access":["Display and feedback","পর্দা ও সাড়া"],"pref_text_size":["Text size","লেখার আকার"],"size_standard":["Standard","সাধারণ"],"size_large":["Large","বড়"],"size_xlarge":["Extra large","আরও বড়"],"pref_theme":["Colours and contrast","রং ও বৈসাদৃশ্য"],"pref_speech_rate":["Speaking speed","কথা বলার গতি"],"speed_slower":["Slower","ধীরে"],"speed_normal":["Normal","স্বাভাবিক"],"speed_faster":["Faster","দ্রুত"],"speed_fastest":["Very fast","খুব দ্রুত"],"pref_haptics":["Vibrate for alerts and confirmations","সতর্কতা ও নিশ্চিতকরণে কম্পন"],"assessment_storage":["Your answers are saved to your Astha account so they follow you to another phone. You can export or delete them in Settings.","আপনার উত্তর আস্থা অ্যাকাউন্টে রাখা হয়, তাই অন্য ফোনেও পাবেন। সেটিংস থেকে রপ্তানি বা মুছে ফেলা যায়।"],"setup_saving":["Saving…","সংরক্ষণ হচ্ছে…"],"setup_saved_account":["Saved to your account.","অ্যাকাউন্টে রাখা হয়েছে।"],"setup_saved_device":["Saved on this device. It will be copied to your account when you allow online processing and Astha can reach the server.","এই ডিভাইসে রাখা হয়েছে। অনলাইন প্রসেসিংয়ের অনুমতি দিলে এবং সার্ভারে সংযোগ পেলে অ্যাকাউন্টে তোলা হবে।"],"devices_intro":["Astha works with the phone camera alone. A paired Wi-Fi camera and a Braille controller are optional.","শুধু ফোনের ক্যামেরা দিয়েই আস্থা চলে। ওয়াই-ফাই ক্যামেরা ও ব্রেইল কন্ট্রোলার ঐচ্ছিক।"],"devices_camera_title":["Clip-on or glasses camera","ক্লিপ বা চশমার ক্যামেরা"],"pi_title":["Pair a Wi-Fi camera","ওয়াই-ফাই ক্যামেরা জুড়ুন"],"pi_help":["Keep the camera and this phone on the same Wi-Fi. Enter the camera's secure address and its private pairing code. The code is kept only until you disconnect or close Astha.","ক্যামেরা ও এই ফোন একই ওয়াই-ফাইয়ে রাখুন। ক্যামেরার সুরক্ষিত ঠিকানা ও ব্যক্তিগত পেয়ারিং কোড দিন। সংযোগ বন্ধ বা আস্থা বন্ধ না করা পর্যন্তই কোডটি রাখা হয়।"],"pi_address":["Camera HTTPS address","ক্যামেরার HTTPS ঠিকানা"],"pi_address_example":["Example: https://astha-pi.local:8443","উদাহরণ: https://astha-pi.local:8443"],"pi_pairing":["Private pairing code","ব্যক্তিগত পেয়ারিং কোড"],"pi_saver":["Low-data mode: one image per second","কম ডেটা মোড: সেকেন্ডে একটি ছবি"],"pi_connect":["Connect camera","ক্যামেরা যুক্ত করুন"],"pi_stop":["Disconnect camera","ক্যামেরার সংযোগ বন্ধ করুন"],"pi_stopped":["Wi-Fi camera disconnected.","ওয়াই-ফাই ক্যামেরার সংযোগ বন্ধ।"],"pi_connecting":["Connecting to your Wi-Fi camera…","আপনার ওয়াই-ফাই ক্যামেরায় যুক্ত হচ্ছে…"],"pi_connected":["Wi-Fi camera connected.","ওয়াই-ফাই ক্যামেরা যুক্ত হয়েছে।"],"pi_reconnecting":["The Wi-Fi camera link dropped. Trying to reconnect.","ওয়াই-ফাই ক্যামেরার সংযোগ বিচ্ছিন্ন। আবার যুক্ত করার চেষ্টা করছি।"],"pi_reconnected":["Wi-Fi camera reconnected.","ওয়াই-ফাই ক্যামেরা আবার যুক্ত হয়েছে।"],"pi_paused":["Wi-Fi camera paused while Astha is in the background.","আস্থা পেছনে থাকায় ওয়াই-ফাই ক্যামেরা বিরত আছে।"],"pi_connection_lost":["The Wi-Fi camera could not be reached again. Check its power and Wi-Fi, then connect once more. You can use the phone camera.","ওয়াই-ফাই ক্যামেরা আর পাওয়া যাচ্ছে না। এর বিদ্যুৎ ও ওয়াই-ফাই দেখে আবার যুক্ত করুন। ফোনের ক্যামেরা ব্যবহার করতে পারেন।"],"pi_pairing_rejected":["Pairing was rejected. Check the camera address and private pairing code.","পেয়ারিং গ্রহণ হয়নি। ক্যামেরার ঠিকানা ও ব্যক্তিগত কোড পরীক্ষা করুন।"],"pi_stale_frame":["The camera image stopped updating. Reconnect when the camera is ready.","ক্যামেরার ছবি হালনাগাদ হচ্ছে না। ক্যামেরা প্রস্তুত হলে আবার যুক্ত করুন।"],"pi_frame_timeout":["The camera took too long to respond. Check the Wi-Fi and reconnect.","ক্যামেরা উত্তর দিতে বেশি সময় নিচ্ছে। ওয়াই-ফাই পরীক্ষা করে আবার যুক্ত করুন।"],"pi_invalid_origin":["Enter the camera’s HTTPS address without a page path.","কোনো পৃষ্ঠার পথ ছাড়া ক্যামেরার HTTPS ঠিকানা দিন।"],"pi_invalid_pairing_token":["Enter the private pairing code supplied for your camera.","আপনার ক্যামেরার জন্য দেওয়া ব্যক্তিগত পেয়ারিং কোড দিন।"],"pi_error":["Could not use this camera. Check that it is on the same Wi-Fi and that this phone trusts its secure connection. You can use the phone camera.","এই ক্যামেরা ব্যবহার করা যায়নি। একই ওয়াই-ফাইয়ে আছে কি না এবং ফোন এর সুরক্ষিত সংযোগ বিশ্বাস করে কি না দেখুন। ফোনের ক্যামেরা ব্যবহার করতে পারেন।"],"pi_models":["Wi-Fi camera connected, but the recognition models did not load. Try again.","ওয়াই-ফাই ক্যামেরা যুক্ত, কিন্তু শনাক্ত করার মডেল লোড হয়নি। আবার চেষ্টা করুন।"],"pi_preview":["Paired Wi-Fi camera view","যুক্ত ওয়াই-ফাই ক্যামেরার দৃশ্য"],"pi_source":["Paired Wi-Fi camera · Current view","যুক্ত ওয়াই-ফাই ক্যামেরা · বর্তমান দৃশ্য"],"braille_practice_off":["Start keyboard practice","কীবোর্ডে অনুশীলন শুরু করুন"],"braille_practice_on":["Stop keyboard practice","কীবোর্ডে অনুশীলন বন্ধ করুন"],"braille_status_off":["Braille controller: not connected.","ব্রেইল কন্ট্রোলার: যুক্ত নয়।"],"braille_status_practice":["Keyboard practice is on. No controller is connected.","কীবোর্ডে অনুশীলন চলছে। কোনো কন্ট্রোলার যুক্ত নয়।"],"braille_status_connecting":["Connecting to the Braille controller…","ব্রেইল কন্ট্রোলারে যুক্ত হচ্ছে…"],"braille_status_connected":["Braille controller connected.","ব্রেইল কন্ট্রোলার যুক্ত হয়েছে।"],"braille_status_reconnecting":["Braille controller link dropped. Trying to reconnect.","ব্রেইল কন্ট্রোলারের সংযোগ বিচ্ছিন্ন। আবার যুক্ত করার চেষ্টা করছি।"],"braille_status_error":["The Braille controller could not be connected.","ব্রেইল কন্ট্রোলার যুক্ত করা যায়নি।"],"braille_commands":["Controller commands","কন্ট্রোলারের নির্দেশ"],"braille_dots":["Dots","ডট"],"brl_cmd_stop":["Stop speaking and cancel","কথা থামাও ও বাতিল করো"],"brl_cmd_listen":["Listen for my question","আমার প্রশ্ন শোনো"],"brl_cmd_describe":["Describe surroundings","চারপাশ বর্ণনা করো"],"brl_cmd_read":["Read text","লেখা পড়ো"],"brl_cmd_find":["Find my things","আমার জিনিস খোঁজো"],"brl_cmd_repeat":["Repeat the last answer","শেষ উত্তর আবার বলো"],"brl_cmd_camera":["Turn the camera on or off","ক্যামেরা চালু বা বন্ধ করো"],"brl_cmd_home":["Go to the home page","হোম পৃষ্ঠায় যাও"],"brl_cmd_mode":["Change what Astha focuses on","আস্থার মনোযোগের বিষয় বদলাও"],"brl_cmd_text":["Turn Braille typing on or off","ব্রেইলে লেখা চালু বা বন্ধ করো"],"sensor_title":["Distance sensor","দূরত্ব মাপার সেন্সর"],"sensor_info":["An ultrasonic distance sensor is planned. None is connected, so Astha does not report measured distances. Distances it mentions are rough estimates from the image.","আল্ট্রাসনিক দূরত্ব সেন্সর যোগ করার পরিকল্পনা আছে। এখন কোনোটি যুক্ত নয়, তাই আস্থা মাপা দূরত্ব জানায় না। যে দূরত্ব বলে তা ছবি দেখে আনুমানিক।"],"setup_theme_navy":["Navy and cyan","গাঢ় নীল ও সায়ান"],"setup_theme_mono":["White on black","কালোর ওপর সাদা"],"setup_theme_yellow":["Yellow on black","কালোর ওপর হলুদ"],"screen_access_explain":["In the Android app you can let Astha read other apps aloud. When you ask, it reads the text on the screen and can go back or home. It does not watch in the background, never reads password fields, and cannot tap, type or send anything for you. Android shows its own warning before it is turned on, and you can turn it off here at any time.","অ্যান্ড্রয়েড অ্যাপে আস্থাকে অন্য অ্যাপের লেখা পড়ে শোনানোর অনুমতি দিতে পারেন। আপনি বললে এটি পর্দার লেখা পড়ে এবং পেছনে বা হোমে যেতে পারে। এটি পেছন থেকে নজর রাখে না, পাসওয়ার্ডের ঘর কখনো পড়ে না, এবং আপনার হয়ে চাপ দিতে, লিখতে বা কিছু পাঠাতে পারে না। চালু করার আগে অ্যান্ড্রয়েড নিজের সতর্কবার্তা দেখায়, আর এখান থেকে যেকোনো সময় বন্ধ করা যায়।"],"screen_access_on":["Let Astha read other apps","আস্থাকে অন্য অ্যাপ পড়তে দিন"],"screen_access_off":["Stop Astha reading other apps","আস্থার অন্য অ্যাপ পড়া বন্ধ করুন"],"screen_status_off":["Reading other apps is off.","অন্য অ্যাপ পড়া বন্ধ আছে।"],"screen_status_waiting":["Almost done: turn on Astha screen reading in Android Accessibility settings.","প্রায় শেষ: অ্যান্ড্রয়েডের অ্যাক্সেসিবিলিটি সেটিংসে আস্থার স্ক্রিন পড়া চালু করুন।"],"screen_status_on":["Reading other apps is on. Say “What is on my screen?”","অন্য অ্যাপ পড়া চালু আছে। বলুন “স্ক্রিনে কী আছে?”"],"assessment_guided":["Answer by voice","কণ্ঠে উত্তর দিন"],"mic_hint_tap":["Tap the microphone, wait for the chime, then ask. You can also type below.","মাইক্রোফোনে চাপ দিন, শব্দের পরে জিজ্ঞাসা করুন। নিচে লিখেও দিতে পারেন।"],"device_actions_info":["You can also say “open the WhatsApp app”, or “write a message saying I will be late”. Astha asks before opening anything, and you choose the person and press send yourself.","আপনি বলতে পারেন “হোয়াটসঅ্যাপ অ্যাপ খোলো”, অথবা “বার্তা লেখো, আমার দেরি হবে”। কিছু খোলার আগে আস্থা জিজ্ঞাসা করে, আর ব্যক্তি বাছাই ও পাঠানো আপনি নিজেই করেন।"],"voice_no_bangla":["This device has no Bangla voice, so Astha is speaking English.","এই ডিভাইসে বাংলা কণ্ঠ নেই, তাই আস্থা ইংরেজিতে বলছে।"],"consent_title":["Allow online processing?","অনলাইন প্রসেসিংয়ের অনুমতি দেবেন?"],"consent_allow":["Allow for this session","এই সেশনের জন্য অনুমতি দিন"],"consent_cancel":["Cancel, keep on this phone","বাতিল, ফোনেই রাখুন"],"tagline":["A little more independence, every day.","প্রতিদিন আরেকটু স্বাধীনতা।"],"mic_idle":["Talk to ASTHA","আস্থার সাথে কথা বলুন"],"essentials_title":["Your everyday essentials","প্রতিদিনের দরকারি কাজ"],"ess_explore":["Explore","চারপাশ"],"ess_explore_hint":["Understand your surroundings","চারপাশ বুঝে নিন"],"ess_read":["Read","পড়া"],"ess_read_hint":["Hear any text: a page, a board, a screen","যেকোনো লেখা শুনুন: পাতা, বোর্ড, পর্দা"],"ess_remember":["Remember","মনে রাখা"],"ess_remember_hint":["Find saved information","রাখা তথ্য খুঁজুন"],"ess_awareness":["Awareness","সচেতনতা"],"ess_awareness_hint":["Check nearby obstacles","কাছের বাধা সম্পর্কে জানুন"],"ess_awareness_on":["On. Tap to turn off","চালু আছে। বন্ধ করতে চাপুন"],"type_instead":["Type a request instead","লিখে অনুরোধ করুন"],"voice_turn_on":["Turn on the Bangla voice","বাংলা কণ্ঠ চালু করুন"],"status_awareness":["Awareness on","সচেতনতা চালু"],"status_reading":["Reading as the text changes","লেখা বদলালে পড়ছি"],"messages_title":["Messages","বার্তা"],"messages_explain":["Astha can tell you when a message arrives in an app such as Messenger or WhatsApp, read it to you, and send the reply you dictate or one she suggests. Nothing is sent until you say yes, and messages are never saved. Android asks you to allow notification access first.","মেসেঞ্জার বা হোয়াটসঅ্যাপের মতো অ্যাপে বার্তা এলে আস্থা আপনাকে জানাতে, পড়ে শোনাতে, এবং আপনার বলা বা তার সাজানো উত্তর পাঠাতে পারে। আপনি হ্যাঁ না বলা পর্যন্ত কিছুই পাঠানো হয় না, আর বার্তা কখনো সংরক্ষণ করা হয় না। অ্যান্ড্রয়েড আগে নোটিফিকেশন অ্যাক্সেসের অনুমতি চাইবে।"],"messages_on":["Let Astha read and answer my messages","আস্থাকে আমার বার্তা পড়তে ও উত্তর দিতে দিন"],"messages_off":["Stop Astha reading my messages","আস্থার বার্তা পড়া বন্ধ করুন"],"messages_status_off":["Message help is off.","বার্তা সহায়তা বন্ধ আছে।"],"messages_status_waiting":["Almost done: turn on Astha in Android notification access settings.","প্রায় শেষ: অ্যান্ড্রয়েডের নোটিফিকেশন অ্যাক্সেস সেটিংসে আস্থা চালু করুন।"],"messages_status_on":["Message help is on.","বার্তা সহায়তা চালু আছে।"],"messages_background":["Also read messages aloud when the phone is locked","ফোন লক থাকলেও বার্তা পড়ে শোনাও"],"messages_background_explain":["Astha keeps a notification showing while this is on, with a Turn off button. She listens only for a few seconds right after reading a message or asking a question, and waits while you are on a call.","এটি চালু থাকলে আস্থা একটি নোটিফিকেশন দেখিয়ে রাখে, তাতে বন্ধ করার বোতাম থাকে। সে শুধু বার্তা পড়া বা প্রশ্ন করার ঠিক পরে কয়েক সেকেন্ড শোনে, আর আপনি ফোনে কথা বললে অপেক্ষা করে।"],"messages_web":["Reading and answering messages from apps such as Messenger works in the ASTHA Android app.","মেসেঞ্জারের মতো অ্যাপের বার্তা পড়া ও উত্তর দেওয়া আস্থার অ্যান্ড্রয়েড অ্যাপে কাজ করে।"],"pi_distance_sensor":["distance sensor","দূরত্ব সেন্সর"]};
+const I18N_EXTRA = {"debug_title":["Vision diagnostics","দৃষ্টি শনাক্তকরণের পরীক্ষা"],"debug_help":["The preview and boxes above use actual model results. Scores are model scores, not verified accuracy. Timing is collected only while this panel is open and stays on this device.","উপরের ছবি ও বক্সে মডেলের আসল ফল দেখানো হয়। স্কোর হলো মডেলের স্কোর, যাচাইকৃত নির্ভুলতা নয়। শুধু এই অংশ খোলা থাকলে সময় মাপা হয় এবং তথ্য এই ডিভাইসেই থাকে।"],"debug_perception":["Object detection","বস্তু শনাক্তকরণ"],"debug_reasoning":["Online reasoning","অনলাইন বিশ্লেষণ"],"debug_speech":["Speech request to first audio event","কথা বলার অনুরোধ থেকে প্রথম অডিও সংকেত"],"debug_limits":["These are separate stage timings, not end-to-end response time. Native first-audio timing, wake-word and transcription timing are not measured here. No result is shown until that stage runs.","এগুলো আলাদা ধাপের সময়, সম্পূর্ণ উত্তরের সময় নয়। অ্যাপের স্থানীয় কণ্ঠের প্রথম অডিও, জাগানোর শব্দ ও কথার প্রতিলিপির সময় এখানে মাপা হয় না। ধাপটি চালানোর আগে কোনো ফল দেখানো হয় না।"],"debug_unmeasured":["Not measured","এখনও মাপা হয়নি"],"debug_running":["Measuring…","সময় মাপা হচ্ছে…"],"debug_cancelled":["Cancelled","বাতিল করা হয়েছে"],"debug_failed":["Failed or start event not reported","ব্যর্থ হয়েছে বা শুরুর সংকেত পাওয়া যায়নি"],"debug_ms":["{ms} ms","{ms} মিলিসেকেন্ড"],"skip_link":["Skip to companion","সরাসরি সহায়কে যান"],"auth_sub":["Your voice-first visual companion. Create an account once; Astha remembers your things and rooms after that.","আপনার কণ্ঠ-নির্ভর দৃষ্টি-সহায়ক। একবার অ্যাকাউন্ট তৈরি করুন; এরপর আস্থা আপনার জিনিসপত্র ও ঘরের কথা মনে রাখবে।"],"auth_action":["Account action","অ্যাকাউন্টের কাজ"],"auth_create":["Create account","অ্যাকাউন্ট তৈরি"],"auth_login":["Log in","প্রবেশ করুন"],"auth_name":["Your name","আপনার নাম"],"auth_phone":["Phone number","ফোন নম্বর"],"auth_passcode":["Passcode (4 to 8 digits)","পাসকোড (৪ থেকে ৮টি সংখ্যা)"],"auth_note":["Your name and phone are used only to sign you back in. Everything Astha remembers stays tied to your account.","আপনার নাম ও ফোন নম্বর শুধু আবার প্রবেশের জন্য ব্যবহৃত হয়। আস্থা যা মনে রাখে তা আপনার অ্যাকাউন্টের সঙ্গেই যুক্ত থাকে।"],"auth_close":["Continue without an account","অ্যাকাউন্ট ছাড়াই চালিয়ে যান"],"theme_title":["Contrast theme Selector","রঙের থিম বাছাই"],"theme_label":["Contrast theme","রঙের থিম"],"theme_navy":["🌊 Navy and cyan","🌊 গাঢ় নীল ও সায়ান"],"theme_mono":["⚪ Monochrome (white on black)","⚪ সাদা-কালো (কালোর ওপর সাদা)"],"theme_yellow":["🟡 Yellow on black (photophobia)","🟡 কালোর ওপর হলুদ (আলোয় অস্বস্তি হলে)"],"font_label":["Font Size","লেখার আকার"],"font_normal":["Text: Standard","লেখা: সাধারণ"],"font_large":["Text: Large","লেখা: বড়"],"font_xlarge":["Text: Extra large","লেখা: খুব বড়"],"voice_delivery":["Voice Delivery","কণ্ঠের ভাষা"],"voice_delivery_title":["Voice Delivery Language","আস্থা যে ভাষায় কথা বলবে"],"voice_en_btn":["Voice: English","কণ্ঠ: English"],"voice_en_title":["Voice output spoken in English","আস্থা ইংরেজিতে কথা বলবে"],"voice_bn_btn":["Voice: বাংলা","কণ্ঠ: বাংলা"],"voice_bn_title":["Voice output spoken in Bangla (বাংলা)","আস্থা বাংলায় কথা বলবে"],"safety_brand":["Astha AI Companion","আস্থা এআই সহায়ক"],"safety_note":["· Experimental visual assistance. Use your usual mobility aid; Astha cannot confirm a safe path. আস্থা নিরাপদ পথ নিশ্চিত করতে পারে না।","· পরীক্ষামূলক দৃষ্টি-সহায়তা। আপনার চলাচলের সহায়ক ব্যবহার করুন; আস্থা নিরাপদ পথ নিশ্চিত করতে পারে না।"],"secure_title":["This page is open on an insecure address.","এই পাতাটি অনিরাপদ ঠিকানায় খোলা হয়েছে।"],"secure_body":["The browser will ask for the microphone and camera every time and may block them. Open the app on localhost or over HTTPS. On Android, use Chrome's port forwarding (chrome://inspect on the computer) so the phone sees localhost, or a Cloudflare tunnel.","ব্রাউজার প্রতিবার মাইক্রোফোন ও ক্যামেরার অনুমতি চাইবে এবং আটকে দিতে পারে। অ্যাপটি localhost অথবা HTTPS ঠিকানায় খুলুন। অ্যান্ড্রয়েডে Chrome-এর পোর্ট ফরওয়ার্ডিং (কম্পিউটারে chrome://inspect) অথবা Cloudflare টানেল ব্যবহার করুন।"],"hf_title":["Keep listening for “Astha, …”","“আস্থা, …” শোনার জন্য মাইক্রোফোন চালু রাখুন"],"engine_mode":["AI Engine Mode","এআই প্রসেসিং মোড"],"engine_mode_title":["Choose online processing or on-device models","অনলাইন প্রসেসিং অথবা ফোনের নিজস্ব মডেল বেছে নিন"],"mode_online":["✨ Online AI","✨ অনলাইন এআই"],"mode_offline":["📱 Offline","📱 অফলাইন"],"speaking_mode":["Speaking mode","কথা বলার ধরন"],"speaking_mode_title":["Auto: speaks up in busy places. Quiet: speaks only when asked.","অটো: ব্যস্ত জায়গায় নিজে থেকে জানায়। শান্ত: শুধু জিজ্ঞাসা করলে বলে।"],"mode_auto":["Auto · busy area","অটো · ব্যস্ত জায়গা"],"mode_quiet":["Quiet · ask me","শান্ত · জিজ্ঞাসা করলে"],"command_label":["Ask Astha in Bangla or English","বাংলা বা ইংরেজিতে আস্থাকে জিজ্ঞাসা করুন"],"command_placeholder":["Type a request, e.g. Where are my glasses?","অনুরোধ লিখুন, যেমন: আমার চশমা কোথায়?"],"command_submit":["Ask Astha","আস্থাকে জিজ্ঞাসা করুন"],"btn_repeat":["Repeat","আবার বলো"],"btn_stop_speaking":["Stop speaking","কথা থামাও"],"btn_voice_commands":["Voice commands","ভয়েস কমান্ড"],"agent_title_label":["Autonomous Agent","স্বয়ংক্রিয় সহায়ক"],"agent_goal":["Goal: ","লক্ষ্য: "],"still_alt":["Visual Source","দৃশ্যের উৎস"],"video_source":["Video source","ভিডিওর উৎস"],"act_agent":["Autonomous task","স্বয়ংক্রিয় কাজ"],"act_agent_desc":["Plan, RAG memory & verify loop","পরিকল্পনা, স্মৃতি খোঁজা ও যাচাই"],"calib_heading":["🏠 Video Home & Room Calibration","🏠 ভিডিও দিয়ে ঘর চেনানো"],"calib_instruction":["Choose a room name, then walk through with your camera. Astha will continuously identify furniture surfaces (dressing table, reading table, bed, chairs) and remember where items are placed.","ঘরের নাম বেছে নিন, তারপর ক্যামেরা নিয়ে ঘরটি ঘুরে দেখান। আস্থা আসবাবপত্র (ড্রেসিং টেবিল, পড়ার টেবিল, বিছানা, চেয়ার) শনাক্ত করবে এবং জিনিসপত্র কোথায় রাখা আছে তা মনে রাখবে।"],"room_name":["Room name","ঘরের নাম"],"room_placeholder":["Reading Room, Bedroom, etc.","পড়ার ঘর, শোবার ঘর ইত্যাদি"],"calib_view_status":["Point camera at room furniture and tap \"Start Video Walkthrough\"","ঘরের আসবাবের দিকে ক্যামেরা ধরে “ভিডিও শুরু করুন” চাপুন"],"calib_landmarks":["Detected Furniture & Landmarks in this Room:","এই ঘরে শনাক্ত হওয়া আসবাব ও চিহ্ন:"],"calib_none":["None detected yet. Walk through room with camera.","এখনও কিছু শনাক্ত হয়নি। ক্যামেরা নিয়ে ঘরটি ঘুরে দেখান।"],"calib_save":["✓ Save Calibrated Room","✓ ঘরটি সংরক্ষণ করুন"],"cancel":["Cancel","বাতিল"],"calib_ready":["Ready to scan","স্ক্যানের জন্য প্রস্তুত"],"calib_start":["🎥 Start Video Walkthrough","🎥 ভিডিও শুরু করুন"],"calib_resume":["🎥 Resume Walkthrough","🎥 আবার শুরু করুন"],"calib_stop":["⏹️ Stop Walkthrough","⏹️ ভিডিও থামান"],"calib_paused":["Walkthrough paused","ভিডিও বিরতিতে"],"calib_scanning":["Walking & scanning room…","ঘর ঘুরে দেখা হচ্ছে…"],"calib_recalibrating":["Recalibrating {room}","{room} আবার চেনানো হচ্ছে"],"ocr_append":["Add this text to reader","এই লেখা পাঠকে যোগ করুন"],"narrate_label":["Auto narrate","নিজে থেকে বর্ণনা"],"reader_title":["Reading transcript","পড়া লেখার প্রতিলিপি"],"reader_help":["Everything Astha reads from the camera is collected here. Say “Astha, read this” or tap “Read to me” to read a book or letter. Pasting text is optional.","ক্যামেরা থেকে আস্থা যা পড়ে তা এখানে জমা হয়। বই বা চিঠি পড়তে বলুন “আস্থা, এটা পড়ো” অথবা “পড়ে শোনাও” চাপুন। লেখা পেস্ট করা ঐচ্ছিক।"],"reader_label":["Transcript","প্রতিলিপি"],"reader_placeholder":["Pages Astha has read will appear here.","আস্থার পড়া পাতাগুলো এখানে দেখা যাবে।"],"reader_again":["Read the transcript again","প্রতিলিপি আবার পড়ো"],"reader_pause":["Pause","বিরতি"],"reader_resume":["Resume","আবার শুরু"],"reader_stop":["Stop","থামাও"],"reader_clear":["Clear text","লেখা মুছুন"],"eye_title":["♥ Astha on your screen","♥ আপনার স্ক্রিনে আস্থা"],"eye_help":["Share your screen and Astha tells you what is on it: a message, a slide, a document, a web page, a design or code. Ask her to read it, explain it, or help you with it. Say “Astha, watch my screen”.","আপনার স্ক্রিন শেয়ার করলে আস্থা বলে দেয় তাতে কী আছে: বার্তা, স্লাইড, নথি, ওয়েব পৃষ্ঠা, নকশা বা কোড। পড়ে শোনাতে, বুঝিয়ে বলতে বা সাহায্য করতে বলুন। বলুন “আস্থা, আমার স্ক্রিন দেখো”।"],"eye_empty":["Screen not shared yet.","স্ক্রিন এখনও শেয়ার করা হয়নি।"],"eye_whats":["What is on my screen?","আমার স্ক্রিনে কী আছে?"],"eye_error":["Explain what is on my screen","স্ক্রিনে কী আছে বুঝিয়ে বলো"],"eye_paste_label":["Or paste any text from your screen","অথবা স্ক্রিনের যেকোনো লেখা পেস্ট করুন"],"eye_paste_placeholder":["Paste text here, then say “Astha, explain this”.","লেখা এখানে পেস্ট করে বলুন “আস্থা, এটা বুঝিয়ে বলো”।"],"focus_text":["Keyboard guidance: name each control as I Tab to it","কিবোর্ড নির্দেশনা: Tab চাপলে প্রতিটি নিয়ন্ত্রণের নাম বলো"],"focus_label":["Keyboard guidance","কিবোর্ড নির্দেশনা"],"eye_note":["Astha can read and explain a shared screen. On an Android phone she can also read other apps and answer your messages; see Devices.","আস্থা শেয়ার করা স্ক্রিন পড়তে ও বুঝিয়ে বলতে পারে। অ্যান্ড্রয়েড ফোনে সে অন্য অ্যাপও পড়তে এবং আপনার বার্তার উত্তর দিতে পারে; ডিভাইস পৃষ্ঠা দেখুন।"],"prefs_title":["Your preferences","আপনার পছন্দ"],"account_open":["Create account or log in","অ্যাকাউন্ট তৈরি বা প্রবেশ"],"sign_out":["Sign out","সাইন আউট"],"data_help":["You can download everything Astha has saved about you, remove your face and voice templates, or delete your account.","আস্থা আপনার সম্পর্কে যা সংরক্ষণ করেছে তা ডাউনলোড করতে, মুখ ও কণ্ঠের নমুনা সরাতে অথবা অ্যাকাউন্ট মুছে ফেলতে পারেন।"],"data_export":["Download my data","আমার তথ্য ডাউনলোড"],"data_forget_bio":["Forget my face and voice","আমার মুখ ও কণ্ঠ ভুলে যাও"],"data_delete":["Delete my account","আমার অ্যাকাউন্ট মুছুন"],"data_delete_warn":["This permanently deletes your Astha account, every saved memory, room note, activity record and personal note, and the copies on this phone. It cannot be undone.","এতে আপনার আস্থা অ্যাকাউন্ট, সংরক্ষিত সব স্মৃতি, ঘরের নোট, কার্যক্রমের রেকর্ড ও ব্যক্তিগত নোট এবং এই ফোনে থাকা কপি স্থায়ীভাবে মুছে যাবে। এটি আর ফেরানো যাবে না।"],"data_delete_pin":["Enter your passcode to confirm","নিশ্চিত করতে আপনার পাসকোড দিন"],"data_delete_confirm":["Delete permanently","স্থায়ীভাবে মুছুন"],"rate_label":["Speaking speed","কথা বলার গতি"],"rate_slower":["Slower","ধীরে"],"rate_normal":["Normal","স্বাভাবিক"],"rate_faster":["Faster","দ্রুত"],"rate_very_fast":["Very fast","খুব দ্রুত"],"desc_label":["Description length","বর্ণনার দৈর্ঘ্য"],"desc_short":["Short","সংক্ষিপ্ত"],"desc_detailed":["Detailed","বিস্তারিত"],"ocr_label":["Reading language","পড়ার ভাষা"],"voice_label":["Astha's voice","আস্থার কণ্ঠ"],"stt_label":["I speak","আমি যে ভাষায় বলি"],"stt_auto":["Same as the voice language","কণ্ঠের ভাষার মতোই"],"stt_bn":["বাংলা (Banglish works too)","বাংলা (বাংলিশও চলবে)"],"hf_help":["Hands-free mode keeps the microphone open in this tab and waits for “Astha, …”. Browser speech recognition may use an online service.","হ্যান্ডস-ফ্রি মোডে এই ট্যাবে মাইক্রোফোন চালু থাকে এবং “আস্থা, …” শোনার অপেক্ষা করে। ব্রাউজারের কণ্ঠ শনাক্তকরণ অনলাইন পরিষেবা ব্যবহার করতে পারে।"],"owner_title":["Owner ID","মালিক শনাক্তকরণ"],"owner_help":["Face and voice matching are experimental convenience controls, not secure authentication. Templates are saved locally for this profile. Camera and microphone access require your browser permission.","মুখ ও কণ্ঠ মেলানো পরীক্ষামূলক সুবিধা মাত্র, নিরাপদ প্রমাণীকরণ নয়। নমুনাগুলো এই প্রোফাইলের জন্য এই ফোনেই সংরক্ষিত থাকে। ক্যামেরা ও মাইক্রোফোনের জন্য ব্রাউজারের অনুমতি লাগবে।"],"owner_face":["Remember my face","আমার মুখ মনে রাখো"],"owner_voice":["Remember my voice (experimental)","আমার কণ্ঠ মনে রাখো (পরীক্ষামূলক)"],"owner_me":["It's me","এটা আমি"],"diag_summary":["Advanced: AI model status","উন্নত: এআই মডেলের অবস্থা"],"memory_item_label":["Object","জিনিস"],"memory_item_placeholder":["Glasses / চশমা","চশমা"],"memory_location_label":["Last seen location","শেষ যেখানে দেখা গেছে"],"memory_location_placeholder":["Bedroom, on the bedside table","শোবার ঘর, বিছানার পাশের টেবিলে"],"memory_submit":["Remember this","এটা মনে রাখো"],"memory_search_label":["Search memories","স্মৃতি খুঁজুন"],"memory_search_placeholder":["Find an object or room","জিনিস বা ঘর খুঁজুন"],"distance_label":["Distance","দূরত্ব"],"api_url_label":["Backend URL","ব্যাকএন্ড ঠিকানা"],"guide_summary":["Voice Commands & Assistant Guide","ভয়েস কমান্ড ও সহায়িকা"],"guide_text":["Always-listening Siri mode: Say “Astha” or ask directly: “What is in front of me?”, “Read this”, “Check clothes”, “Where are my keys?”. Say “Stop talking” to silence instantly.","সবসময় শোনার মোড: “আস্থা” বলুন অথবা সরাসরি জিজ্ঞাসা করুন: “আমার সামনে কী আছে?”, “এটা পড়ো”, “কাপড় দেখো”, “আমার চাবি কোথায়?”। সঙ্গে সঙ্গে থামাতে বলুন “কথা থামাও”।"],"hf_on":["Hands-free: on","হ্যান্ডস-ফ্রি: চালু"],"hf_off":["Hands-free: off","হ্যান্ডস-ফ্রি: বন্ধ"],"privacy_on":["Privacy mode: on","গোপনীয়তা মোড: চালু"],"privacy_off":["Privacy mode: off","গোপনীয়তা মোড: বন্ধ"],"privacy_status_on":["New memories, room notes and activity are not saved while this is on. Existing account data is untouched.","এটি চালু থাকলে নতুন স্মৃতি, ঘরের নোট ও কার্যক্রম সংরক্ষণ হয় না। অ্যাকাউন্টের আগের তথ্য অপরিবর্তিত থাকে।"],"privacy_status_off":["Notes are saved on this browser; account sync needs permission and a connection. Browser notes are not encrypted.","নোট এই ব্রাউজারে সংরক্ষিত হয়; অ্যাকাউন্টের সঙ্গে সমন্বয়ের জন্য অনুমতি ও সংযোগ লাগে। ব্রাউজারের নোট এনক্রিপ্ট করা নয়।"],"owner_lock_on":["Owner lock: on","মালিক লক: চালু"],"owner_lock_off":["Owner lock: off","মালিক লক: বন্ধ"],"eye_start":["Let Astha see my screen","আস্থাকে আমার স্ক্রিন দেখতে দিন"],"eye_stop":["Stop watching my screen","স্ক্রিন দেখা বন্ধ করো"],"eye_idle":["Not watching","দেখছে না"],"reader_ready":["Ready","প্রস্তুত"],"reader_reading":["Reading","পড়ছে"],"reader_paused":["Paused","বিরতিতে"],"reader_stopped":["Stopped","থেমেছে"],"reader_finished":["Finished","শেষ হয়েছে"],"reader_part":["Part {n} of {total}","অংশ {n} / {total}"],"reader_failed":["Speech failed. Try Read all again.","পড়া যায়নি। আবার পড়তে বলুন।"],"reader_no_voice":["No local voice available","এই ফোনে কোনো কণ্ঠ নেই"],"read_stop":["Stop reading","পড়া থামাও"],"source_idle":["Camera off · No image selected","ক্যামেরা বন্ধ · কোনো ছবি বাছাই করা হয়নি"],"source_live":["Live camera · Recognition is experimental","লাইভ ক্যামেরা · শনাক্তকরণ পরীক্ষামূলক"],"source_demo":["Demo photo · Not your surroundings","নমুনা ছবি · আপনার চারপাশ নয়"],"source_photo":["Uploaded photo · Not a live view","আপলোড করা ছবি · লাইভ দৃশ্য নয়"],"eye_watching":["Watching","দেখছে"],"memory_clear_confirm":["Delete all saved object memories and room notes from this phone and your Astha account?","এই ফোন ও আপনার আস্থা অ্যাকাউন্ট থেকে সংরক্ষিত সব জিনিসের স্মৃতি ও ঘরের নোট মুছে ফেলবেন?"],"data_delete_guest":["This is a guest account, so no passcode is needed.","এটি অতিথি অ্যাকাউন্ট, তাই পাসকোড লাগবে না।"],"data_delete_local":["No account is connected. This removes the notes and templates saved on this phone.","কোনো অ্যাকাউন্ট সংযুক্ত নেই। এতে এই ফোনে সংরক্ষিত নোট ও নমুনা মুছে যাবে।"],"owner_face_yes":["Face enrolled","মুখ নিবন্ধিত"],"owner_face_no":["No face yet","মুখ এখনও নেই"],"owner_voice_yes":["voiceprint saved","কণ্ঠের নমুনা আছে"],"owner_voice_no":["no voiceprint","কণ্ঠের নমুনা নেই"],"owner_lock_short_on":["lock on","লক চালু"],"owner_lock_short_off":["lock off","লক বন্ধ"],"owner_verified":["verified {time}","যাচাই হয়েছে {time}"],"owner_unverified":["not verified","যাচাই হয়নি"],"theme_calm":["Mulberry & Apricot","মালবেরি ও অ্যাপ্রিকট"],"ui_display_voice":["Display & voice","পর্দা ও কণ্ঠ"],"ui_more_assistance":["More assistance","আরও সহায়তা"],"ui_try_demo":["Try a demo","নমুনা দেখুন"],"ui_preferences_privacy":["Preferences & privacy","পছন্দ ও গোপনীয়তা"],"ui_activity":["Activity & diagnostics","কার্যকলাপ ও পরীক্ষা"],"ui_hardware_testing":["Hardware testing","হার্ডওয়্যার পরীক্ষা"],"ui_welcome_title":["I’m here with you.","আমি আপনার পাশে আছি।"],"page_home":["Home","হোম"],"page_assessment":["Personal setup","নিজের পছন্দ"],"assessment_intro":["Tell Astha how you would like to be helped. These are preferences, not a medical test, and you can change them at any time.","আস্থা কীভাবে সাহায্য করবে তা জানান। এগুলো আপনার পছন্দ, চিকিৎসা পরীক্ষা নয়; যেকোনো সময় বদলাতে পারবেন।"],"assessment_read":["Read the instructions aloud","নির্দেশনা পড়ে শোনাও"],"assessment_vision":["How much do you rely on vision?","আপনি দৃষ্টির ওপর কতটা নির্ভর করেন?"],"vision_none":["I am blind and use speech or touch","আমি দৃষ্টিহীন; কণ্ঠ বা স্পর্শ ব্যবহার করি"],"vision_low":["I have low vision and prefer larger text","আমার স্বল্পদৃষ্টি; বড় লেখা চাই"],"vision_unspecified":["Prefer not to say","জানাতে চাই না"],"assessment_permissions":["Camera, microphone and online processing each ask for permission when first used. Stop and Privacy mode are always available.","ক্যামেরা, মাইক্রোফোন ও অনলাইন প্রসেসিং প্রথমবার ব্যবহারের সময় আলাদা অনুমতি চাইবে। থামানো ও গোপনীয়তা মোড সবসময় থাকবে।"],"assessment_save":["Save and return home","রেখে হোমে ফিরুন"],"devices_camera":["A clip-on camera or smart glasses connect over your own Wi-Fi with a private pairing code. Images go from the camera to this phone only.","ক্লিপ ক্যামেরা বা স্মার্ট চশমা আপনার নিজের ওয়াই-ফাইয়ে ব্যক্তিগত পেয়ারিং কোড দিয়ে যুক্ত হয়। ছবি ক্যামেরা থেকে শুধু এই ফোনে আসে।"],"braille_title":["Six-key Braille controller","ছয় চাবির ব্রেইল কন্ট্রোলার"],"braille_info":["The wireless controller is not built yet, so nothing can be paired. You can practise its key combinations now on a computer keyboard: F, D and S are dots 1, 2 and 3; J, K and L are dots 4, 5 and 6. Press the keys together and release.","তারবিহীন কন্ট্রোলারটি এখনও তৈরি হয়নি, তাই কিছু জোড়া যাবে না। কম্পিউটারের কীবোর্ডে এর চাবির সমন্বয় অনুশীলন করতে পারেন: F, D ও S হলো ডট ১, ২ ও ৩; J, K ও L হলো ডট ৪, ৫ ও ৬। চাবিগুলো একসঙ্গে চেপে ছেড়ে দিন।"],"screen_control_title":["Other apps and screen control","অন্য অ্যাপ ও স্ক্রিন নিয়ন্ত্রণ"],"screen_control_info":["This version can read a screen you explicitly share. Controlling other apps is not connected yet. Camera permission does not enable it.","আপনি স্পষ্টভাবে শেয়ার করলে এই সংস্করণ স্ক্রিন পড়তে পারে। অন্য অ্যাপ নিয়ন্ত্রণ এখনও যুক্ত হয়নি। ক্যামেরার অনুমতি দিয়ে এটি চালু হয় না।"],"context_road":["Awareness: updates about what is around me","সচেতনতা: আমার চারপাশের খবর"],"nav_label":["Astha pages","আস্থার পৃষ্ঠাসমূহ"],"page_tools":["Camera and tools","ক্যামেরা ও সরঞ্জাম"],"page_memory":["Memories","স্মৃতি"],"page_devices":["Devices","ডিভাইস"],"page_settings":["Settings","সেটিংস"],"state_idle":["What would you like to know?","আপনি কী জানতে চান?"],"state_listening":["Listening…","শুনছি…"],"state_processing":["Working on it…","কাজ করছি…"],"state_speaking":["Speaking…","বলছি…"],"device_camera_off":["No camera is on","কোনো ক্যামেরা চালু নেই"],"device_phone_on":["Phone camera is on","ফোনের ক্যামেরা চালু"],"device_wifi_on":["Your wearable is connected","আপনার পরিধেয় ক্যামেরা যুক্ত"],"device_image":["Looking at a picture you chose","আপনার বাছাই করা ছবি দেখছি"],"vision_light":["I can tell light or large shapes, but not detail","আলো বা বড় আকার বুঝতে পারি, খুঁটিনাটি নয়"],"assessment_language":["Which language should Astha use?","আস্থা কোন ভাষা ব্যবহার করবে?"],"assessment_feedback":["How should Astha answer you?","আস্থা কীভাবে উত্তর দেবে?"],"feedback_detailed":["Speak full descriptions","বিস্তারিত বর্ণনা বলবে"],"feedback_brief":["Speak short answers","সংক্ষেপে উত্তর বলবে"],"feedback_text":["Show text only, without speech","শুধু লেখা দেখাবে, কথা বলবে না"],"assessment_devices":["Which devices do you use with Astha?","আস্থার সঙ্গে কোন ডিভাইস ব্যবহার করেন?"],"assessment_devices_hint":["Choose every one that applies. Leave all empty if you are not sure.","যেগুলো প্রযোজ্য সব বেছে নিন। নিশ্চিত না হলে খালি রাখুন।"],"device_phone":["Smartphone camera","স্মার্টফোনের ক্যামেরা"],"device_glasses":["Smart glasses","স্মার্ট চশমা"],"device_clip":["Clip-on camera","ক্লিপ ক্যামেরা"],"device_braille":["Six-key Braille controller","ছয় চাবির ব্রেইল কন্ট্রোলার"],"assessment_modes":["Do you want Awareness on the home screen?","হোম পর্দায় সচেতনতা চান?"],"assessment_modes_hint":["Answering when you ask is always available.","জিজ্ঞাসা করলে উত্তর দেওয়া সবসময় চালু থাকে।"],"assessment_access":["Display and feedback","পর্দা ও সাড়া"],"pref_text_size":["Text size","লেখার আকার"],"size_standard":["Standard","সাধারণ"],"size_large":["Large","বড়"],"size_xlarge":["Extra large","আরও বড়"],"pref_theme":["Colours and contrast","রং ও বৈসাদৃশ্য"],"pref_speech_rate":["Speaking speed","কথা বলার গতি"],"speed_slower":["Slower","ধীরে"],"speed_normal":["Normal","স্বাভাবিক"],"speed_faster":["Faster","দ্রুত"],"speed_fastest":["Very fast","খুব দ্রুত"],"pref_haptics":["Vibrate for alerts and confirmations","সতর্কতা ও নিশ্চিতকরণে কম্পন"],"assessment_storage":["Your answers are saved to your Astha account so they follow you to another phone. You can export or delete them in Settings.","আপনার উত্তর আস্থা অ্যাকাউন্টে রাখা হয়, তাই অন্য ফোনেও পাবেন। সেটিংস থেকে রপ্তানি বা মুছে ফেলা যায়।"],"setup_saving":["Saving…","সংরক্ষণ হচ্ছে…"],"setup_saved_account":["Saved to your account.","অ্যাকাউন্টে রাখা হয়েছে।"],"setup_saved_device":["Saved on this device. It will be copied to your account when you allow online processing and Astha can reach the server.","এই ডিভাইসে রাখা হয়েছে। অনলাইন প্রসেসিংয়ের অনুমতি দিলে এবং সার্ভারে সংযোগ পেলে অ্যাকাউন্টে তোলা হবে।"],"devices_intro":["Astha works with the phone camera alone. A paired Wi-Fi camera and a Braille controller are optional.","শুধু ফোনের ক্যামেরা দিয়েই আস্থা চলে। ওয়াই-ফাই ক্যামেরা ও ব্রেইল কন্ট্রোলার ঐচ্ছিক।"],"devices_camera_title":["Clip-on or glasses camera","ক্লিপ বা চশমার ক্যামেরা"],"pi_title":["Pair a Wi-Fi camera","ওয়াই-ফাই ক্যামেরা জুড়ুন"],"pi_help":["Keep the camera and this phone on the same Wi-Fi. Enter the camera's secure address and its private pairing code. The code is kept only until you disconnect or close Astha.","ক্যামেরা ও এই ফোন একই ওয়াই-ফাইয়ে রাখুন। ক্যামেরার সুরক্ষিত ঠিকানা ও ব্যক্তিগত পেয়ারিং কোড দিন। সংযোগ বন্ধ বা আস্থা বন্ধ না করা পর্যন্তই কোডটি রাখা হয়।"],"pi_address":["Camera HTTPS address","ক্যামেরার HTTPS ঠিকানা"],"pi_address_example":["Example: https://astha-pi.local:8443","উদাহরণ: https://astha-pi.local:8443"],"pi_pairing":["Private pairing code","ব্যক্তিগত পেয়ারিং কোড"],"pi_saver":["Low-data mode: one image per second","কম ডেটা মোড: সেকেন্ডে একটি ছবি"],"pi_connect":["Connect camera","ক্যামেরা যুক্ত করুন"],"pi_stop":["Disconnect camera","ক্যামেরার সংযোগ বন্ধ করুন"],"pi_stopped":["Wi-Fi camera disconnected.","ওয়াই-ফাই ক্যামেরার সংযোগ বন্ধ।"],"pi_connecting":["Connecting to your Wi-Fi camera…","আপনার ওয়াই-ফাই ক্যামেরায় যুক্ত হচ্ছে…"],"pi_connected":["Wi-Fi camera connected.","ওয়াই-ফাই ক্যামেরা যুক্ত হয়েছে।"],"pi_reconnecting":["The Wi-Fi camera link dropped. Trying to reconnect.","ওয়াই-ফাই ক্যামেরার সংযোগ বিচ্ছিন্ন। আবার যুক্ত করার চেষ্টা করছি।"],"pi_reconnected":["Wi-Fi camera reconnected.","ওয়াই-ফাই ক্যামেরা আবার যুক্ত হয়েছে।"],"pi_paused":["Wi-Fi camera paused while Astha is in the background.","আস্থা পেছনে থাকায় ওয়াই-ফাই ক্যামেরা বিরত আছে।"],"pi_connection_lost":["The Wi-Fi camera could not be reached again. Check its power and Wi-Fi, then connect once more. You can use the phone camera.","ওয়াই-ফাই ক্যামেরা আর পাওয়া যাচ্ছে না। এর বিদ্যুৎ ও ওয়াই-ফাই দেখে আবার যুক্ত করুন। ফোনের ক্যামেরা ব্যবহার করতে পারেন।"],"pi_pairing_rejected":["Pairing was rejected. Check the camera address and private pairing code.","পেয়ারিং গ্রহণ হয়নি। ক্যামেরার ঠিকানা ও ব্যক্তিগত কোড পরীক্ষা করুন।"],"pi_stale_frame":["The camera image stopped updating. Reconnect when the camera is ready.","ক্যামেরার ছবি হালনাগাদ হচ্ছে না। ক্যামেরা প্রস্তুত হলে আবার যুক্ত করুন।"],"pi_frame_timeout":["The camera took too long to respond. Check the Wi-Fi and reconnect.","ক্যামেরা উত্তর দিতে বেশি সময় নিচ্ছে। ওয়াই-ফাই পরীক্ষা করে আবার যুক্ত করুন।"],"pi_invalid_origin":["Enter the camera’s HTTPS address without a page path.","কোনো পৃষ্ঠার পথ ছাড়া ক্যামেরার HTTPS ঠিকানা দিন।"],"pi_invalid_pairing_token":["Enter the private pairing code supplied for your camera.","আপনার ক্যামেরার জন্য দেওয়া ব্যক্তিগত পেয়ারিং কোড দিন।"],"pi_error":["Could not use this camera. Check that it is on the same Wi-Fi and that this phone trusts its secure connection. You can use the phone camera.","এই ক্যামেরা ব্যবহার করা যায়নি। একই ওয়াই-ফাইয়ে আছে কি না এবং ফোন এর সুরক্ষিত সংযোগ বিশ্বাস করে কি না দেখুন। ফোনের ক্যামেরা ব্যবহার করতে পারেন।"],"pi_models":["Wi-Fi camera connected, but the recognition models did not load. Try again.","ওয়াই-ফাই ক্যামেরা যুক্ত, কিন্তু শনাক্ত করার মডেল লোড হয়নি। আবার চেষ্টা করুন।"],"pi_preview":["Paired Wi-Fi camera view","যুক্ত ওয়াই-ফাই ক্যামেরার দৃশ্য"],"pi_source":["Paired Wi-Fi camera · Current view","যুক্ত ওয়াই-ফাই ক্যামেরা · বর্তমান দৃশ্য"],"braille_practice_off":["Start keyboard practice","কীবোর্ডে অনুশীলন শুরু করুন"],"braille_practice_on":["Stop keyboard practice","কীবোর্ডে অনুশীলন বন্ধ করুন"],"braille_status_off":["Braille controller: not connected.","ব্রেইল কন্ট্রোলার: যুক্ত নয়।"],"braille_status_practice":["Keyboard practice is on. No controller is connected.","কীবোর্ডে অনুশীলন চলছে। কোনো কন্ট্রোলার যুক্ত নয়।"],"braille_status_connecting":["Connecting to the Braille controller…","ব্রেইল কন্ট্রোলারে যুক্ত হচ্ছে…"],"braille_status_connected":["Braille controller connected.","ব্রেইল কন্ট্রোলার যুক্ত হয়েছে।"],"braille_status_reconnecting":["Braille controller link dropped. Trying to reconnect.","ব্রেইল কন্ট্রোলারের সংযোগ বিচ্ছিন্ন। আবার যুক্ত করার চেষ্টা করছি।"],"braille_status_error":["The Braille controller could not be connected.","ব্রেইল কন্ট্রোলার যুক্ত করা যায়নি।"],"braille_commands":["Controller commands","কন্ট্রোলারের নির্দেশ"],"braille_dots":["Dots","ডট"],"brl_cmd_stop":["Stop speaking and cancel","কথা থামাও ও বাতিল করো"],"brl_cmd_listen":["Listen for my question","আমার প্রশ্ন শোনো"],"brl_cmd_describe":["Describe surroundings","চারপাশ বর্ণনা করো"],"brl_cmd_read":["Read text","লেখা পড়ো"],"brl_cmd_find":["Find my things","আমার জিনিস খোঁজো"],"brl_cmd_repeat":["Repeat the last answer","শেষ উত্তর আবার বলো"],"brl_cmd_camera":["Turn the camera on or off","ক্যামেরা চালু বা বন্ধ করো"],"brl_cmd_home":["Go to the home page","হোম পৃষ্ঠায় যাও"],"brl_cmd_mode":["Change what Astha focuses on","আস্থার মনোযোগের বিষয় বদলাও"],"brl_cmd_text":["Turn Braille typing on or off","ব্রেইলে লেখা চালু বা বন্ধ করো"],"sensor_title":["Distance sensor","দূরত্ব মাপার সেন্সর"],"sensor_info":["An ultrasonic distance sensor is planned. None is connected, so Astha does not report measured distances. Distances it mentions are rough estimates from the image.","আল্ট্রাসনিক দূরত্ব সেন্সর যোগ করার পরিকল্পনা আছে। এখন কোনোটি যুক্ত নয়, তাই আস্থা মাপা দূরত্ব জানায় না। যে দূরত্ব বলে তা ছবি দেখে আনুমানিক।"],"setup_theme_navy":["Navy and cyan","গাঢ় নীল ও সায়ান"],"setup_theme_mono":["White on black","কালোর ওপর সাদা"],"setup_theme_yellow":["Yellow on black","কালোর ওপর হলুদ"],"screen_access_explain":["In the Android app you can let Astha read other apps aloud. When you ask, it reads the text on the screen and can go back or home. It does not watch in the background, never reads password fields, and cannot tap, type or send anything for you. Android shows its own warning before it is turned on, and you can turn it off here at any time.","অ্যান্ড্রয়েড অ্যাপে আস্থাকে অন্য অ্যাপের লেখা পড়ে শোনানোর অনুমতি দিতে পারেন। আপনি বললে এটি পর্দার লেখা পড়ে এবং পেছনে বা হোমে যেতে পারে। এটি পেছন থেকে নজর রাখে না, পাসওয়ার্ডের ঘর কখনো পড়ে না, এবং আপনার হয়ে চাপ দিতে, লিখতে বা কিছু পাঠাতে পারে না। চালু করার আগে অ্যান্ড্রয়েড নিজের সতর্কবার্তা দেখায়, আর এখান থেকে যেকোনো সময় বন্ধ করা যায়।"],"screen_access_on":["Let Astha read other apps","আস্থাকে অন্য অ্যাপ পড়তে দিন"],"screen_access_off":["Stop Astha reading other apps","আস্থার অন্য অ্যাপ পড়া বন্ধ করুন"],"screen_status_off":["Reading other apps is off.","অন্য অ্যাপ পড়া বন্ধ আছে।"],"screen_status_waiting":["Almost done: turn on Astha screen reading in Android Accessibility settings.","প্রায় শেষ: অ্যান্ড্রয়েডের অ্যাক্সেসিবিলিটি সেটিংসে আস্থার স্ক্রিন পড়া চালু করুন।"],"screen_status_on":["Reading other apps is on. Say “What is on my screen?”","অন্য অ্যাপ পড়া চালু আছে। বলুন “স্ক্রিনে কী আছে?”"],"assessment_guided":["Answer by voice","কণ্ঠে উত্তর দিন"],"mic_hint_tap":["Tap the microphone, wait for the chime, then ask. You can also type below.","মাইক্রোফোনে চাপ দিন, শব্দের পরে জিজ্ঞাসা করুন। নিচে লিখেও দিতে পারেন।"],"device_actions_info":["You can also say “open the WhatsApp app”, or “write a message saying I will be late”. Astha asks before opening anything, and you choose the person and press send yourself.","আপনি বলতে পারেন “হোয়াটসঅ্যাপ অ্যাপ খোলো”, অথবা “বার্তা লেখো, আমার দেরি হবে”। কিছু খোলার আগে আস্থা জিজ্ঞাসা করে, আর ব্যক্তি বাছাই ও পাঠানো আপনি নিজেই করেন।"],"voice_no_bangla":["This device has no Bangla voice, so Astha is speaking English.","এই ডিভাইসে বাংলা কণ্ঠ নেই, তাই আস্থা ইংরেজিতে বলছে।"],"consent_title":["Allow online processing?","অনলাইন প্রসেসিংয়ের অনুমতি দেবেন?"],"consent_allow":["Allow for this session","এই সেশনের জন্য অনুমতি দিন"],"consent_cancel":["Cancel, keep on this phone","বাতিল, ফোনেই রাখুন"],"tagline":["A little more independence, every day.","প্রতিদিন আরেকটু স্বাধীনতা।"],"mic_idle":["Talk to ASTHA","আস্থার সাথে কথা বলুন"],"essentials_title":["Your everyday essentials","প্রতিদিনের দরকারি কাজ"],"ess_explore":["Explore","চারপাশ"],"ess_explore_hint":["Understand your surroundings","চারপাশ বুঝে নিন"],"ess_read":["Read","পড়া"],"ess_read_hint":["Hear any text: a page, a board, a screen","যেকোনো লেখা শুনুন: পাতা, বোর্ড, পর্দা"],"ess_remember":["Remember","মনে রাখা"],"ess_remember_hint":["Find saved information","রাখা তথ্য খুঁজুন"],"ess_awareness":["Awareness","সচেতনতা"],"ess_awareness_hint":["Check nearby obstacles","কাছের বাধা সম্পর্কে জানুন"],"ess_awareness_on":["On. Tap to turn off","চালু আছে। বন্ধ করতে চাপুন"],"type_instead":["Type a request instead","লিখে অনুরোধ করুন"],"voice_turn_on":["Turn on the Bangla voice","বাংলা কণ্ঠ চালু করুন"],"status_awareness":["Awareness on","সচেতনতা চালু"],"status_reading":["Reading as the text changes","লেখা বদলালে পড়ছি"],"messages_title":["Messages","বার্তা"],"messages_explain":["Astha can tell you when a message arrives in an app such as Messenger or WhatsApp, read it to you, and send the reply you dictate or one she suggests. Nothing is sent until you say yes, and messages are never saved. Android asks you to allow notification access first.","মেসেঞ্জার বা হোয়াটসঅ্যাপের মতো অ্যাপে বার্তা এলে আস্থা আপনাকে জানাতে, পড়ে শোনাতে, এবং আপনার বলা বা তার সাজানো উত্তর পাঠাতে পারে। আপনি হ্যাঁ না বলা পর্যন্ত কিছুই পাঠানো হয় না, আর বার্তা কখনো সংরক্ষণ করা হয় না। অ্যান্ড্রয়েড আগে নোটিফিকেশন অ্যাক্সেসের অনুমতি চাইবে।"],"messages_on":["Let Astha read and answer my messages","আস্থাকে আমার বার্তা পড়তে ও উত্তর দিতে দিন"],"messages_off":["Stop Astha reading my messages","আস্থার বার্তা পড়া বন্ধ করুন"],"messages_status_off":["Message help is off.","বার্তা সহায়তা বন্ধ আছে।"],"messages_status_waiting":["Almost done: turn on Astha in Android notification access settings.","প্রায় শেষ: অ্যান্ড্রয়েডের নোটিফিকেশন অ্যাক্সেস সেটিংসে আস্থা চালু করুন।"],"messages_status_on":["Message help is on.","বার্তা সহায়তা চালু আছে।"],"messages_background":["Also read messages aloud when the phone is locked","ফোন লক থাকলেও বার্তা পড়ে শোনাও"],"messages_background_explain":["Astha keeps a notification showing while this is on, with a Turn off button. She listens only for a few seconds right after reading a message or asking a question, and waits while you are on a call.","এটি চালু থাকলে আস্থা একটি নোটিফিকেশন দেখিয়ে রাখে, তাতে বন্ধ করার বোতাম থাকে। সে শুধু বার্তা পড়া বা প্রশ্ন করার ঠিক পরে কয়েক সেকেন্ড শোনে, আর আপনি ফোনে কথা বললে অপেক্ষা করে।"],"messages_web":["Reading and answering messages from apps such as Messenger works in the ASTHA Android app.","মেসেঞ্জারের মতো অ্যাপের বার্তা পড়া ও উত্তর দেওয়া আস্থার অ্যান্ড্রয়েড অ্যাপে কাজ করে।"],"pi_distance_sensor":["distance sensor","দূরত্ব সেন্সর"]};
 /* =====================================================================
    0a. Interface strings beyond the original dictionary
        tools/i18n.json keeps each English and Bangla string side by side.
@@ -4115,8 +4161,134 @@ function refreshStateLabels() {
   if (typeof AsthaBraille !== 'undefined') AsthaBraille.refreshLabels();
   if (typeof AsthaScreenAccess !== 'undefined') AsthaScreenAccess.refreshLabels();
   if (typeof AsthaMessages !== 'undefined') AsthaMessages.refreshLabels();
+  if (typeof AsthaDiagnosticsUI !== 'undefined') AsthaDiagnosticsUI.render();
   if (typeof window.ASTHA_RENDER_ACCOUNT === 'function') window.ASTHA_RENDER_ACCOUNT();
 }
+// Opt-in, local-only timing records. No DOM, persistence, networking or user content.
+//
+// API:
+//   setEnabled(true)                         // disabled by default
+//   setSourceEpoch(state.sourceEpoch)        // invalidates old-source records
+//   start(stage, { sourceEpoch?, request? }) // opaque token, or null if rejected
+//   finish(token, 'success'|'error'|'cancel') // false for stale/unknown tokens
+//   snapshot(), reset(), subscribe(listener) // unsubscribe returned by subscribe
+//
+// Stage meanings are caller-owned: finish `speech` at the first actual audio event,
+// not when fetch resolves or playback ends. To measure capture-to-first-audio, start
+// `capture_to_audio` at that capture and finish its same token at actual first audio.
+// Never finish it for a different task. `request` is a numeric task generation only.
+const AsthaDiagnostics = (() => {
+  const STAGES = Object.freeze(['perception', 'reasoning', 'speech', 'capture_to_audio']);
+  const OUTCOMES = new Set(['success', 'error', 'cancel']);
+  const MAX_SUBSCRIBERS = 16;
+  const records = new Map(), active = new Map(), latestRequests = new Map(), listeners = new Set();
+  let enabled = false, sourceEpoch = 0, lastClock = 0;
+  const integer = value => Number.isSafeInteger(value) && value >= 0;
+
+  function now() {
+    const value = performance.now();
+    if (!Number.isFinite(value) || value < 0) return null;
+    lastClock = Math.max(lastClock, value);
+    return lastClock;
+  }
+  function snapshot() {
+    const stages = {};
+    for (const stage of STAGES) {
+      const record = records.get(stage);
+      stages[stage] = record ? Object.freeze({ ...record }) : null;
+    }
+    return Object.freeze({ enabled, sourceEpoch, stages: Object.freeze(stages) });
+  }
+  function publish() {
+    const value = snapshot();
+    for (const listener of [...listeners]) {
+      try { listener(value); } catch { /* Debug UI must never break assistance. */ }
+    }
+  }
+  function reset() {
+    records.clear(); active.clear(); latestRequests.clear(); publish();
+  }
+  function setEnabled(value) {
+    if (typeof value !== 'boolean') return false;
+    if (enabled === value) return true;
+    enabled = value;
+    reset();
+    return true;
+  }
+  function setSourceEpoch(value) {
+    if (!integer(value)) return false;
+    if (sourceEpoch === value) return true;
+    sourceEpoch = value;
+    reset();
+    return true;
+  }
+  function start(stage, options = {}) {
+    if (!enabled || !STAGES.includes(stage) || !options || typeof options !== 'object' || Array.isArray(options) ||
+        Object.keys(options).some(key => !['sourceEpoch', 'request'].includes(key))) return null;
+    const epoch = options.sourceEpoch === undefined ? sourceEpoch : options.sourceEpoch;
+    const request = options.request === undefined ? null : options.request;
+    if (!integer(epoch) || epoch !== sourceEpoch || (request !== null && !integer(request))) return null;
+    if (request !== null && latestRequests.has(stage) && request < latestRequests.get(stage)) return null;
+    const startedAt = now();
+    if (startedAt === null) return null;
+    const token = Object.freeze({});
+    if (request !== null) latestRequests.set(stage, request);
+    // A newer measurement replaces the prior token; retained state is at most four records.
+    active.set(stage, { token, startedAt });
+    records.set(stage, { status: 'running', durationMs: null, request, sourceEpoch: epoch });
+    publish();
+    return token;
+  }
+  function finish(token, outcome = 'success') {
+    if (!enabled || !token || !OUTCOMES.has(outcome)) return false;
+    const stage = STAGES.find(name => active.get(name)?.token === token);
+    if (!stage) return false;
+    const endedAt = now();
+    if (endedAt === null) return false;
+    const current = active.get(stage);
+    records.set(stage, { ...records.get(stage), status: outcome, durationMs: endedAt - current.startedAt });
+    active.delete(stage);
+    publish();
+    return true;
+  }
+  function subscribe(listener) {
+    if (typeof listener !== 'function' || listeners.size >= MAX_SUBSCRIBERS) return () => {};
+    listeners.add(listener);
+    try { listener(snapshot()); } catch { /* A failed debug subscriber is isolated. */ }
+    return () => { listeners.delete(listener); };
+  }
+  return Object.freeze({ setEnabled, setSourceEpoch, start, finish, snapshot, reset, subscribe });
+})();
+// Optional helper view. Timings stay in memory; opening it never starts a camera/model.
+const AsthaDiagnosticsUI = (() => {
+  const rows = { perception: 'debug-perception', reasoning: 'debug-reasoning', speech: 'debug-speech' };
+  function render() {
+    const snapshot = AsthaDiagnostics.snapshot();
+    for (const [stage, id] of Object.entries(rows)) {
+      const node = $(id); if (!node) continue;
+      const value = snapshot.stages[stage];
+      node.textContent = !value ? t('debug_unmeasured') : value.status === 'running' ? t('debug_running')
+        : value.status === 'cancel' ? t('debug_cancelled') : value.status === 'error' ? t('debug_failed')
+        : t('debug_ms', { ms: Math.round(value.durationMs) });
+    }
+  }
+  function toggle() {
+    AsthaDiagnostics.setSourceEpoch(state.sourceEpoch || 0);
+    AsthaDiagnostics.setEnabled(Boolean($('vision-debug')?.open) && !document.hidden);
+    render();
+  }
+  function clear() {
+    if ($('vision-debug')) $('vision-debug').open = false;
+    AsthaDiagnostics.setEnabled(false); AsthaDiagnostics.reset();
+  }
+  function boot() {
+    $('vision-debug')?.addEventListener('toggle', toggle);
+    document.addEventListener('visibilitychange', toggle);
+    AsthaDiagnostics.subscribe(render);
+    toggle();
+  }
+  return { boot, render, clear };
+})();
 /* =====================================================================
    0. VoiceEngine — Astha's real voice
       Speaks through our backend's neural TTS (a genuine Bangla female voice,
@@ -4180,6 +4352,17 @@ function deadlineSignal(timeoutMs, callerSignal) {
   return controller.signal;
 }
 
+// Cancels requests already in flight; it does not revoke permission for the next request.
+const AsthaCancellation = {
+  generation: 0,
+  controllers: new Set(),
+  cancel() {
+    this.generation++;
+    for (const controller of this.controllers) controller.abort();
+    this.controllers.clear();
+  },
+};
+
 const VoiceEchoFilter = {
   recentUtterances: [], // array of { text, words, time }
   recordMachineSpeech(text) {
@@ -4222,6 +4405,12 @@ const VoiceEngine = {
   lastSpokeAt: 0,
   _currentResolve: null,
   requestController: null, generation: 0,
+  _speechTiming: null,
+  _finishSpeechTiming(outcome, token = this._speechTiming) {
+    if (token !== this._speechTiming) return;
+    if (typeof AsthaDiagnostics !== 'undefined') AsthaDiagnostics.finish(this._speechTiming, outcome);
+    this._speechTiming = null;
+  },
   criticalUntil: 0, _criticalDone: null, _endCritical: null, _criticalToken: 0,
   get speaking() {
     if (this.mode === 'audio') return !!this.audioEl && !this.audioEl.paused && !this.audioEl.ended;
@@ -4236,6 +4425,7 @@ const VoiceEngine = {
   // Ordinary speech replaces ordinary speech. Only the user (Stop, voice off) or a newer
   // alert ends a hazard alert early; anything else waits for it in speak().
   stop(user = false) {
+    this._finishSpeechTiming('cancel');
     this.generation++;
     if (this.requestController) { this.requestController.abort(); this.requestController = null; }
     if (!user && this.criticalUntil > Date.now()) return;
@@ -4299,6 +4489,8 @@ const VoiceEngine = {
     if (!state.audio || !text) return false;
     // Let a hazard alert finish. A newer sentence that arrives meanwhile replaces this one.
     if (this._criticalDone) { await this._criticalDone; if (generation !== this.generation) return false; }
+    const speechTiming = typeof AsthaDiagnostics !== 'undefined' ? AsthaDiagnostics.start('speech', { sourceEpoch: state.sourceEpoch || 0 }) : null;
+    this._speechTiming = speechTiming;
     VoiceEchoFilter.recordMachineSpeech(text);
     this.lastSpokeAt = Date.now();
     const voiceKey = lang === 'bn' ? 'bn-female' : 'en-female';
@@ -4330,12 +4522,13 @@ const VoiceEngine = {
           this._currentResolve = resolve;
           audio.onended = () => { this.lastSpokeAt = Date.now(); resolve(true); };
           audio.onerror = () => { this.lastSpokeAt = Date.now(); resolve(false); };
+          audio.onplaying = () => { if (generation === this.generation) this._finishSpeechTiming('success', speechTiming); };
           audio.play().catch(() => resolve(false));
         });
         this._currentResolve = null;
         if (this.audioEl === audio) { this.mode = null; this.audioEl = null; }
         this.lastSpokeAt = Date.now();
-        if (ok) { if (lang === 'bn') this._banglaVoiced(true); return true; }
+        if (ok) { this._finishSpeechTiming('error', speechTiming); if (lang === 'bn') this._banglaVoiced(true); return true; }
         // fall through to the browser voice if playback itself failed
       }
     } catch (e) { /* offline, signed out, or the server is down: use the local voice instead */ }
@@ -4343,7 +4536,9 @@ const VoiceEngine = {
     // The Android WebView has no speech synthesis; the app supplies the device voice instead.
     const u = window.speechSynthesis && this._deviceVoice(lang) ? makeUtterance(sanitizeForSpeech(text), lang) : null;
     if (!u) {
-      const spoken = await this._speakOnDevice(text, lang, generation);
+      // The native bridge reports completion, not first audio; do not invent that timing.
+      this._finishSpeechTiming('error', speechTiming);
+      const spoken = await this._speakOnDevice(text, lang, generation, local || !remoteProcessingAllowed());
       if (spoken && lang === 'bn') this._banglaVoiced(true);
       if (spoken || generation !== this.generation || !fallback) return spoken;
       return this.speak(this._withoutBangla(fallback), fallback.lang, { local: true });
@@ -4353,19 +4548,21 @@ const VoiceEngine = {
       this._currentResolve = resolve;
       u.onend = () => { this.lastSpokeAt = Date.now(); resolve(true); };
       u.onerror = () => { this.lastSpokeAt = Date.now(); resolve(false); };
+      u.onstart = () => { if (generation === this.generation) this._finishSpeechTiming('success', speechTiming); };
       window.speechSynthesis.speak(u);
     });
     this._currentResolve = null;
     if (this.mode === 'synth') this.mode = null;
     this.lastSpokeAt = Date.now();
+    this._finishSpeechTiming('error', speechTiming);
     if (ok && lang === 'bn') this._banglaVoiced(true);
     return ok;
   },
-  async _speakOnDevice(text, lang, generation) {
+  async _speakOnDevice(text, lang, generation, onDeviceOnly = true) {
     const device = window.AsthaNative;
     if (!device || !device.canSpeak) return false;
     this.mode = 'native';
-    const ok = await device.speak(sanitizeForSpeech(text), lang, Number($('speech-rate') && $('speech-rate').value) || 1);
+    const ok = await device.speak(sanitizeForSpeech(text), lang, Number($('speech-rate') && $('speech-rate').value) || 1, { onDeviceOnly });
     if (generation === this.generation && this.mode === 'native') this.mode = null;
     this.lastSpokeAt = Date.now();
     return ok;
@@ -5031,18 +5228,20 @@ async function readingTick() {
 }
 function normLine(l) { return l.toLowerCase().replace(/[^\p{L}\p{N}]/gu, ''); }
 async function ocrPage() {
+  const stillWanted = captureLocalActionGuard();
   reading.ocrBusy = true;
   try {
     const worker = await ensureOcr();
+    if (!reading.active || !stillWanted()) return;
     const frame = captureFrame(1024); // ~3 s per page on a laptop CPU with Bangla + English
     let lines = null, explain = null;
-    if (cloudReady()) { try { const r = await cloudReadLines(frame); lines = r.lines; explain = r; } catch (e) { cloudFail(e); } }
+    if (cloudReady()) { try { const r = await cloudReadLines(frame); if (!reading.active || !stillWanted()) return; lines = r.lines; explain = r; } catch (e) { if (e.cancelled || !reading.active || !stillWanted()) return; cloudFail(e); } }
     if (!lines) {
       const { data } = await worker.recognize(frame);
       lines = (data.lines || []).filter(l => l.confidence >= 55).map(l => cleanOcrLine(l.text))
         .filter(l => { const letters = l.replace(/[^\p{L}\p{N}]/gu, '').length; return letters >= 2 && letters / l.length >= 0.5; });
     }
-    if (!reading.active) return;
+    if (!reading.active || !stillWanted()) return;
     reading.explain = explain;
     if (!lines.length) { reading.phase = 'align'; reading.goodStreak = 0; heartSet({ mode: 'bad', label: 'No text found' }); sayGuide('no_text', true); return; }
     const fresh = lines.filter(l => !reading.readLines.has(normLine(l)));
@@ -5062,13 +5261,19 @@ async function ocrPage() {
       else sayGuide('page_done', true);
     };
     startReader(text);
-  } catch (e) { console.warn('ocrPage', e); reading.phase = 'align'; }
+  } catch (e) { if (e.cancelled || !reading.active || !stillWanted()) return; console.warn('ocrPage', e); reading.phase = 'align'; }
   finally { reading.ocrBusy = false; }
 }
 
-// ---- Voice-Led Siri Engine (Always Listening, Acoustic Echo Filter, Instant Stop) ---
-const STOP_TALKING_REGEX = /(?:^|[^A-Za-z0-9_\u0980-\u09FF])(stop|stop talking|shut up|be quiet|quiet|silence|pause|enough|halt|don't speak|dont speak|stop reading|থামো|চুপ|চুপ কর|চুপ করো|থামুন|কথা বন্ধ|পড়া বন্ধ|বন্ধ করো|স্টপ|thamo|chup|bondho koro|bondho kor)(?![A-Za-z0-9_\u0980-\u09FF])/i;
+// ---- Foreground hands-free listening (only after explicit consent) ---
+// Whole commands only: a bus stop or quoted instructions are not a request to stop.
+const STOP_TALKING_REGEX = /^(?:please\s+)?(?:stop(?: talking| speaking| reading)?|pause|shut up|be quiet|quiet|silence|enough|halt|don'?t (?:speak|talk)|থামো|চুপ|চুপ কর|চুপ করো|থামুন|কথা বন্ধ|পড়া বন্ধ|বন্ধ করো|স্টপ|thamo|chup|bondho koro|bondho kor)(?:\s+please)?[.!?।\s]*$/i;
 const WAKE_RE = /(^|[\s,.!?])(astha|asta|ashtha|aastha|astar|হে আস্থা|আস্থা|আসথা|আস্তা)(?=$|[\s,.!?])/i;
+function isSpeechStopCommand(text) {
+  const command = String(text || '').trim().replace(/[’]/g, "'")
+    .replace(/^(?:hey\s+|হেই\s+)?(?:astha|asta|ashtha|aastha|astar|হে আস্থা|আস্থা|আসথা|আস্তা)[,.!?।\s]+/i, '');
+  return STOP_TALKING_REGEX.test(command);
+}
 
 const SiriVoice = {
   enabled: false, // Hands-free listening requires an explicit user action each session.
@@ -5160,19 +5365,20 @@ const SiriVoice = {
         const currentSpeech = (finalText || interimText).trim();
         if (!currentSpeech) return;
 
-        // 1. INSTANT STOP / BARGE-IN CHECK (Evaluated on BOTH interim and final for <50ms response)
-        if (STOP_TALKING_REGEX.test(currentSpeech)) {
+        // An interim Stop cancels pending answers as well as audio, without a debounce.
+        // A short explicit Stop takes priority over the heuristic echo filter: an alert
+        // itself may contain "stop", and must still be interruptible by the user.
+        if (isSpeechStopCommand(currentSpeech)) {
           clearTimeout(this.speechDebounceTimer);
           this.pendingSpeech = '';
-          if (VoiceEngine.speaking || (typeof reader !== 'undefined' && reader.active) || (typeof reading !== 'undefined' && reading.active)) {
-            VoiceEngine.stop();
-            if (typeof stopReader === 'function') stopReader();
-            if (typeof reading !== 'undefined' && reading.active) stopReading(true);
-            this.lastBargeInAt = Date.now();
-            setCaption(t('agent_voice') || 'Astha', 'Stopped speech.', 'voice', null, 'কথা থামানো হয়েছে।');
-            playEarcon('click');
-            return;
-          }
+          // Browsers often emit the same Stop again as a final result.
+          if (Date.now() - this.lastBargeInAt < 1200) return;
+          this.lastBargeInAt = Date.now();
+          if (/stop reading|পড়া বন্ধ/i.test(currentSpeech) && typeof AsthaExperience !== 'undefined' && AsthaExperience.mode === 'reading') AsthaExperience.setContext('ask', true);
+          stopAllSpeech();
+          setCaption(t('agent_voice') || 'Astha', 'Stopped speech.', 'voice', null, 'কথা থামানো হয়েছে।');
+          playEarcon('click');
+          return;
         }
 
         // If we recently barged in (< 1200ms ago), ignore residual fragments of the stop utterance
@@ -5592,6 +5798,7 @@ async function handleItemPlacementVoice(query) {
   if (privacyMode) return announce('Memory is off in privacy mode.', 'গোপনীয়তা মোডে মেমরি বন্ধ।');
 
   if (withCamera(() => handleItemPlacementVoice(query))) return;
+  const generation = AsthaCancellation.generation;
 
   const rawItem = extractItemFromPlacementSpeech(query);
   const roomsSummary = state.spatialHome.map(r => r.name + ' (' + r.notes + ')').join(' | ');
@@ -5607,11 +5814,13 @@ async function handleItemPlacementVoice(query) {
         }
       }
     } catch (e) {
+      if (e.cancelled || generation !== AsthaCancellation.generation) return;
       console.warn('Cloud placement failed, using on-device placement fallback:', e);
     }
   }
 
   // 2. On-Device Fallback (Without Gemini / Offline)
+  if (generation !== AsthaCancellation.generation) return;
   return handleOnDevicePlacement(query, rawItem);
 }
 
@@ -6024,6 +6233,7 @@ function toggleVideoCalibrationWalk() {
 
 async function videoCalibrationTick() {
   if (!VideoRoomCalib.active || VideoRoomCalib.isProcessing) return;
+  const generation = AsthaCancellation.generation;
   const frame = captureFrame(896);
   if (!frame) return;
   VideoRoomCalib.isProcessing = true;
@@ -6032,6 +6242,7 @@ async function videoCalibrationTick() {
     // 1. Cloud-powered calibration if available
     if (typeof cloudReady === 'function' && cloudReady() && typeof cloudCalibrateVideoFrame === 'function') {
       const r = await cloudCalibrateVideoFrame(frame, VideoRoomCalib.roomName);
+      if (!VideoRoomCalib.active || generation !== AsthaCancellation.generation) return;
       if (r && Array.isArray(r.furniture) && r.furniture.length > 0) {
         let hasNew = false;
         r.furniture.forEach(item => {
@@ -6057,7 +6268,9 @@ async function videoCalibrationTick() {
 
     // 2. On-device fallback room calibration (Without Gemini / Offline)
     await ensureVisionModels();
+    if (!VideoRoomCalib.active || generation !== AsthaCancellation.generation) return;
     const cocoObjs = await runCoco(frame);
+    if (!VideoRoomCalib.active || generation !== AsthaCancellation.generation) return;
     state.lastCocoPreds = cocoObjs;
 
     // Detect furniture objects: table, desk, bed, chair, couch, tv, book
@@ -7140,32 +7353,68 @@ If no target item is clearly placed on a surface, return JSON:
 // Existing callers use this function name; all provider requests go through ASTHA.
 async function gemini(task, frame, opts = {}) {
   const requester = window.ASTHA_ACCOUNT_ID;
-  const stillAllowed = () => {
-    if (!remoteProcessingAllowed() || window.ASTHA_ACCOUNT_ID !== requester || opts.signal?.aborted) {
-      const error = new Error('Remote request cancelled or account changed'); error.noCloud = true; throw error;
-    }
+  const source = typeof state === 'undefined' ? undefined : state.source;
+  const epoch = typeof state === 'undefined' ? undefined : state.sourceEpoch;
+  const cancellation = typeof AsthaCancellation === 'undefined' ? null : AsthaCancellation;
+  const generation = cancellation?.generation;
+  const controller = new AbortController();
+  const cancelled = () => {
+    const error = new Error('Remote request cancelled'); error.noCloud = true; error.cancelled = true; return error;
   };
-  stillAllowed();
-  if (!serverCloud.available) { const error = new Error('no cloud reasoning available'); error.noCloud = true; throw error; }
-  cloud.lastCallAt = Date.now();
-  const image = frame ? frameToJpeg(frame, opts.maxW || 800) : undefined;
-  const res = await fetch(apiUrl('/api/vision'), {
-    method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ task: 'custom', prompt: task, image, maxTokens: opts.maxTokens || 900 }),
-    signal: deadlineSignal(30000, opts.signal),
-  });
-  stillAllowed();
-  if (res.status === 401 || res.status === 503) {
-    serverCloud.checked = true; serverCloud.available = false; serverCloud.provider = null;
-    updateCloudBadge();
+  const stillAllowed = () => {
+    if (!remoteProcessingAllowed() || window.ASTHA_ACCOUNT_ID !== requester || opts.signal?.aborted || controller.signal.aborted ||
+        cancellation?.generation !== generation || (typeof state !== 'undefined' && (source !== state.source || epoch !== state.sourceEpoch)) ||
+        (typeof document !== 'undefined' && document.hidden)) throw cancelled();
+  };
+  const fromCaller = () => controller.abort();
+  let rejectAborted;
+  const aborted = new Promise((_, reject) => { rejectAborted = reject; });
+  const onAbort = () => rejectAborted(cancelled());
+  controller.signal.addEventListener('abort', onAbort, { once: true });
+  opts.signal?.addEventListener('abort', fromCaller, { once: true });
+  if (opts.signal?.aborted) controller.abort();
+  cancellation?.controllers.add(controller);
+  const timing = typeof AsthaDiagnostics === 'undefined' ? null : AsthaDiagnostics.start('reasoning', { sourceEpoch: epoch || 0 });
+  let outcome = 'error';
+  try {
+    const work = (async () => {
+      stillAllowed();
+      if (!serverCloud.available) { const error = new Error('no cloud reasoning available'); error.noCloud = true; throw error; }
+      cloud.lastCallAt = Date.now();
+      const image = frame ? frameToJpeg(frame, opts.maxW || 800) : undefined;
+      const res = await fetch(apiUrl('/api/vision'), {
+        method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ task: 'custom', prompt: task, image, maxTokens: opts.maxTokens || 900 }),
+        signal: deadlineSignal(30000, controller.signal),
+      });
+      stillAllowed();
+      if (res.status === 401 || res.status === 503) {
+        serverCloud.checked = true; serverCloud.available = false; serverCloud.provider = null;
+        updateCloudBadge();
+      }
+      if (res.status === 429) throw new Error('rate limit');
+      if (!res.ok) { const error = new Error('ASTHA online service unavailable'); error.noCloud = true; throw error; }
+      const result = await res.json();
+      stillAllowed();
+      if (!result || typeof result !== 'object' || Array.isArray(result)) throw new Error('Invalid ASTHA response');
+      serverCloud.checked = true;
+      return result;
+    })();
+    // Also settle promptly when a transport or body decoder ignores abort. Its late
+    // completion still passes through the guards above and is consumed by this race.
+    const result = await Promise.race([work, aborted]);
+    outcome = 'success';
+    return result;
+  } catch (error) {
+    if (error.cancelled || controller.signal.aborted || cancellation?.generation !== generation) outcome = 'cancel';
+    stillAllowed();
+    throw error;
+  } finally {
+    if (typeof AsthaDiagnostics !== 'undefined') AsthaDiagnostics.finish(timing, outcome);
+    cancellation?.controllers.delete(controller);
+    opts.signal?.removeEventListener('abort', fromCaller);
+    controller.signal.removeEventListener('abort', onAbort);
   }
-  if (res.status === 429) throw new Error('rate limit');
-  if (!res.ok) { const error = new Error('ASTHA online service unavailable'); error.noCloud = true; throw error; }
-  const result = await res.json();
-  stillAllowed();
-  if (!result || typeof result !== 'object' || Array.isArray(result)) throw new Error('Invalid ASTHA response');
-  serverCloud.checked = true;
-  return result;
 }
 function parseJsonLoose(text) {
   try { return JSON.parse(text); } catch (e) {}
@@ -7173,6 +7422,16 @@ function parseJsonLoose(text) {
   return { en: (text || '').trim(), bn: '' };
 }
 function cloudFail(e) { console.warn('cloud', e); return /rate limit/.test(String(e)); }
+function scheduleCloudFallback(run) {
+  const cancellation = typeof AsthaCancellation === 'undefined' ? null : AsthaCancellation;
+  const generation = cancellation?.generation, requester = window.ASTHA_ACCOUNT_ID;
+  const source = state.source, epoch = state.sourceEpoch;
+  setTimeout(() => {
+    if (cancellation?.generation !== generation || requester !== window.ASTHA_ACCOUNT_ID ||
+        source !== state.source || epoch !== state.sourceEpoch || document.hidden) return;
+    run();
+  }, 20);
+}
 
 // ---- Server-backed actions with on-device fallback ----
 async function cloudDescribe() {
@@ -7189,8 +7448,9 @@ async function cloudDescribe() {
         r.objects.slice(0, 3).forEach(obj => autoRecordMemory({ item: obj, location: r.en || 'In front of you', source: 'Scene description' }));
       }
     } catch (e) {
+      if (e.cancelled) return;
       if (cloudFail(e)) announce('The cloud is busy for a moment; describing on-device.', 'ক্লাউড একটু ব্যস্ত; ডিভাইসেই বর্ণনা করছি।', 'system');
-      setTimeout(() => describeScene(true), 20);
+      scheduleCloudFallback(() => describeScene(true));
     }
   });
 }
@@ -7206,8 +7466,9 @@ async function cloudIdentify() {
         autoRecordMemory({ item: r.name, location: 'Held in front of camera', source: 'Identified object', score: null });
       }
     } catch (e) {
+      if (e.cancelled) return;
       cloudFail(e);
-      setTimeout(() => identifyObject(true), 20);
+      scheduleCloudFallback(() => identifyObject(true));
     }
   });
 }
@@ -7222,8 +7483,9 @@ async function cloudClothes() {
         autoRecordMemory({ item: (r.colour ? r.colour + ' ' : '') + r.garment, location: 'Worn or held', source: 'Clothes inspection' });
       }
     } catch (e) {
+      if (e.cancelled) return;
       cloudFail(e);
-      setTimeout(() => inspectClothesAndColor(true), 20);
+      scheduleCloudFallback(() => inspectClothesAndColor(true));
     }
   });
 }
@@ -7231,7 +7493,7 @@ async function cloudCompliment(frame, r) {
   state.complimentIdx = ((state.complimentIdx || 0) + 1) % COMPLIMENTS.length;
   const c = COMPLIMENTS[state.complimentIdx];
   let en = `I can see you in the mirror. ${c[0]}`, bn = `আয়নায় আপনাকে দেখতে পাচ্ছি। ${c[1]}`;
-  try { const cl = await gemini(CLOUD_PROMPTS.clothes, frame); if (cl.en) { en += ' ' + cl.en.replace(/^(You are|The person is) wearing/i, 'You are wearing'); bn += ' ' + cl.bn; } } catch (e) {}
+  try { const cl = await gemini(CLOUD_PROMPTS.clothes, frame); if (cl.en) { en += ' ' + cl.en.replace(/^(You are|The person is) wearing/i, 'You are wearing'); bn += ' ' + cl.bn; } } catch (e) { if (e.cancelled) return; }
   state.lastComplimentAt = Date.now();
   announce(en, bn, 'vision'); playEarcon('confirm'); heartFlash({ x: 0.5, y: 0.45, mode: 'lock', label: '♥' }, 5000);
 }
@@ -7256,7 +7518,7 @@ async function cloudVerifyAndSpeak(fresh, fallbackEn, fallbackBn) {
     if (r.mirror === true && now - (state.lastComplimentAt || 0) > 60000) return cloudCompliment(frame, r);
     if (r.none || !r.en) return;
     setCaption(t('new_title'), r.en, 'vision', null, r.bn); speak(r.en, r.bn); heartPointAt(fresh[0]);
-  } catch (e) { if (!cloudFail(e) && stillWanted()) { setCaption(t('new_title'), fallbackEn, 'vision', null, fallbackBn); speak(fallbackEn, fallbackBn); } }
+  } catch (e) { if (!e.cancelled && !cloudFail(e) && stillWanted()) { setCaption(t('new_title'), fallbackEn, 'vision', null, fallbackBn); speak(fallbackEn, fallbackBn); } }
 }
 async function cloudScreen(frame) { return gemini(CLOUD_PROMPTS.screen, frame, { maxW: 1280, maxTokens: 2500 }); }
 
@@ -7290,8 +7552,9 @@ async function cloudReadLive() {
       heartFlash({ x: 0.5, y: 0.5, mode: 'lock', label: r.isBoardOrSign ? 'Board text' : 'Read' });
       logEvent('Cloud read: ' + (text.slice(0, 40) || 'board text'));
     } catch (e) {
+      if (e.cancelled) return;
       if (cloudFail(e)) announce('Cloud reading is busy; switching to on-device reader.', 'ক্লাউড রিডার ব্যস্ত; ডিভাইসের রিডারে চেষ্টা করছি।', 'system');
-      setTimeout(() => startReading(), 20);
+      scheduleCloudFallback(() => startReading());
     }
   });
 }
@@ -7321,8 +7584,9 @@ async function cloudSafetyCheck(silentIfClear) {
       logEvent('Cloud safety: ' + (r.en || '').slice(0, 40));
       return r;
     } catch (e) {
+      if (e.cancelled) return;
       if (cloudFail(e)) announce('Cloud safety busy; checking on-device.', 'ক্লাউড ব্যস্ত; ডিভাইসে পরীক্ষা করছি।', 'system');
-      setTimeout(() => safetyCheck(silentIfClear), 20);
+      scheduleCloudFallback(() => safetyCheck(silentIfClear));
     }
   });
 }
@@ -7368,6 +7632,7 @@ async function cloudCalibrateVideoFrame(frame, roomName) {
     const r = await gemini(prompt, f, { maxTokens: 600 });
     return r;
   } catch (e) {
+    if (e.cancelled) throw e;
     cloudFail(e);
     return null;
   }
@@ -7403,6 +7668,7 @@ async function cloudRecordPlacement(query, frame, rooms) {
       }
       return null;
     } catch (e) {
+      if (e.cancelled) throw e;
       cloudFail(e);
       throw e;
     }
@@ -9160,12 +9426,20 @@ function parseSpokenPlace(query) {
   return null;
 }
 async function handleOnDevicePlacement(query, statedItem) {
+  const stillWanted = captureLocalActionGuard();
   return withBusy('Remembering…', async () => {
     const accountKey = LocalStore.KEY;
+    if (!stillWanted() || privacyMode || privacyTransition) return;
     const frame = captureFrame(640); if (!frame) return;
     heartSet({ x: 0.5, y: 0.5, mode: 'seek', label: 'Looking…' });
-    await ensureVisionModels();
-    const cocoObjs = await runCoco(frame); state.lastCocoPreds = cocoObjs;
+    let cocoObjs;
+    try {
+      await ensureVisionModels();
+      if (!stillWanted()) return;
+      cocoObjs = await runCoco(frame);
+    } catch (e) { if (!stillWanted() || e.cancelled) return; throw e; }
+    if (!stillWanted()) return;
+    state.lastCocoPreds = cocoObjs;
     if (typeof perceptionHook === 'function') perceptionHook(cocoObjs, frame, { noDepthKick: true });
     let item = statedItem ? statedItem.trim() : '', itemBn = null, targetId = null, seen = false;
     const vm = item && typeof findVocabMatch === 'function' ? findVocabMatch(item) : null;
@@ -9174,20 +9448,22 @@ async function handleOnDevicePlacement(query, statedItem) {
     if (!seen && engine.clip.status === 'ready') {
       try {
         const [emb] = await clipEmbedCrops(frame, [centerRect(frame, 0.6)]);
+        if (!stillWanted()) return;
         const ranked = scoreEmbedding(emb).filter(r => r.id !== '_bg' && !(VOCAB_BY_ID[r.id] || {}).quiet);
         if (targetId) seen = ranked.slice(0, 3).some(r => r.id === targetId && r.p >= 0.12);
         else if (!item && ranked[0] && ranked[0].p >= 0.15 && (VOCAB_BY_ID[ranked[0].id] || {}).personal) { item = label(ranked[0].id); itemBn = labelBn(ranked[0].id); targetId = ranked[0].id; seen = true; }
-      } catch (e) { console.warn('placement clip', e); }
+      } catch (e) { if (!stillWanted() || e.cancelled) return; console.warn('placement clip', e); }
     }
     if (!item) {
       const central = cocoObjs.filter(o => (VOCAB_BY_ID[o.id] || {}).personal).sort((a, b) => (a.bbox[2] * a.bbox[3]) - (b.bbox[2] * b.bbox[3]))[0];
       if (central) { item = objLabel(central); itemBn = objLabelBn(central); targetId = central.id; seen = true; }
     }
+    if (!stillWanted()) return;
     if (!item) { heartHide(); return announce('Tell me what you are keeping, for example: I am keeping my wallet here.', 'কী রাখছেন বলুন, যেমন: আমার মানিব্যাগ এখানে রাখছি।', 'memory'); }
     // Only the user's named place confirms a physical location. An image alone cannot
     // establish that an item rests on a detected surface or belongs to the current room.
     const spoken = parseSpokenPlace(query);
-    if (privacyMode || privacyTransition || LocalStore.KEY !== accountKey) return;
+    if (!stillWanted() || privacyMode || privacyTransition || LocalStore.KEY !== accountKey) return;
     if (!spoken) {
       heartHide();
       return announce('Tell me the place to save, for example: my wallet is on the table. The image does not confirm its physical location.', 'কোথায় রাখছেন বলুন, যেমন: আমার মানিব্যাগ টেবিলের ওপর। শুধু ছবি থেকে প্রকৃত স্থান নিশ্চিত করা যায় না।', 'memory');
@@ -9566,10 +9842,12 @@ async function listenOnDevice() {
   setCaption(t('agent_voice'), 'Listening… take your time.', 'voice', 'busy', 'শুনছি… ধীরে বলুন।');
   playEarcon('confirm');
   let text = '', failure = null;
-  try { text = (await window.AsthaNative.listen(sttLang())).trim(); } catch (error) { failure = error && error.code; }
+  const onDeviceOnly = !remoteProcessingAllowed() || OfflineEar.wanted();
+  try { text = (await window.AsthaNative.listen(sttLang(), { onDeviceOnly })).trim(); } catch (error) { failure = error && error.code; }
   if (!state.listening) return;   // the user tapped again to cancel
   stopListening();
   if (failure === 'permission') return announce('Microphone access was denied.', 'মাইক্রোফোনের অনুমতি নেই।', 'voice');
+  if (failure === 'on_device_unavailable' || failure === 'language_unavailable') return OfflineEar.listenAndHandle('native_unavailable');
   if (failure === 'recognizer_unavailable') return announce('This phone has no speech recognizer installed. Type your request instead.', 'এই ফোনে কণ্ঠ শনাক্ত করার ব্যবস্থা নেই। অনুরোধ লিখে দিন।', 'voice');
   if (text) return handleQuery(text);
   setCaption(t('agent_voice'), 'I did not hear anything. Tap the microphone and speak after the chime.', 'voice', null, 'কিছু শুনতে পাইনি। মাইক্রোফোন চেপে শব্দের পরে বলুন।');
@@ -9624,7 +9902,16 @@ function toggleListening() {
 function stopAllSpeech() {
   // Drop answers that have not been spoken yet, and end a hazard alert as well.
   if (typeof AsthaExperience !== 'undefined') AsthaExperience.cancelPending();
+  if (typeof AsthaCancellation !== 'undefined') AsthaCancellation.cancel();
+  state.busyToken = null; state.busy = false;
+  $('companion-main')?.setAttribute('aria-busy', 'false');
+  if (typeof AsthaAgent !== 'undefined') AsthaAgent.cancel?.();
+  if (typeof reading !== 'undefined' && reading.active) stopReading(true);
   stopReader(); stopListening(); VoiceEngine.stop(true);
+  if (typeof VideoRoomCalib !== 'undefined' && VideoRoomCalib.active) {
+    VideoRoomCalib.active = false; clearInterval(VideoRoomCalib.timer); VideoRoomCalib.timer = null;
+    if ($('calib-start-btn')) $('calib-start-btn').textContent = t('calib_resume');
+  }
   if (typeof Seeker !== 'undefined' && Seeker.active) Seeker.stop('user');
   if (OfflineEar.active) OfflineEar.cancel();
   $('reader-progress').textContent = t('reader_stopped');
@@ -10079,7 +10366,7 @@ const AsthaExperience = (() => {
     if (mode === 'reading' && /^stop reading|পড়া বন্ধ/.test(q)) { setContext('ask'); return true; }
     if (/stop updates|only when i ask|quiet mode|আপডেট বন্ধ|জিজ্ঞাসা করলে|শান্ত মোড/.test(q)) { setContext('ask'); return true; }
     // Stop silences ASTHA and drops unspoken answers. The chosen mode stays until changed.
-    if (/^(?:stop|stop talking|cancel|be quiet|quiet|silence|enough|shut up|halt|থামো|থামুন|বন্ধ করো|চুপ|চুপ কর|চুপ করো|কথা বন্ধ|স্টপ|thamo|chup|bondho koro)[.!।\s]*$/.test(q)) { cancelPending(); stopAllSpeech(); if (typeof AsthaAgent !== 'undefined') AsthaAgent.cancel?.(); return true; }
+    if ((typeof isSpeechStopCommand === 'function' && isSpeechStopCommand(query)) || /^(?:stop|stop talking|don't talk|don't speak|cancel|be quiet|quiet|silence|enough|shut up|halt|থামো|থামুন|বন্ধ করো|চুপ|চুপ কর|চুপ করো|কথা বন্ধ|স্টপ|thamo|chup|bondho koro)[.!।\s]*$/.test(q)) { cancelPending(); stopAllSpeech(); if (typeof AsthaAgent !== 'undefined') AsthaAgent.cancel?.(); return true; }
     // Page names are whole commands, so a question that merely mentions one is still answered.
     const bare = q.replace(/[.!?।\s]+$/, '');
     const open = '(?:open |go to |show )?', kholo = '(?: খোলো| দেখাও|ে যাও)?';
@@ -10277,6 +10564,7 @@ const AsthaExperience = (() => {
   }
   // A shared phone must not keep the previous person's vision and device answers.
   function accountCleared() {
+    if (typeof AsthaDiagnosticsUI !== 'undefined') AsthaDiagnosticsUI.clear();
     invalidatePreferences();
     try { localStorage.removeItem(PREF_KEY); localStorage.removeItem('astha.accessibility.v1'); } catch {}
     preferences = { ...DEFAULTS }; fillForm(preferences); setupStatus('');
@@ -11146,6 +11434,7 @@ window.__asthaBoot = function boot() {
   AsthaBraille.boot();
   AsthaScreenAccess.boot();
   AsthaMessages.boot();
+  AsthaDiagnosticsUI.boot();
   refreshMemory();
   refreshRooms();
   // Warm the on-device detector while the page settles (cached weights + WebGL shader compile),

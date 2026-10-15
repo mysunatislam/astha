@@ -138,7 +138,7 @@ const AsthaExperience = (() => {
     if (mode === 'reading' && /^stop reading|পড়া বন্ধ/.test(q)) { setContext('ask'); return true; }
     if (/stop updates|only when i ask|quiet mode|আপডেট বন্ধ|জিজ্ঞাসা করলে|শান্ত মোড/.test(q)) { setContext('ask'); return true; }
     // Stop silences ASTHA and drops unspoken answers. The chosen mode stays until changed.
-    if (/^(?:stop|stop talking|cancel|be quiet|quiet|silence|enough|shut up|halt|থামো|থামুন|বন্ধ করো|চুপ|চুপ কর|চুপ করো|কথা বন্ধ|স্টপ|thamo|chup|bondho koro)[.!।\s]*$/.test(q)) { cancelPending(); stopAllSpeech(); if (typeof AsthaAgent !== 'undefined') AsthaAgent.cancel?.(); return true; }
+    if ((typeof isSpeechStopCommand === 'function' && isSpeechStopCommand(query)) || /^(?:stop|stop talking|don't talk|don't speak|cancel|be quiet|quiet|silence|enough|shut up|halt|থামো|থামুন|বন্ধ করো|চুপ|চুপ কর|চুপ করো|কথা বন্ধ|স্টপ|thamo|chup|bondho koro)[.!।\s]*$/.test(q)) { cancelPending(); stopAllSpeech(); if (typeof AsthaAgent !== 'undefined') AsthaAgent.cancel?.(); return true; }
     // Page names are whole commands, so a question that merely mentions one is still answered.
     const bare = q.replace(/[.!?।\s]+$/, '');
     const open = '(?:open |go to |show )?', kholo = '(?: খোলো| দেখাও|ে যাও)?';
@@ -336,6 +336,7 @@ const AsthaExperience = (() => {
   }
   // A shared phone must not keep the previous person's vision and device answers.
   function accountCleared() {
+    if (typeof AsthaDiagnosticsUI !== 'undefined') AsthaDiagnosticsUI.clear();
     invalidatePreferences();
     try { localStorage.removeItem(PREF_KEY); localStorage.removeItem('astha.accessibility.v1'); } catch {}
     preferences = { ...DEFAULTS }; fillForm(preferences); setupStatus('');

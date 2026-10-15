@@ -16,17 +16,21 @@
   win.AsthaNative = Object.freeze({
     canSpeak: true, canListen: true,
     // Resolves true only when the whole sentence was spoken.
-    async speak(text, lang, rate) {
+    async speak(text, lang, rate, options = {}) {
       const value = String(text || '').slice(0, 4000);
       if (!value.trim()) return false;
-      try { return (await plugin.speak({ text: value, lang: lang === 'bn' ? 'bn' : 'en', rate: Number(rate) || 1 })).completed === true; }
+      const onDeviceOnly = options?.onDeviceOnly !== false;
+      try { return (await plugin.speak({ text: value, lang: lang === 'bn' ? 'bn' : 'en', rate: Number(rate) || 1, onDeviceOnly })).completed === true; }
       catch { return false; }
     },
     stopSpeaking() { quiet(plugin.stopSpeaking()); },
     // Resolves the heard text ('' when nothing was heard); rejects with a code otherwise.
-    async listen(language) {
+    async listen(language, options = {}) {
       try {
-        const reply = await plugin.listen({ language: /^[a-z]{2}-[A-Z]{2}$/.test(language || '') ? language : 'bn-BD' });
+        // Only an explicit boolean false from a consent-checked caller permits the
+        // platform's default recognizer, which may send audio to its own service.
+        const onDeviceOnly = options?.onDeviceOnly !== false;
+        const reply = await plugin.listen({ language: /^[a-z]{2}-[A-Z]{2}$/.test(language || '') ? language : 'bn-BD', onDeviceOnly });
         return typeof reply?.text === 'string' ? reply.text.slice(0, 500) : '';
       } catch (error) { throw failure(error); }
     },

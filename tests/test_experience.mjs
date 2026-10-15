@@ -622,6 +622,6 @@ test('the page has exactly one live Stop definition after the modules are joined
   // Function declarations are hoisted, so the last one wins. It must be the cancelling one.
   const built = fs.readFileSync(new URL('../web/index.html', import.meta.url), 'utf8');
   const last = built.slice(built.lastIndexOf('\nfunction stopAllSpeech() {'));
-  assert.match(last.slice(0, 400), /AsthaExperience\.cancelPending\(\)/);
-  assert.match(last.slice(0, 400), /VoiceEngine\.stop\(true\)/);
+  assert.match(last.slice(0, 700), /AsthaExperience\.cancelPending\(\)/);
+  assert.match(last.slice(0, 700), /VoiceEngine\.stop\(true\)/);
 });

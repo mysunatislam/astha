@@ -239,8 +239,8 @@ NEW_IDENTIFY = r"""function identifyObject(skipCloud) {
 rep_between("function identifyObject() {", "\n/* =====================================================================\n   12. Guided Home Layout Calibration Wizard & Spatial Memory", NEW_IDENTIFY)
 
 # ---- readText → one-shot for still images; guided mode lives in the module ----
-rep("function readText() {\n  if (!state.source) { setCaption(t('ready_title'), t('need_source'), 'ocr', null, tBn('need_source')); speak(t('need_source'), tBn('need_source')); return; }\n  withBusy(t('reading_title'), async () => {",
-    "function readStillOnce() {\n  withBusy(t('reading_title'), async () => {")
+rep("function readText() {\n  if (!state.source) { setCaption(t('ready_title'), t('need_source'), 'ocr', null, tBn('need_source')); speak(t('need_source'), tBn('need_source')); return; }\n  const stillWanted = captureLocalActionGuard();\n  return withBusy(t('reading_title'), async () => {",
+    "function readStillOnce() {\n  const stillWanted = captureLocalActionGuard();\n  return withBusy(t('reading_title'), async () => {")
 
 # ---- reader finish hook ----
 rep("    reader.active = false; $('reader-progress').textContent = 'Finished'; return;",
@@ -458,8 +458,8 @@ rep("const fresh = worldSorted().filter(o => (state.announced.get(o.id) || 0) < 
 rep("    setCaption(t('new_title'), msgEn, 'vision', null, msgBn);\n    speak(msgEn, msgBn);\n    heartPointAt(fresh[0]);",
     "    if (cloudReady()) { cloudVerifyAndSpeak(fresh, msgEn, msgBn); return; }\n    setCaption(t('new_title'), msgEn, 'vision', null, msgBn);\n    speak(msgEn, msgBn);\n    heartPointAt(fresh[0]);")
 # Still-image reading through the cloud when available
-rep("    const frame = captureFrame(1280);\n    setCaption(t('reading_title'), t('ocr_working'), 'ocr', 'busy', tBn('ocr_working'));\n    speak(t('ocr_working'), tBn('ocr_working'));\n    const { data } = await worker.recognize(frame);\n    const lines = (data.lines || []).filter(l => l.confidence >= 55).map(l => cleanOcrLine(l.text))\n      .filter(l => { const letters = l.replace(/[^\\p{L}\\p{N}]/gu, '').length; return letters >= 2 && letters / l.length >= 0.5; });\n    const text = lines.join('\\n');",
-    "    const frame = captureFrame(1280);\n    setCaption(t('reading_title'), t('ocr_working'), 'ocr', 'busy', tBn('ocr_working'));\n    speak(t('ocr_working'), tBn('ocr_working'));\n    let lines = null, explain = null;\n    if (cloudReady()) { try { const r = await cloudReadLines(frame); lines = r.lines; explain = r; } catch (e) { cloudFail(e); } }\n    if (!lines) {\n      const { data } = await worker.recognize(frame);\n      lines = (data.lines || []).filter(l => l.confidence >= 55).map(l => cleanOcrLine(l.text))\n        .filter(l => { const letters = l.replace(/[^\\p{L}\\p{N}]/gu, '').length; return letters >= 2 && letters / l.length >= 0.5; });\n    }\n    const text = lines.join('\\n');\n    if (explain && explain.explainEn) reader.onFinish = () => speak(explain.explainEn, explain.explainBn);")
+rep("    const frame = captureFrame(1280);\n    setCaption(t('reading_title'), t('ocr_working'), 'ocr', 'busy', tBn('ocr_working'));\n    speak(t('ocr_working'), tBn('ocr_working'));\n    let data;\n    try { ({ data } = await worker.recognize(frame)); } catch (e) { if (!stillWanted() || e.cancelled) return; throw e; }\n    if (!stillWanted()) return;\n    const lines = (data.lines || []).filter(l => l.confidence >= 55).map(l => cleanOcrLine(l.text))\n      .filter(l => { const letters = l.replace(/[^\\p{L}\\p{N}]/gu, '').length; return letters >= 2 && letters / l.length >= 0.5; });\n    const text = lines.join('\\n');",
+    "    const frame = captureFrame(1280);\n    setCaption(t('reading_title'), t('ocr_working'), 'ocr', 'busy', tBn('ocr_working'));\n    speak(t('ocr_working'), tBn('ocr_working'));\n    let lines = null, explain = null;\n    if (cloudReady()) { try { const r = await cloudReadLines(frame); if (!stillWanted()) return; lines = r.lines; explain = r; } catch (e) { if (e.cancelled || !stillWanted()) return; cloudFail(e); } }\n    if (!stillWanted()) return;\n    if (!lines) {\n      let data;\n      try { ({ data } = await worker.recognize(frame)); } catch (e) { if (!stillWanted() || e.cancelled) return; throw e; }\n      if (!stillWanted()) return;\n      lines = (data.lines || []).filter(l => l.confidence >= 55).map(l => cleanOcrLine(l.text))\n        .filter(l => { const letters = l.replace(/[^\\p{L}\\p{N}]/gu, '').length; return letters >= 2 && letters / l.length >= 0.5; });\n    }\n    if (!stillWanted()) return;\n    const text = lines.join('\\n');\n    if (explain && explain.explainEn) reader.onFinish = () => speak(explain.explainEn, explain.explainBn);")
 # Voice: yes/no follow-ups, owner lock, modes, screen reading, owner commands
 rep("  if (!privacyMode) logEvent('Request: ' + query);\n",
     "  if (!privacyMode) logEvent('Request: ' + query);\n"
@@ -570,13 +570,15 @@ braille_js = (HERE / "braille.js").read_text(encoding="utf-8")
 screen_js = (HERE / "screen-access.js").read_text(encoding="utf-8")
 messages_js = (HERE / "messages.js").read_text(encoding="utf-8")
 sensors_js = (HERE / "sensors.js").read_text(encoding="utf-8")
-rep("\n(function boot() {", i18n_data + i18n_js.rstrip("\n") + "\n" + module.rstrip("\n") + "\n" + eye_js.rstrip("\n") + "\n" + cloud_js.rstrip("\n") + "\n" + agent_js.rstrip("\n") + "\n" + perceive_js.rstrip("\n") + "\n" + spatial_js.rstrip("\n") + "\n" + offline_js.rstrip("\n") + "\n" + account_js.rstrip("\n") + "\n" + experience_js.rstrip("\n") + "\n" + pi_ui_js.rstrip("\n") + "\n" + braille_js.rstrip("\n") + "\n" + sensors_js.rstrip("\n") + "\n" + screen_js.rstrip("\n") + "\n" + messages_js.rstrip("\n") + "\n\n(function boot() {")
+diagnostics_js = (HERE / "diagnostics.js").read_text(encoding="utf-8")
+diagnostics_ui_js = (HERE / "diagnostics-ui.js").read_text(encoding="utf-8")
+rep("\n(function boot() {", i18n_data + i18n_js.rstrip("\n") + "\n" + diagnostics_js.rstrip("\n") + "\n" + diagnostics_ui_js.rstrip("\n") + "\n" + module.rstrip("\n") + "\n" + eye_js.rstrip("\n") + "\n" + cloud_js.rstrip("\n") + "\n" + agent_js.rstrip("\n") + "\n" + perceive_js.rstrip("\n") + "\n" + spatial_js.rstrip("\n") + "\n" + offline_js.rstrip("\n") + "\n" + account_js.rstrip("\n") + "\n" + experience_js.rstrip("\n") + "\n" + pi_ui_js.rstrip("\n") + "\n" + braille_js.rstrip("\n") + "\n" + sensors_js.rstrip("\n") + "\n" + screen_js.rstrip("\n") + "\n" + messages_js.rstrip("\n") + "\n\n(function boot() {")
 rep("  renderSpatialLayout();\n  enhancementBoot();\n})();", "  renderSpatialLayout();\n  enhancementBoot();\n  companionBoot();\n  eyeBoot();\n  cloudBoot();\n})();")
 
 # ---- boot(): expose it instead of self-invoking, so backend.js can run it after sign-in ----
 rep('(function boot() {', 'window.__asthaBoot = function boot() {')
 rep('  companionBoot();\n  eyeBoot();\n  cloudBoot();\n})();',
-    '  companionBoot();\n  eyeBoot();\n  cloudBoot();\n  offlineBoot();\n  AsthaExperience.boot();\n  AsthaPiCamera.boot();\n  AsthaBraille.boot();\n  AsthaScreenAccess.boot();\n  AsthaMessages.boot();\n  refreshMemory();\n  refreshRooms();\n'
+    '  companionBoot();\n  eyeBoot();\n  cloudBoot();\n  offlineBoot();\n  AsthaExperience.boot();\n  AsthaPiCamera.boot();\n  AsthaBraille.boot();\n  AsthaScreenAccess.boot();\n  AsthaMessages.boot();\n  AsthaDiagnosticsUI.boot();\n  refreshMemory();\n  refreshRooms();\n'
     '  // Warm the on-device detector while the page settles (cached weights + WebGL shader compile),\n'
     '  // so the first "describe" or camera start does not begin with a silent wait. Skipped on data-saver.\n'
     "  setTimeout(() => { if (typeof loadCoco === 'function' && engine.coco.status === 'idle' && !(navigator.connection && navigator.connection.saveData)) loadCoco().catch(() => {}); }, 1200);\n"
