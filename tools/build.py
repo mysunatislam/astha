@@ -80,7 +80,6 @@ rep("function proxFromArea(r) { return null; }",
 rep("  if (type === 'click') {\n    // Gentle tap feedback: 550Hz short tick",
     "  if (type === 'tick') {\n    // Alignment click for the heart cursor: very short, quiet\n    osc.type = 'square';\n    osc.frequency.setValueAtTime(1400, now);\n    gain.gain.setValueAtTime(0.05, now);\n    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.03);\n    osc.start(now); osc.stop(now + 0.03);\n  } else if (type === 'click') {\n    // Gentle tap feedback: 550Hz short tick")
 rep("const col = hz ? '#ff3b30' : '#ffd700'; // Clinical yellow / danger red", "const col = hz ? '#ff3b30' : themeAccent();")
-rep("const txt = `${label(o.id)} ${Math.round(o.score * 100)}%`;", "const txt = `${objLabel(o)} ${Math.round(o.score * 100)}%`;")
 rep("esc(label(o.id))", "esc(objLabel(o))", count=2)
 
 # ---- ingest: relabel, mirror special-case, suppression ----
@@ -586,13 +585,14 @@ messages_js = (HERE / "messages.js").read_text(encoding="utf-8")
 sensors_js = (HERE / "sensors.js").read_text(encoding="utf-8")
 diagnostics_js = (HERE / "diagnostics.js").read_text(encoding="utf-8")
 diagnostics_ui_js = (HERE / "diagnostics-ui.js").read_text(encoding="utf-8")
-rep("\n(function boot() {", i18n_data + i18n_js.rstrip("\n") + "\n" + diagnostics_js.rstrip("\n") + "\n" + diagnostics_ui_js.rstrip("\n") + "\n" + module.rstrip("\n") + "\n" + eye_js.rstrip("\n") + "\n" + cloud_js.rstrip("\n") + "\n" + agent_js.rstrip("\n") + "\n" + perceive_js.rstrip("\n") + "\n" + spatial_js.rstrip("\n") + "\n" + offline_js.rstrip("\n") + "\n" + account_js.rstrip("\n") + "\n" + experience_js.rstrip("\n") + "\n" + pi_ui_js.rstrip("\n") + "\n" + braille_js.rstrip("\n") + "\n" + sensors_js.rstrip("\n") + "\n" + screen_js.rstrip("\n") + "\n" + messages_js.rstrip("\n") + "\n\n(function boot() {")
+vision_details_js = (HERE / "vision-details.js").read_text(encoding="utf-8")
+rep("\n(function boot() {", i18n_data + i18n_js.rstrip("\n") + "\n" + diagnostics_js.rstrip("\n") + "\n" + diagnostics_ui_js.rstrip("\n") + "\n" + vision_details_js.rstrip("\n") + "\n" + module.rstrip("\n") + "\n" + eye_js.rstrip("\n") + "\n" + cloud_js.rstrip("\n") + "\n" + agent_js.rstrip("\n") + "\n" + perceive_js.rstrip("\n") + "\n" + spatial_js.rstrip("\n") + "\n" + offline_js.rstrip("\n") + "\n" + account_js.rstrip("\n") + "\n" + experience_js.rstrip("\n") + "\n" + pi_ui_js.rstrip("\n") + "\n" + braille_js.rstrip("\n") + "\n" + sensors_js.rstrip("\n") + "\n" + screen_js.rstrip("\n") + "\n" + messages_js.rstrip("\n") + "\n\n(function boot() {")
 rep("  renderSpatialLayout();\n  enhancementBoot();\n})();", "  renderSpatialLayout();\n  enhancementBoot();\n  companionBoot();\n  eyeBoot();\n  cloudBoot();\n})();")
 
 # ---- boot(): expose it instead of self-invoking, so backend.js can run it after sign-in ----
 rep('(function boot() {', 'window.__asthaBoot = function boot() {')
 rep('  companionBoot();\n  eyeBoot();\n  cloudBoot();\n})();',
-    '  companionBoot();\n  eyeBoot();\n  cloudBoot();\n  offlineBoot();\n  AsthaExperience.boot();\n  AsthaPiCamera.boot();\n  AsthaBraille.boot();\n  AsthaScreenAccess.boot();\n  AsthaMessages.boot();\n  AsthaDiagnosticsUI.boot();\n  refreshMemory();\n  refreshRooms();\n'
+    '  companionBoot();\n  eyeBoot();\n  cloudBoot();\n  offlineBoot();\n  AsthaExperience.boot();\n  AsthaPiCamera.boot();\n  AsthaBraille.boot();\n  AsthaScreenAccess.boot();\n  AsthaMessages.boot();\n  AsthaDiagnosticsUI.boot();\n  AsthaVisionDetails.boot();\n  refreshMemory();\n  refreshRooms();\n'
     '  // Warm the on-device detector while the page settles (cached weights + WebGL shader compile),\n'
     '  // so the first "describe" or camera start does not begin with a silent wait. Skipped on data-saver.\n'
     "  setTimeout(() => { if (typeof loadCoco === 'function' && engine.coco.status === 'idle' && !(navigator.connection && navigator.connection.saveData)) loadCoco().catch(() => {}); }, 1200);\n"

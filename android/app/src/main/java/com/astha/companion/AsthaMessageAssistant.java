@@ -1,5 +1,6 @@
 package com.astha.companion;
 
+import android.Manifest;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -7,6 +8,7 @@ import android.app.PendingIntent;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.content.pm.ServiceInfo;
 import android.media.AudioAttributes;
 import android.media.AudioFocusRequest;
@@ -24,6 +26,7 @@ import android.speech.tts.UtteranceProgressListener;
 import android.speech.tts.Voice;
 
 import androidx.core.app.NotificationCompat;
+import androidx.core.app.NotificationManagerCompat;
 import androidx.core.content.ContextCompat;
 
 import java.util.ArrayDeque;
@@ -109,8 +112,45 @@ public class AsthaMessageAssistant extends Service {
     }
 
     static void start(Context context, String language) {
+        if (startError(context, appVisible) != null || !permitted(context)) throw new IllegalStateException();
         Intent intent = new Intent(context, AsthaMessageAssistant.class).putExtra(LANGUAGE, language);
         ContextCompat.startForegroundService(context, intent);
+    }
+
+    static String startError(Context context, boolean foreground) {
+        return BackgroundMessagePolicy.startError(foreground,
+            context.getSharedPreferences(PREFERENCES, MODE_PRIVATE).getBoolean("message_access_consent", false),
+            NotificationManagerCompat.getEnabledListenerPackages(context).contains(context.getPackageName()),
+            ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED,
+            Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED,
+            notificationVisible(context));
+    }
+
+    private static boolean notificationVisible(Context context) {
+        try {
+            if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) return false;
+            NotificationManager manager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+            if (manager == null) return false;
+            NotificationChannel channel = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O ? manager.getNotificationChannel(CHANNEL) : null;
+            return channel == null || channel.getImportance() != NotificationManager.IMPORTANCE_NONE;
+        } catch (RuntimeException unavailable) { return false; }
+    }
+
+    private static boolean permitted(Context context) {
+        return context.getSharedPreferences(PREFERENCES, MODE_PRIVATE).getBoolean(BACKGROUND, false) && startError(context, true) == null;
+    }
+
+    private void disableAndStop() {
+        getSharedPreferences(PREFERENCES, MODE_PRIVATE).edit().putBoolean(BACKGROUND, false).apply();
+        dropPending();
+        stopSelf();
+    }
+
+    private boolean mayWork() {
+        if (!permitted(this)) { disableAndStop(); return false; }
+        if (appVisible) { dropPending(); return false; }
+        return true;
     }
 
     static void stop(Context context) {
@@ -127,9 +167,10 @@ public class AsthaMessageAssistant extends Service {
         if (intent != null && ACTION_STOP.equals(intent.getAction())) {
             // "Turn off" in the notification is the same as turning it off inside ASTHA.
             getSharedPreferences(PREFERENCES, MODE_PRIVATE).edit().putBoolean(BACKGROUND, false).apply();
-            stopSelf();
+            dropPending(); stopSelf();
             return START_NOT_STICKY;
         }
+        if (!permitted(this)) { disableAndStop(); return START_NOT_STICKY; }
         String language = intent == null ? null : intent.getStringExtra(LANGUAGE);
         if (language == null) language = getSharedPreferences(PREFERENCES, MODE_PRIVATE).getString(LANGUAGE, "en");
         listenBangla = "bn".equals(language);
@@ -137,12 +178,13 @@ public class AsthaMessageAssistant extends Service {
             showNotification();
         } catch (RuntimeException refused) {
             // Android refuses a microphone service that was not started while ASTHA was on screen.
-            stopSelf();
+            disableAndStop();
             return START_NOT_STICKY;
         }
         instance = this;
         if (voice == null) {
             voice = new TextToSpeech(getApplicationContext(), status -> main.post(() -> {
+                if (!permitted(this)) { disableAndStop(); return; }
                 voiceReady = status == TextToSpeech.SUCCESS && voice != null;
                 if (voiceReady) prepareVoice();
                 if (current == null) next();
@@ -159,10 +201,12 @@ public class AsthaMessageAssistant extends Service {
     }
 
     private void showNotification(String status) {
+        if (!permitted(this)) throw new IllegalStateException();
         NotificationManager manager = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && manager != null) {
             manager.createNotificationChannel(new NotificationChannel(CHANNEL, getString(R.string.astha_messages_label), NotificationManager.IMPORTANCE_LOW));
         }
+        if (!notificationVisible(this)) throw new IllegalStateException();
         Intent launch = getPackageManager().getLaunchIntentForPackage(getPackageName());
         PendingIntent open = launch == null ? null : PendingIntent.getActivity(this, 0, launch, PendingIntent.FLAG_IMMUTABLE);
         PendingIntent turnOff = PendingIntent.getService(this, 1,
@@ -192,8 +236,10 @@ public class AsthaMessageAssistant extends Service {
         // consent. Never fall through to an engine's default network voice.
         voiceReady = chosen != null && voice.setVoice(chosen) == TextToSpeech.SUCCESS;
         if (!voiceReady) {
-            showNotification(listenBangla ? "অফলাইন কণ্ঠ নেই। ফোনের ভাষা সেটিংসে বাংলা বা ইংরেজি কণ্ঠ ইনস্টল করে আস্থা আবার খুলুন। বার্তা পড়া বা পাঠানো হচ্ছে না।"
-                : "No offline voice is installed. Install a Bangla or English device voice and reopen Astha. Messages are not being read or sent.");
+            try {
+                showNotification(listenBangla ? "অফলাইন কণ্ঠ নেই। ফোনের ভাষা সেটিংসে বাংলা বা ইংরেজি কণ্ঠ ইনস্টল করে আস্থা আবার খুলুন। বার্তা পড়া বা পাঠানো হচ্ছে না।"
+                    : "No offline voice is installed. Install a Bangla or English device voice and reopen Astha. Messages are not being read or sent.");
+            } catch (RuntimeException refused) { disableAndStop(); }
             return;
         }
         // Android 7 has no "assistant" audio usage; accessibility speech is the closest there.
@@ -221,7 +267,7 @@ public class AsthaMessageAssistant extends Service {
     /** Called by the notification listener when a message arrives and ASTHA is not in front. */
     void offer(String key, String conversation, String app, String sender, String text, boolean canReply) {
         main.post(() -> {
-            if (appVisible) return;
+            if (!mayWork()) return;
             // An edited or repeated notification for the same conversation replaces the one waiting.
             for (Pending waiting : new ArrayList<>(queue)) if (waiting.conversation.equals(conversation)) queue.remove(waiting);
             if (current != null && current.conversation.equals(conversation) && !current.key.equals(key)) {
@@ -264,7 +310,7 @@ public class AsthaMessageAssistant extends Service {
     }
 
     private void next() {
-        if (appVisible) { dropPending(); return; }
+        if (!mayWork()) return;
         main.removeCallbacks(nextMessage);
         stopListening();
         current = null;
@@ -288,12 +334,13 @@ public class AsthaMessageAssistant extends Service {
 
     // Each utterance carries whether the microphone should open once it has been spoken.
     private void say(String words, boolean thenListen) {
+        if (!mayWork()) return;
         String id = (++turn) + (thenListen ? ":listen" : ":next");
         if (voice.speak(words, TextToSpeech.QUEUE_FLUSH, null, id) != TextToSpeech.SUCCESS) spoken(id, false);
     }
 
     private void spoken(String id, boolean completed) {
-        if (appVisible) { dropPending(); return; }
+        if (!mayWork()) return;
         if (id == null || !id.startsWith(turn + ":")) return;   // an older sentence finishing late
         // A failed or interrupted read-back cannot authorize opening the microphone
         // for confirmation. next() drops the current draft and stops any recognizer.
@@ -302,7 +349,7 @@ public class AsthaMessageAssistant extends Service {
     }
 
     private void listen() {
-        if (appVisible) { dropPending(); return; }
+        if (!mayWork()) return;
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.S || !SpeechRecognizer.isOnDeviceRecognitionAvailable(this)) {
             onDeviceInputUnavailable();
             return;
@@ -323,6 +370,7 @@ public class AsthaMessageAssistant extends Service {
 
             @Override
             public void onError(int error) {
+                if (!mayWork()) return;
                 if (recognizer != requestRecognizer) return;
                 if (!MessageCommands.mayAnswer(appVisible, heardFor, turn, current != null)) return;
                 if (error == SpeechRecognizer.ERROR_LANGUAGE_NOT_SUPPORTED || error == SpeechRecognizer.ERROR_LANGUAGE_UNAVAILABLE) {
@@ -358,6 +406,7 @@ public class AsthaMessageAssistant extends Service {
             .putExtra(RecognizerIntent.EXTRA_LANGUAGE, listenBangla ? "bn-BD" : "en-US")
             .putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
             .putExtra(RecognizerIntent.EXTRA_CALLING_PACKAGE, getPackageName());
+        if (!mayWork()) return;
         try { recognizer.startListening(intent); }
         catch (RuntimeException unavailable) { onDeviceInputUnavailable(); return; }
         // The microphone closes on its own even if the recognizer never reports back.
@@ -366,7 +415,7 @@ public class AsthaMessageAssistant extends Service {
     }
 
     private void onDeviceInputUnavailable() {
-        if (appVisible) { dropPending(); return; }
+        if (!mayWork()) return;
         stopListening();
         draft = "";
         say(bangla ? "এই ফোনে এই ভাষার অফলাইন কণ্ঠ শনাক্তকরণ নেই। কিছু পাঠানো হয়নি। আস্থা খুলে লিখে উত্তর দিন।"
@@ -379,12 +428,13 @@ public class AsthaMessageAssistant extends Service {
         if (recognizer != null) {
             SpeechRecognizer previous = recognizer;
             recognizer = null;
-            previous.cancel();
-            previous.destroy();
+            try { previous.cancel(); } catch (RuntimeException ignored) {}
+            try { previous.destroy(); } catch (RuntimeException ignored) {}
         }
     }
 
     private void answered(int heardFor, String heard) {
+        if (!mayWork()) return;
         if (!MessageCommands.mayAnswer(appVisible, heardFor, turn, current != null)) return;
         stopListening();
         MessageCommands.Command command = MessageCommands.parse(heard, stage);
@@ -428,6 +478,7 @@ public class AsthaMessageAssistant extends Service {
     }
 
     private void send() {
+        if (!mayWork()) return;
         if (appVisible || !MessageCommands.CONFIRM.equals(stage) || current == null) { dropPending(); return; }
         AsthaNotificationListener listener = AsthaNotificationListener.running();
         boolean delivered = listener != null && listener.reply(current.key, draft);

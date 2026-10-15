@@ -658,6 +658,17 @@
   .astha-app:is([data-view="home"], [data-view="memory"], [data-view="settings"]) :is(#reader-card, #eye-card) { display: none; }
   .astha-app[data-view="home"] .companion > :not(:is(.status-line, .hero-card, .voice-notice, .essentials, .type-instead, .utility-row, .caption, #agent-status-card, #calib-modal)) { display: none; }
   .astha-app[data-view="tools"] .companion > :is(.status-line, .hero-card, .voice-notice, .essentials, .type-instead, .utility-row) { display: none; }
+  .astha-app .vision-details-head { margin-bottom: 18px; }
+  .astha-app .vision-details-head h2 { margin: 0 0 10px; font-size: 1.25rem; }
+  .astha-app .vision-details-actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 12px 0; }
+  .astha-app .vision-details-actions .btn { min-height: 48px; white-space: normal; }
+  .astha-app .vision-result-table { width: 100%; border-collapse: collapse; table-layout: fixed; font-size: .95rem; }
+  .astha-app .vision-result-table caption { text-align: start; font-weight: 700; padding: 12px 0; }
+  .astha-app .vision-result-table th, .astha-app .vision-result-table td { padding: 12px 8px; text-align: start; vertical-align: top; overflow-wrap: anywhere; border-bottom: 1px solid var(--border); }
+  .astha-app .vision-result-table th { color: var(--text); background: var(--surface-2, var(--bg-2)); }
+  .astha-app[data-view="tools"] .viewport { aspect-ratio: var(--vision-aspect, 4 / 3); max-height: none; }
+  .astha-app[data-view="tools"] .viewport :is(video, img, canvas) { object-fit: contain; }
+  .astha-app .detailed-entry { min-height: 48px; margin: 8px 0 18px; }
   /* The calibration dialog lives in the companion card, so the card stays in the tree. */
   .astha-app:is([data-view="memory"], [data-view="settings"]) .companion > :not(#calib-modal) { display: none; }
   .astha-app:is([data-view="memory"], [data-view="settings"]) .companion { padding: 0; border: 0; box-shadow: none; background: transparent; }
@@ -924,6 +935,21 @@
         </div>
 
 
+      <section class="vision-details-head" aria-labelledby="vision-details-title">
+        <div class="vision-details-actions">
+          <button class="btn" type="button" data-astha-page="devices" data-i18n="vision_back_devices">Back to Devices</button>
+          <button class="btn" type="button" data-astha-page="settings" data-i18n="page_settings">Settings</button>
+        </div>
+        <h2 id="vision-details-title" data-i18n="page_tools">Detailed view</h2>
+        <p class="help" data-i18n="vision_details_intro">Inspect the existing camera or selected image and its actual local detector results. Opening this view does not start a camera or a recognition check.</p>
+        <div class="vision-details-actions">
+          <button class="btn accent" type="button" id="vision-camera" aria-pressed="false" data-i18n="vision_camera_start">Start phone camera</button>
+          <button class="btn" type="button" id="vision-check" data-i18n="vision_check">Run one check</button>
+          <button class="btn" type="button" onclick="stopAllSpeech()" data-i18n="vision_stop">Stop current work</button>
+        </div>
+        <p id="vision-model" class="help" data-i18n="vision_model_idle">Object detector: not loaded.</p>
+        <p id="vision-state" class="help" role="status" data-i18n="vision_off">Camera off. Start a camera or select a photo below.</p>
+      </section>
       <p class="prototype-note">Browser prototype · Camera recognition and reading are experimental. Use your usual mobility aid; Astha cannot confirm a safe path.</p>
       <p id="source-status" class="source-status" role="status">Camera off · No image selected</p>
       <div class="viewport" id="viewport">
@@ -969,6 +995,16 @@
         <span class="label" data-i18n="seeing_now">Seeing now:</span>
         <span class="empty-note" id="seen-empty" data-i18n="seen_none">nothing yet</span>
       </div>
+
+      <section id="vision-results" aria-labelledby="vision-results-title">
+        <h3 id="vision-results-title" data-i18n="vision_results_title">Detector results</h3>
+        <p class="help" data-i18n="vision_results_help">Solid boxes locate detected objects. Their model scores are not verified accuracy. Dashed areas are recent CLIP search zones with similarity ranking scores, not object boxes or segmentation. Online descriptions are separate from these results.</p>
+        <table class="vision-result-table" aria-live="off">
+          <caption id="vision-result-count" data-i18n="vision_not_checked">No current result for this source.</caption>
+          <thead><tr><th scope="col" data-i18n="vision_object">Object</th><th scope="col" data-i18n="vision_method">Result type</th><th scope="col" data-i18n="vision_score">Score</th><th scope="col" data-i18n="vision_position">Position</th></tr></thead>
+          <tbody id="vision-result-rows"></tbody>
+        </table>
+      </section>
 
       <details id="vision-debug" class="card">
         <summary data-i18n="debug_title">Vision diagnostics</summary>
@@ -1090,7 +1126,7 @@
   <aside class="stack">
     <div class="card settings-links">
       <button class="btn" type="button" data-astha-page="assessment" data-i18n="page_assessment">Personal setup</button>
-      <button class="btn" type="button" data-astha-page="tools" data-i18n="page_tools">Camera and tools</button>
+      <button class="btn accent detailed-entry" type="button" data-astha-page="tools" data-i18n="page_tools">Detailed view</button>
     </div>
     <details class="panel-disclosure">
       <summary data-i18n="ui_preferences_privacy">Preferences &amp; privacy</summary>
@@ -1758,6 +1794,7 @@ function setEngineState(key, status) {
   pill.textContent = t('state_' + status);
   pill.className = 'pill ' + ({ idle: '', loading: 'warn', ready: 'ok', error: 'danger' }[status] || '');
   if (key === 'coco') renderDetectorDescription();
+  if (key === 'coco' && typeof AsthaVisionDetails !== 'undefined') AsthaVisionDetails.modelChanged();
 }
 function renderDetectorDescription() {
   const description = $('engine-coco-sub');
@@ -1864,6 +1901,7 @@ function activeSourceEl() {
 function showSource(kind) {
   state.source = kind;
   state.sourceEpoch = (state.sourceEpoch || 0) + 1;
+  if (typeof AsthaVisionDetails !== 'undefined') AsthaVisionDetails.sourceChanged();
   if (typeof AsthaDiagnostics !== 'undefined') AsthaDiagnostics.setSourceEpoch(state.sourceEpoch);
   if (typeof AsthaExperience !== 'undefined') AsthaExperience.invalidate();
   if ($('pi-preview')) $('pi-preview').hidden = kind !== 'pi';
@@ -2217,11 +2255,16 @@ function captureFrame(maxW = 640) {
   const scale=Math.min(1,maxW/sw), frame=document.createElement('canvas');
   frame.width=Math.round(sw*scale); frame.height=Math.round(sh*scale);
   frame.getContext('2d',{willReadFrequently:true}).drawImage(src,0,0,frame.width,frame.height);
+  if (typeof AsthaVisionDetails !== 'undefined') AsthaVisionDetails.capture(frame);
   return frame;
 }
 
 async function runCoco(frame) {
-  if (engine.coco.status !== 'ready' || !engine.coco.model) return [];
+  if (engine.coco.status !== 'ready' || !engine.coco.model) {
+    if (typeof AsthaVisionDetails !== 'undefined') AsthaVisionDetails.skipped(frame);
+    return [];
+  }
+  if (typeof AsthaVisionDetails !== 'undefined') AsthaVisionDetails.begin(frame);
   const confThresh = (engine.coco.type === 'yolo26n') ? 0.38 : 0.50;
   const timing = typeof AsthaDiagnostics !== 'undefined' ? AsthaDiagnostics.start('perception', { sourceEpoch: state.sourceEpoch || 0 }) : null;
   let preds;
@@ -2230,11 +2273,14 @@ async function runCoco(frame) {
     if (typeof AsthaDiagnostics !== 'undefined') AsthaDiagnostics.finish(timing, 'success');
   } catch (error) {
     if (typeof AsthaDiagnostics !== 'undefined') AsthaDiagnostics.finish(timing, 'error');
+    if (typeof AsthaVisionDetails !== 'undefined') AsthaVisionDetails.failed(frame);
     throw error;
   }
+  if (typeof AsthaVisionDetails !== 'undefined') AsthaVisionDetails.complete(frame);
   const area = frame.width * frame.height;
   return preds.filter(p => p.score >= confThresh && COCO_TO_ID[p.class]).map(p => ({
     id: COCO_TO_ID[p.class],
+    detectorId: COCO_TO_ID[p.class], detectorScore: p.score,
     score: p.score,
     bbox: p.bbox,
     pos: posFromX(p.bbox[0] + p.bbox[2] / 2, frame.width),
@@ -2340,6 +2386,8 @@ function worldSorted() {
 function clearOverlay() { const c = $('overlay'); c.getContext('2d').clearRect(0, 0, c.width, c.height); }
 
 function drawOverlay(frame, cocoObjs, clipHits) {
+  if (typeof AsthaVisionDetails !== 'undefined' && !AsthaVisionDetails.canDraw(frame, cocoObjs)) return;
+  clipHits = (clipHits || []).filter(hit => !Number.isFinite(hit.at) || Date.now() - hit.at <= 4000);
   const c = $('overlay');
   if (c.width !== frame.width || c.height !== frame.height) { c.width = frame.width; c.height = frame.height; }
   const ctx = c.getContext('2d');
@@ -2353,7 +2401,7 @@ function drawOverlay(frame, cocoObjs, clipHits) {
     const hz = isHazard(o);
     const col = hz ? '#ff3b30' : '#ffd700'; // Clinical yellow / danger red
     ctx.strokeStyle = col; ctx.lineWidth = lw; ctx.strokeRect(x, y, w, h);
-    const txt = `${label(o.id)} ${Math.round(o.score * 100)}%`;
+    const txt = t('vision_box_label', { label: label(o.detectorId || o.id), score: Math.round((o.detectorScore ?? o.score) * 100) });
     const tw = ctx.measureText(txt).width;
     const ly = Math.max(0, y - fs - 8);
     ctx.fillStyle = col; ctx.fillRect(x, ly, tw + 14, fs + 8);
@@ -2366,12 +2414,13 @@ function drawOverlay(frame, cocoObjs, clipHits) {
     const z = hh.zone; const col = isHazard(hh) ? '#ff3b30' : '#00e5ff';
     ctx.setLineDash([8, 6]); ctx.strokeStyle = col; ctx.lineWidth = lw * 0.8;
     ctx.strokeRect(z.x + lw, z.y + lw, z.s - 2 * lw, z.s - 2 * lw); ctx.setLineDash([]);
-    const txt = `${label(hh.id)} ${Math.round(hh.score * 100)}%`;
+    const txt = t('vision_clip_label', { label: label(hh.id), score: Number(hh.score).toFixed(2) });
     const tw = ctx.measureText(txt).width;
     const lx = z.x + (z.s - tw - 14) / 2, ly = z.y + z.s - fs - 12;
     ctx.fillStyle = col; ctx.fillRect(lx, ly, tw + 14, fs + 8);
     ctx.fillStyle = '#000000'; ctx.fillText(txt, lx + 7, ly + fs);
   });
+  if (typeof AsthaVisionDetails !== 'undefined') AsthaVisionDetails.publish(frame, cocoObjs, clipHits);
 }
 
 function isHazard(o) {
@@ -2985,7 +3034,7 @@ const VAULT_KEY = 'astha.memory.v1.encrypted';
 
 Object.assign(I18N.en, {
   badge_clinical: 'Prototype', tagline: 'Your voice-first visual companion',
-  ready_text: 'Hello. I am ready. How can I help you? Start the camera, read a page, or ask about your saved things.',
+  ready_text: 'Hello, I am Astha, your AI vision companion.',
   act_describe_desc: 'Describe objects and their position in the image', act_identify_desc: 'Inspect the item and read its visible text',
   act_calibrate: 'Remember a room', act_calibrate_desc: 'Save landmarks confirmed by you',
   spatial_title: 'My room notes', spatial_calibrate_btn: '+ Add a room', spatial_help: 'Notes you have confirmed. These do not measure distances or track your position.', spatial_empty: 'No room notes yet.',
@@ -3004,6 +3053,7 @@ Object.assign(I18N.en, {
   auto_narrate: 'Announce new objects automatically (off by default for screen readers)'
 });
 Object.assign(I18N.bn, {
+  ready_text: 'হ্যালো, আমি আস্থা, আপনার এআই দৃষ্টি সহায়ক।',
   path_clear: 'এই ছবিতে কোনো বাধা শনাক্ত হয়নি। পথ নিরাপদ কি না নিশ্চিত করতে পারি না।',
   fall_msg: 'এটি পতন সতর্কতার ডেমো। কোনো পতন শনাক্ত হয়নি এবং কোনো বার্তা পাঠানো হয়নি।',
   shield_on_msg: 'পরীক্ষামূলক বাধা সতর্কতা চালু। বিপদ বাদ পড়তে পারে। পথ নিরাপদ কি না নিশ্চিত করতে পারি না।',

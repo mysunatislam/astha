@@ -14,6 +14,21 @@ const reply = (text, init) => new Response(JSON.stringify({ detail: { response: 
 const answer = { en: 'A chair is ahead.', bn: 'সামনে একটি চেয়ার আছে।', hazard: false };
 const fixtureImage = Buffer.from('mock-image-bytes').toString('base64');
 
+test('provider tasks carry Astha identity without replacing names read from documents', async t => {
+  useMaira();
+  let query;
+  const document = { en: 'The sign says Neurobridge Asha.', bn: 'সাইনবোর্ডে লেখা আছে নিউরোব্রিজ আশা।', text: 'Neurobridge Asha' };
+  t.mock.method(globalThis, 'fetch', async (_url, options) => {
+    query = JSON.parse(options.body).query;
+    return reply(JSON.stringify(document));
+  });
+  assert.deepEqual(await callMaira({ task: 'read', userId: 'synthetic-identity-user' }), document);
+  assert.match(query, /Your user-facing name is Astha/);
+  assert.match(query, /Hello, I am Astha, your AI vision companion\./);
+  assert.match(query, /হ্যালো, আমি আস্থা, আপনার এআই দৃষ্টি সহায়ক।/);
+  assert.match(query, /Do not add an introduction to ordinary visual answers unless asked/);
+});
+
 test('explicit provider selection and config-only status preserve Gemini and legacy Maira installations', () => {
   assert.equal(getCloudProvider({}), 'none');
   assert.deepEqual(getCloudStatus({}), { provider: 'none', configured: false });

@@ -123,6 +123,12 @@ const AsthaExperience = (() => {
     if (guide) { answerGuide(q); return true; }
     // A message being answered owns the next request, as the guide does.
     if (typeof AsthaMessages !== 'undefined' && AsthaMessages.route(query)) return true;
+    // A complete greeting or identity question is local; quoted words and reading tasks
+    // keep their normal route. A guided setup or message reply still owns its next answer.
+    const greeting = q.normalize('NFC').replace(/[.!?।\s]+$/, '');
+    if (/^(?:(?:hello|hi|hey)(?:[,\s]+astha)?|who are you|introduce yourself|are you there|হ্যালো(?:[,\s]+আস্থা)?|হাই(?:[,\s]+আস্থা)?|তুমি কে|আপনি কে|নিজের পরিচয় দাও|নিজের পরিচয় দিন|তুমি কি আছো|আপনি কি আছেন|আছো|আছেন)$/.test(greeting)) {
+      say(I18N.en.identity_intro, I18N.bn.identity_intro); return true;
+    }
     if (/^(?:start |begin )?(?:the )?(?:guided|voice|spoken) setup$|^set me up$|গাইডেড সেটআপ|কণ্ঠে সেটআপ|সেটআপ শুরু করো/.test(q.replace(/[.!?।\s]+$/, ''))) { showPage('assessment', { speakTitle: false }); startGuide(); return true; }
     // Hands-free needs continuous recognition, which this browser or app does not have.
     if (!handsFreeAvailable() && /hands.?free|keep listening|always listen|হ্যান্ডস.?ফ্রি|সবসময় শোনো/.test(q)) {
@@ -148,7 +154,7 @@ const AsthaExperience = (() => {
       ['devices', new RegExp('^(?:' + open + '(?:my |connected )?devices|(?:সংযুক্ত )?ডিভাইস' + kholo + ')$')],
       ['settings', new RegExp('^(?:' + open + '(?:the )?settings|সেটিংস' + kholo + ')$')],
       ['memory', new RegExp('^(?:' + open + '(?:my )?(?:memory|memories)|স্মৃতি' + kholo + ')$')],
-      ['tools', new RegExp('^(?:' + open + '(?:the )?(?:camera view|camera tools|tools)|ক্যামেরা(?: খোলো| দেখাও))$')],
+      ['tools', new RegExp('^(?:' + open + '(?:the )?(?:detailed view|camera view|camera tools|tools)|বিস্তারিত দৃশ্য' + kholo + '|ক্যামেরা(?: খোলো| দেখাও))$')],
     ];
     for (const [name, pattern] of pages) if (pattern.test(bare)) { showPage(name); return true; }
     if (typeof AsthaScreenAccess !== 'undefined' && AsthaScreenAccess.route(query)) return true;
@@ -188,6 +194,7 @@ const AsthaExperience = (() => {
     document.querySelectorAll('[data-astha-page]').forEach(button => button.setAttribute('aria-current', button.dataset.asthaPage === next ? 'page' : 'false'));
     const title = $('page-title');
     if (title) { title.textContent = t(PAGE_KEYS[next]); if (focus) { title.setAttribute('tabindex', '-1'); title.focus(); } }
+    if (typeof AsthaVisionDetails !== 'undefined') AsthaVisionDetails.setVisible(next === 'tools');
     spokenGroup = null;
     if (!speakTitle || !state.audio) return;
     if (next === 'assessment') readAssessment();
@@ -336,6 +343,7 @@ const AsthaExperience = (() => {
   }
   // A shared phone must not keep the previous person's vision and device answers.
   function accountCleared() {
+    if (typeof AsthaVisionDetails !== 'undefined') AsthaVisionDetails.clear();
     if (typeof AsthaDiagnosticsUI !== 'undefined') AsthaDiagnosticsUI.clear();
     invalidatePreferences();
     try { localStorage.removeItem(PREF_KEY); localStorage.removeItem('astha.accessibility.v1'); } catch {}

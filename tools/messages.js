@@ -9,7 +9,7 @@ const AsthaMessages = (() => {
   // Confirm the complete answer. An affirmative prefix followed by a refusal,
   // qualification or unrelated speech must never authorize sending a message.
   const YES = /^(?:(?:yes|yeah|yep|sure|ok|okay)(?:[,\s]+send it)?|send|send it|go ahead|do it|হ্যাঁ(?:[,\s]+(?:পাঠাও|পাঠিয়ে দাও))?|হুম|জি|জ্বি|পাঠাও|পাঠিয়ে দাও|ঠিক আছে)$/;
-  let status = 'off', background = false, backgroundLang = null, current = null, stage = null, draft = '', waiting = [], timer = null;
+  let status = 'off', background = false, backgroundLang = null, backgroundRevision = 0, refreshSequence = 0, current = null, stage = null, draft = '', waiting = [], timer = null;
   const native = () => typeof window !== 'undefined' && window.AsthaNative ? window.AsthaNative.messages : null;
   const speechLang = () => (typeof voiceLang !== 'undefined' ? voiceLang : typeof uiLang !== 'undefined' ? uiLang : 'en') === 'bn' ? 'bn' : 'en';
   const element = id => document.getElementById(id);
@@ -27,27 +27,49 @@ const AsthaMessages = (() => {
   }
   async function refresh() {
     const bridge = native(); if (!bridge) return status;
+    const sequence = ++refreshSequence, revision = backgroundRevision;
+    const currentStatus = () => sequence === refreshSequence && revision === backgroundRevision && !document.hidden;
     try {
       const reply = await bridge.status();
+      if (!currentStatus()) return status;
       status = !reply.consent ? 'off' : reply.enabled ? 'on' : 'waiting';
       background = reply.background === true;
-    } catch { status = 'off'; background = false; }
+    } catch { if (!currentStatus()) return status; status = 'off'; background = false; }
     render();
     return status;
   }
   // The locked-phone assistant is a separate choice: Android shows a notification while it runs.
   async function setBackground(on) {
     const bridge = native(); if (!bridge || !bridge.setBackground) return;
+    const revision = ++backgroundRevision;
+    const stillWanted = () => revision === backgroundRevision && !document.hidden;
     try {
       await bridge.setBackground(on, speechLang());
+      if (!stillWanted()) return;
       backgroundLang = on ? speechLang() : null;
       if (on) say('Astha will read new messages aloud even when the phone is locked. A notification shows while this is on, and she listens only right after reading a message.',
         'ফোন লক থাকলেও আস্থা নতুন বার্তা পড়ে শোনাবে। এটি চালু থাকলে একটি নোটিফিকেশন দেখা যাবে, আর সে শুধু বার্তা পড়ার ঠিক পরেই শোনে।');
       else say('Astha will only read messages while she is open.', 'আস্থা শুধু খোলা থাকলেই বার্তা পড়বে।');
-    } catch {
-      say('Android did not allow it. Astha needs the microphone to hear your answer.', 'অ্যান্ড্রয়েড অনুমতি দেয়নি। আপনার উত্তর শুনতে আস্থার মাইক্রোফোন লাগবে।');
+    } catch (error) {
+      if (!stillWanted()) return;
+      if (error?.code === 'cancelled') { await refresh(); return; }
+      if (error?.code === 'notifications_permission' || error?.code === 'notifications_disabled') {
+        say('Locked-phone message help is off. Allow Astha notifications in Android Settings so the running assistant and Turn off control are visible, then try again.',
+          'লক করা ফোনে বার্তা সহায়তা বন্ধ আছে। চলমান সহায়ক ও বন্ধ করার নিয়ন্ত্রণ দেখতে অ্যান্ড্রয়েড সেটিংসে আস্থার নোটিফিকেশন চালু করে আবার চেষ্টা করুন।');
+      } else if (error?.code === 'service_disabled') {
+        say('Locked-phone message help is off. Allow Astha notification access in Android Settings, then try again.',
+          'লক করা ফোনে বার্তা সহায়তা বন্ধ আছে। অ্যান্ড্রয়েড সেটিংসে আস্থাকে নোটিফিকেশন অ্যাক্সেস দিয়ে আবার চেষ্টা করুন।');
+      } else if (error?.code === 'permission') {
+        say('Locked-phone message help is off. Allow microphone access so Astha can hear your reply, then try again.',
+          'লক করা ফোনে বার্তা সহায়তা বন্ধ আছে। আপনার উত্তর শুনতে আস্থাকে মাইক্রোফোন ব্যবহারের অনুমতি দিয়ে আবার চেষ্টা করুন।');
+      } else if (error?.code === 'consent_required') {
+        say('Turn on message help before enabling locked-phone messages.', 'লক করা ফোনে বার্তা চালু করার আগে বার্তা সহায়তা চালু করুন।');
+      } else {
+        say('Android did not start locked-phone message help. Keep Astha open and try again. Message help while Astha is open is still available.',
+          'অ্যান্ড্রয়েড লক করা ফোনে বার্তা সহায়তা চালু করেনি। আস্থা খোলা রেখে আবার চেষ্টা করুন। আস্থা খোলা অবস্থায় বার্তা সহায়তা ব্যবহার করতে পারবেন।');
+      }
     }
-    await refresh();
+    if (stillWanted()) await refresh();
   }
   function refreshLabels() {
     render();
@@ -59,12 +81,19 @@ const AsthaMessages = (() => {
   }
   async function toggle() {
     const bridge = native(); if (!bridge) return;
+    const revision = ++backgroundRevision;
+    const stillWanted = () => revision === backgroundRevision && !document.hidden;
     if (await refresh() !== 'off') {
-      await bridge.setConsent(false); waiting = []; forget(); backgroundLang = null; await refresh();
+      if (!stillWanted()) return;
+      await bridge.setConsent(false); waiting = []; forget(); backgroundLang = null;
+      if (!stillWanted()) return;
+      await refresh(); if (!stillWanted()) return;
       say('Astha will no longer read or answer your messages.', 'আস্থা আর আপনার বার্তা পড়বে বা উত্তর দেবে না।');
       return;
     }
+    if (!stillWanted()) return;
     await bridge.setConsent(true);
+    if (!stillWanted()) return;
     say('Android will now open its notification access settings. Turn on Astha there. Android will show its own warning first.',
       'এখন অ্যান্ড্রয়েডের নোটিফিকেশন অ্যাক্সেস সেটিংস খুলবে। সেখানে আস্থা চালু করুন। অ্যান্ড্রয়েড আগে নিজের সতর্কবার্তা দেখাবে।');
     await refresh();
@@ -171,7 +200,7 @@ const AsthaMessages = (() => {
     native().onMessage(receive);
     document.addEventListener('visibilitychange', () => {
       if (!document.hidden) refresh();
-      else { clearTimeout(timer); timer = null; waiting = []; forget(); }
+      else { ++backgroundRevision; clearTimeout(timer); timer = null; waiting = []; forget(); }
     });
     refresh().then(() => { if (background) backgroundLang = speechLang(); });
   }
