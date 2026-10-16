@@ -58,7 +58,8 @@ function uploadLocalMemory(entry, accountKey) {
   if (memoryUploads.has(entry)) return memoryUploads.get(entry);
   const upload = (async () => {
     if (!entry.pending) return;
-    const result = await apiSend('POST', '/api/memories', { item: entry.item, location: entry.location, source: entry.source, score: entry.score });
+    const result = await apiSend('POST', '/api/memories', { item: entry.item, location: entry.location, source: entry.source, score: entry.score,
+      ...(Number.isSafeInteger(entry.observedAt) ? { observed_at: entry.observedAt } : {}) });
     if (accountKey !== LocalStore.KEY) return;
     entry.pending = false;
     if (result && result.id) {
@@ -160,28 +161,31 @@ function renderSpatialLayout() {
     </div>`).join('') : '<p class="empty-note">No calibrated rooms yet. Tap "Home layout calibration" to map your rooms with video.</p>';
   LocalStore.scheduleSave();
 }
-function addLocalMemory({ item, location, locationBn = null, source = 'Your note', score = null, id = undefined }) {
+function addLocalMemory({ item, location, locationBn = null, source = 'Your note', score = null, id = undefined, observedAt = null, preserveExistingNotes = false }) {
   const accountKey = LocalStore.KEY;
   const entry = { uid: newUid(), id, item: String(item).trim().slice(0, 80), location: String(location).trim().slice(0, 160), locationBn: locationBn ? String(locationBn).slice(0, 160) : null, source: String(source).slice(0, 80), score: typeof score === 'number' ? score : null, time: new Date().toISOString(), pending: true };
-  state.memory = [entry, ...state.memory.filter(m => m.item.toLowerCase() !== entry.item.toLowerCase())].slice(0, 80);
+  if (Number.isSafeInteger(observedAt) && observedAt > 0 && observedAt <= Date.now()) { entry.observedAt = observedAt; entry.time = new Date(observedAt).toISOString(); }
+  state.memory = [entry, ...state.memory.filter(m => m.item.toLowerCase() !== entry.item.toLowerCase() ||
+    (preserveExistingNotes && !/^Camera observation \((?:online|detector), possible\)$/.test(m.source || '')))].slice(0, 80);
   renderMemory(); LocalStore.save();
   uploadLocalMemory(entry, accountKey).catch(() => { /* stays in this account's local namespace */ });
   return entry;
 }
 let _recentMemoryDedupe2 = [];
-async function autoRecordMemory({ item, location, locationBn = null, source = 'Camera observation', score = null, room = null, furniture = null, approved = false }) {
+async function autoRecordMemory({ item, location, locationBn = null, source = 'Camera observation', score = null, room = null, furniture = null, approved = false, observedAt = null, preserveLocation = false }) {
   if (!approved || privacyMode || privacyTransition) return;
   if (!item || !String(item).trim()) return;
   const cleanItem = String(item).trim().slice(0, 80), now = Date.now();
-  _recentMemoryDedupe2 = _recentMemoryDedupe2.filter(m => now - m.time < 45000);
+  const accountKey = LocalStore.KEY;
+  _recentMemoryDedupe2 = _recentMemoryDedupe2.filter(m => m.accountKey === accountKey && now - m.time < 45000);
   if (_recentMemoryDedupe2.some(m => m.item.toLowerCase() === cleanItem.toLowerCase())) return;
-  _recentMemoryDedupe2.push({ item: cleanItem, time: now });
+  _recentMemoryDedupe2.push({ item: cleanItem, time: now, accountKey });
   let resolved = location || 'in front of the camera';
-  const curRoom = room || state.currentRoom || null;
+  const curRoom = preserveLocation ? null : room || state.currentRoom || null;
   if (furniture && curRoom) resolved = `on the ${furniture} in the ${curRoom}`;
   else if (furniture) resolved = `on the ${furniture}`;
   else if (curRoom && !resolved.toLowerCase().includes(curRoom.toLowerCase())) resolved = `${resolved} in the ${curRoom}`;
-  const entry = addLocalMemory({ item: cleanItem, location: resolved, locationBn, source, score });
+  const entry = addLocalMemory({ item: cleanItem, location: resolved, locationBn, source, score, observedAt, preserveExistingNotes: preserveLocation });
   logEvent(`Memory saved: ${cleanItem} (${resolved})`);
   return entry;
 }
@@ -205,6 +209,8 @@ async function remember(id, pos) {
 }
 async function deleteMemory(uid) {
   if (privacyTransition) return;
+  const forgotten = state.memory.find(m => m.uid === uid);
+  if (forgotten && typeof AsthaObservationMemory !== 'undefined') AsthaObservationMemory.forget(forgotten.item);
   state.memory = state.memory.filter(m => m.uid !== uid); renderMemory(); LocalStore.save();
   LocalStore.queueDelete('/api/memories/' + encodeURIComponent(uid));
   const synced = await LocalStore.flushDeletions();
@@ -213,11 +219,13 @@ async function deleteMemory(uid) {
 }
 async function clearMemory() {
   if (!confirm(t('memory_clear_confirm'))) return;
+  if (typeof AsthaObservationMemory !== 'undefined') AsthaObservationMemory.clear();
   state.memory = []; state.spatialHome = []; state.log = []; LocalStore.clear();
   renderMemory(); renderSpatialLayout(); renderLog();
   ['/api/memories', '/api/rooms', '/api/log'].forEach(path => LocalStore.queueDelete(path));
   const synced = await LocalStore.flushDeletions();
   announce(synced ? 'Personal memories and room notes deleted from this phone and account.' : 'Deleted from this phone. Account deletion is pending and will retry when connected.', synced ? 'এই ফোন ও অ্যাকাউন্ট থেকে ব্যক্তিগত স্মৃতি ও ঘরের নোট মুছে ফেলা হয়েছে।' : 'এই ফোন থেকে মুছে ফেলা হয়েছে। সংযোগ পেলে অ্যাকাউন্ট থেকে মুছে ফেলার চেষ্টা হবে।', 'system');
+  if (typeof AsthaObservationMemory !== 'undefined') announce('Automatic memory is off after clearing. Enable it again only when you want new observations saved.', 'সব মুছে দেওয়ার পরে স্বয়ংক্রিয় স্মৃতি বন্ধ। নতুন পর্যবেক্ষণ রাখতে চাইলে আবার চালু করুন।', 'memory');
 }
 async function deleteCalibratedRoom(id) {
   if (privacyTransition) return;

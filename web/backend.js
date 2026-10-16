@@ -22,6 +22,7 @@
     return fetch(apiUrl(path), { ...options, credentials: 'include', signal: deadlineSignal(5000) });
   }
   window.ASTHA_CLEAR_ACCOUNT = function ({ logout = false } = {}) {
+    if (typeof AsthaObservationMemory !== 'undefined') AsthaObservationMemory.reset();
     sessionGeneration += 1;
     if (logout) logoutPending = true;
     try { localStorage.removeItem(LAST_ACCOUNT); if (logout) localStorage.setItem(PENDING_LOGOUT, '1'); } catch (e) {}

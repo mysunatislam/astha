@@ -18,6 +18,7 @@ function localAccountSnapshot() {
   const ownerKey = ownerNamespace();
   return {
     notes: readStored(LocalStore.KEY),
+    automatic_memory: typeof AsthaObservationMemory === 'undefined' ? { enabled: false } : AsthaObservationMemory.exportPreference(),
     face_template: readStored(ownerKey + '.face'),
     voice_template: readStored(ownerKey + '.voice'),
     preferences: readStored('astha.preferences'),
@@ -78,6 +79,7 @@ async function forgetOwnerBiometrics() {
 // Everything this profile keeps in the browser. Unscoped records from older versions have
 // no reliable owner, so a full deletion removes them too. Interface preferences stay.
 function purgeLocalAccountData() {
+  if (typeof AsthaObservationMemory !== 'undefined') AsthaObservationMemory.clear();
   const ownerKey = ownerNamespace();
   clearTimeout(LocalStore.timer);
   let ok = true;

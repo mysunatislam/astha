@@ -123,6 +123,25 @@ test('passive observations never save memory; explicit approved requests still d
   assert.equal(s.context.state.memory.length, 1);
 });
 
+test('approved observations preserve capture time, actual location uncertainty and existing confirmed notes during offline sync', async () => {
+  const s = storageContext(); const uploads = [], observedAt = Date.now() - 3600000;
+  s.context.state.currentRoom = 'Inferred bedroom';
+  s.context.state.memory = [{ uid: 'manual', item: 'wallet', location: 'drawer', source: 'Your note', time: new Date(observedAt - 1000).toISOString() }];
+  s.context.apiSend = async (method, path, body) => { uploads.push(body); return { id: 'captured-wallet' }; };
+  const entry = await s.autoRecordMemory({ item: 'wallet', location: 'Possible sighting in the left of the camera image; physical location unconfirmed',
+    source: 'Camera observation (online, possible)', observedAt, preserveLocation: true, approved: true });
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(entry.time, new Date(observedAt).toISOString()); assert.equal(entry.observedAt, observedAt);
+  assert.equal(uploads[0].observed_at, observedAt); assert.doesNotMatch(entry.location, /bedroom|drawer/);
+  assert.equal(s.context.state.memory.some(m => m.uid === 'manual'), true);
+  const reopened = storageContext(s.backing);
+  reopened.LocalStore.load();
+  assert.equal(reopened.LocalStore.load().memory.find(m => m.uid === 'captured-wallet').observedAt, observedAt);
+  s.context.window.ASTHA_LOCAL_ACCOUNT_ID = 'accountB'; s.context.window.ASTHA_ACCOUNT_ID = 'accountB'; s.context.state.memory = [];
+  await s.autoRecordMemory({ item: 'wallet', location: 'Account B note', approved: true });
+  assert.equal(s.context.state.memory.length, 1, 'the previous account cannot suppress a new account note');
+});
+
 test('privacy mode does not reload personal data and selects the on-device recognizer', async () => {
   const s = storageContext(); let requests = 0;
   s.context.privacyMode = true;

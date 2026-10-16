@@ -145,3 +145,20 @@ test('HTTP errors and ordinary deadline failures stay failures rather than being
     assert.equal(h.context.cancellation.controllers.size, 0);
   }
 });
+
+test('automatic observations reuse one existing request and only its guarded structured result', async () => {
+  const h = harness(), observations = [], metadata = [{ item: 'wallet', visible: true, clarity: 'clear', position: 'right' }];
+  h.context.AsthaObservationMemory = { prompt: () => '\nStructured memory test schema', observeCloud: (frame, values) => observations.push(values), stop() {} };
+  h.context.transport = async () => reply({ ...result, memory_observations: metadata });
+  await h.run('cloudDescribe()');
+  assert.equal(h.calls.fetch.length, 1); assert.deepEqual(observations, [metadata]);
+  assert.match(JSON.parse(h.calls.fetch[0].options.body).prompt, /Structured memory test schema/);
+  const wait = deferred(); let taskCurrent = true;
+  h.context.transport = () => wait.promise; h.context.taskCurrent = () => taskCurrent;
+  const pending = h.run("cloudVisualQA('synthetic question', {}, '', taskCurrent)");
+  taskCurrent = false; wait.resolve(reply({ ...result, memory_observations: metadata })); await pending;
+  assert.equal(observations.length, 1, 'a superseded task cannot save observations before its caller checks currentness');
+  await h.run('gemini("Synthetic OCR request", {})');
+  assert.equal(observations.length, 1, 'reading does not opt into automatic object metadata');
+  assert.doesNotMatch(JSON.parse(h.calls.fetch.at(-1).options.body).prompt, /Structured memory test schema/);
+});

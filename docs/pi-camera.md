@@ -6,8 +6,9 @@ the phone or the ASTHA server; an original Model B cannot run a modern vision mo
 
 **Status (17 October 2026).** A real Pi camera has been paired with the live ASTHA web app
 in desktop Chrome. The preview received fresh pictures and a captured frame produced a
-visible bilingual answer (see [Verified on hardware](#verified-on-hardware)). Distance
-telemetry connected, but the known-target test produced no valid range measurements.
+visible bilingual answer (see [Verified on hardware](#verified-on-hardware)). Following
+the user's wiring correction, distance telemetry produced valid changing measurements;
+the exact target distances were unknown, so accuracy remains uncalibrated.
 Android pairing, certificate trust, speech playback, battery life, NoIR colour and
 detection accuracy remain unverified.
 
@@ -179,6 +180,14 @@ anything but the address it is given.
   need inspection. No persistent firmware, wiring or flash change was made by this check.
 - MPU6050 remained `not_found`. Android hardware behavior, device voice and audio output
   were not tested in this session.
+
+Later on 17 October, the user reported incorrect wiring and the range feed recovered.
+One ten-second test yielded 35 valid measurements out of 36 samples, spanning
+36.1–45.9 cm (median 38 cm). With a phone held nearby, all 36 samples were valid,
+spanning 9–12.5 cm (median 10 cm), with age at most 99 ms. These are actual sensor
+readings and establish functional response after the wiring correction. The physical
+target distances were not measured; they do not establish calibrated accuracy, a
+particular component failure or a safe path. Firmware was not changed.
 
 These observations are limited to the stated desktop tests. An app-level visibility
 handler was found to disconnect the Pi when Chrome became hidden, despite the transport's

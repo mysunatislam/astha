@@ -66,6 +66,7 @@ const AsthaCancellation = {
   generation: 0,
   controllers: new Set(),
   cancel() {
+    if (typeof AsthaObservationMemory !== 'undefined') AsthaObservationMemory.stop();
     this.generation++;
     for (const controller of this.controllers) controller.abort();
     this.controllers.clear();
@@ -371,6 +372,7 @@ function stopReader() {
   VoiceEngine.stop();
 }
 function stopAllSpeech() {
+  if (typeof AsthaObservationMemory !== 'undefined') AsthaObservationMemory.stop();
   stopReader(); stopListening(); VoiceEngine.stop(true);
   $('reader-progress').textContent = t('reader_stopped');
 }
