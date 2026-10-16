@@ -146,7 +146,7 @@ async function gemini(task, frame, opts = {}) {
       const image = frame ? frameToJpeg(frame, opts.maxW || 800) : undefined;
       const res = await fetch(apiUrl('/api/vision'), {
         method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ task: 'custom', prompt: task, image, maxTokens: opts.maxTokens || 900 }),
+        body: JSON.stringify({ task: 'custom', prompt: task + (opts.observeMemory && typeof AsthaObservationMemory !== 'undefined' ? AsthaObservationMemory.prompt(frame) : ''), image, maxTokens: opts.maxTokens || 900 }),
         signal: deadlineSignal(30000, controller.signal),
       });
       stillAllowed();
@@ -160,6 +160,7 @@ async function gemini(task, frame, opts = {}) {
       stillAllowed();
       if (!result || typeof result !== 'object' || Array.isArray(result)) throw new Error('Invalid ASTHA response');
       serverCloud.checked = true;
+      if (opts.observeMemory && (!opts.memoryCurrent || opts.memoryCurrent()) && typeof AsthaObservationMemory !== 'undefined') AsthaObservationMemory.observeCloud(frame, result.memory_observations);
       return result;
     })();
     // Also settle promptly when a transport or body decoder ignores abort. Its late
@@ -201,7 +202,7 @@ async function cloudDescribe() {
     const frame = captureFrame(896); if (!frame) return;
     heartSet({ x: 0.5, y: 0.5, mode: 'seek', label: 'Looking…' });
     try {
-      const r = await gemini(CLOUD_PROMPTS.describe, frame);
+      const r = await gemini(CLOUD_PROMPTS.describe, frame, { observeMemory: true });
       if (r.mirror === true) { await cloudCompliment(frame, r); return; }
       announce(r.en || t('nothing_seen'), r.bn || tBn('nothing_seen'), 'vision'); playEarcon(r.hazard ? 'hazard' : 'confirm'); haptic(r.hazard ? 'RAPID' : 'CONFIRM');
       heartFlash({ x: 0.5, y: 0.5, mode: 'lock', label: (r.objects || [])[0] || '' });
@@ -221,7 +222,7 @@ async function cloudIdentify() {
     const frame = captureFrame(896); if (!frame) return;
     heartSet({ x: 0.5, y: 0.5, mode: 'seek', label: 'Looking…' });
     try {
-      const r = await gemini(CLOUD_PROMPTS.identify, frame);
+      const r = await gemini(CLOUD_PROMPTS.identify, frame, { observeMemory: true });
       announce(r.en, r.bn, 'vision'); playEarcon('confirm'); haptic('CONFIRM');
       heartFlash({ x: 0.5, y: 0.5, mode: 'lock', label: r.name || '' }); logEvent('Cloud identified: ' + (r.name || ''));
       if (typeof autoRecordMemory === 'function' && r.name) {
@@ -364,7 +365,7 @@ async function cloudVisualQA(query, frame, history = '', current = () => true) {
   try {
     const prompt = typeof CLOUD_PROMPTS.vqa === 'function' ? CLOUD_PROMPTS.vqa(query, history) : CLOUD_PROMPTS.vqa;
     // Maira may take longer than nine seconds. The shared request has a 30-second deadline.
-    const r = await gemini(prompt, f, { maxTokens: 600 });
+    const r = await gemini(prompt, f, { maxTokens: 600, observeMemory: true, memoryCurrent: current });
     if (!current()) return null;
     if (r && (r.en || r.bn)) {
       announce(r.en, r.bn, 'vision');

@@ -69,6 +69,7 @@ const AsthaExperience = (() => {
   }
   function setContext(next, silent = false) {
     if (!MODES.includes(next)) return;
+    if (typeof AsthaObservationMemory !== 'undefined') AsthaObservationMemory.reset();
     visualGeneration++; contextGeneration++;
     mode = next; lastBoard = ''; spoken.clear(); quietUntil = 0;
     clearTimeout(boardTimer); boardTimer = null;
@@ -123,6 +124,7 @@ const AsthaExperience = (() => {
     if (guide) { answerGuide(q); return true; }
     // A message being answered owns the next request, as the guide does.
     if (typeof AsthaMessages !== 'undefined' && AsthaMessages.route(query)) return true;
+    if (typeof AsthaObservationMemory !== 'undefined' && AsthaObservationMemory.route(query)) return true;
     // A complete greeting or identity question is local; quoted words and reading tasks
     // keep their normal route. A guided setup or message reply still owns its next answer.
     const greeting = q.normalize('NFC').replace(/[.!?।\s]+$/, '');
@@ -167,6 +169,7 @@ const AsthaExperience = (() => {
     return false;
   }
   async function visualTask(query, run) {
+    if (typeof AsthaObservationMemory !== 'undefined') AsthaObservationMemory.reset();
     const mine = ++visualGeneration; lastVisualQuery = query; pending++;
     const epoch = state.sourceEpoch, source = state.source;
     const account = window.ASTHA_ACCOUNT_ID, localAccount = window.ASTHA_LOCAL_ACCOUNT_ID;
@@ -431,6 +434,7 @@ const AsthaExperience = (() => {
     return 'idle';
   }
   function renderPresence(force = false) {
+    if (typeof AsthaObservationMemory !== 'undefined') AsthaObservationMemory.tick();
     const next = presence();
     if (force || next !== shownState) {
       shownState = next;
@@ -450,6 +454,7 @@ const AsthaExperience = (() => {
     }
   }
   function refreshLabels() {
+    if (typeof AsthaObservationMemory !== 'undefined') AsthaObservationMemory.render();
     renderMode(); renderPresence(true);
     const title = $('page-title'); if (title) title.textContent = t(PAGE_KEYS[page]);
     // The header language menu and the setup question are two views of one choice.
@@ -465,6 +470,7 @@ const AsthaExperience = (() => {
     if (hint && !handsFreeAvailable()) { hint.setAttribute('data-i18n', 'mic_hint_tap'); hint.textContent = t('mic_hint_tap'); }
   }
   function boot() {
+    if (typeof AsthaObservationMemory !== 'undefined') AsthaObservationMemory.boot();
     // A remembered road mode must not silently resume camera analysis in a new session.
     setContext('ask', true);
     reflectHandsFree();

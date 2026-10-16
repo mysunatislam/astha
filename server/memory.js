@@ -1,5 +1,5 @@
 // Per-user memory: approved object events, room notes, and a short activity log.
-// Every write here is something the user explicitly asked Astha to remember.
+// Writes are explicit notes or camera observations covered by the user's memory opt-in.
 import { Router } from 'express';
 import { nanoid } from 'nanoid';
 import { run, all, saveRoom } from './db.js';
@@ -17,16 +17,17 @@ memoryRouter.get('/memories', asyncRoute(async (req, res) => {
   res.json({ memories: filtered });
 }));
 memoryRouter.post('/memories', asyncRoute(async (req, res) => {
-  const { item, location, source, score } = req.body || {};
+  const { item, location, source, score, observed_at } = req.body || {};
   if (!item || !location) return res.status(400).json({ error: 'item_and_location_required' });
   if (!isBody(req.body) || !isText(item, 120) || !isText(location, 240) ||
       (source !== undefined && !isText(source, 120, false)) ||
-      (score !== undefined && score !== null && (typeof score !== 'number' || !Number.isFinite(score)))) {
+      (score !== undefined && score !== null && (typeof score !== 'number' || !Number.isFinite(score))) ||
+      (observed_at !== undefined && (!Number.isSafeInteger(observed_at) || observed_at < 1 || observed_at > Date.now()))) {
     return res.status(400).json({ error: 'invalid_memory_input' });
   }
   const id = nanoid();
   await run('INSERT INTO memories (id, user_id, item, location, source, score, created_at) VALUES (?,?,?,?,?,?,?)',
-    [id, req.user.id, String(item).slice(0, 120), String(location).slice(0, 240), source || 'Your note', score ?? null, Date.now()]);
+    [id, req.user.id, String(item).slice(0, 120), String(location).slice(0, 240), source || 'Your note', score ?? null, observed_at ?? Date.now()]);
   await applyRetention('memories', req.user.id);
   res.json({ id });
 }));

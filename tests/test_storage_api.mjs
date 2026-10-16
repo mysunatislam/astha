@@ -147,6 +147,24 @@ test('real API awaits asynchronous disposable SQLite storage and preserves accou
     assert.equal((await ok('/api/rooms', { token: account.token })).rooms.length, 1);
   });
 
+  await t.test('camera capture timestamps survive persistence and cannot bypass validation or account ownership', async () => {
+    const observedAt = Date.now() - 86400000;
+    const saved = await ok('/api/memories', { method: 'POST', token: account.token,
+      body: { item: 'observed phone', location: 'Possible sighting in image; physical location unconfirmed', source: 'Camera observation (online, possible)', observed_at: observedAt } });
+    const record = inspection.prepare('SELECT * FROM memories WHERE id = ?').get(saved.id);
+    assert.equal(record.created_at, observedAt); assert.equal(record.user_id, account.userId);
+    assert.equal((await ok('/api/memories?q=observed phone', { token: account.token })).memories[0].created_at, observedAt);
+    assert.deepEqual((await ok('/api/memories?q=observed phone', { token: guestB.token })).memories, []);
+    for (const invalid of [null, '2026-10-17', false, {}, [], -1, 0, 1.5, Date.now() + 60000, Number.MAX_SAFE_INTEGER]) {
+      assert.equal((await api('/api/memories', { method: 'POST', token: account.token,
+        body: { item: 'invalid timestamp', location: 'unknown', observed_at: invalid } })).status, 400, JSON.stringify(invalid));
+    }
+    assert.equal(inspection.prepare('SELECT COUNT(*) AS n FROM memories WHERE item = ?').get('invalid timestamp').n, 0);
+    await ok('/api/memories/' + saved.id, { method: 'DELETE', token: guestB.token });
+    assert(inspection.prepare('SELECT * FROM memories WHERE id = ?').get(saved.id));
+    await ok('/api/memories/' + saved.id, { method: 'DELETE', token: account.token });
+  });
+
   await t.test('concurrent same-name room saves share one stable owned ID without merging accounts', async () => {
     const notes = Array.from({ length: 6 }, (_, index) => 'Concurrent room note ' + index);
     const saves = await Promise.all(notes.map((note, index) => ok('/api/rooms', {

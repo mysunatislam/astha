@@ -1188,6 +1188,8 @@
         <button class="btn small" onclick="clearMemory()" data-i18n="memory_clear">Clear</button>
       </div>
       <p class="help" data-i18n="memory_help">Personal items are remembered with where and when they were last seen.</p>
+      <label class="field" for="auto-memory-enabled"><span data-i18n="auto_memory_label">Automatically remember important objects</span><input id="auto-memory-enabled" type="checkbox" aria-describedby="auto-memory-help"></label>
+      <p class="help" id="auto-memory-help" data-i18n="auto_memory_help">Off by default. While your camera is active, save possible sightings of laptops, phones, glasses, wallets and ID cards with their time and image position. Ask before saving other selected personal objects. No photos or ID text are saved. Online sync requires your existing online consent.</p>
 <form onsubmit="event.preventDefault(); saveManualMemory()">
         <label class="field" for="memory-item">Object<input id="memory-item" maxlength="80" placeholder="Glasses / চশমা" required></label>
         <label class="field" for="memory-location">Last seen location<input id="memory-location" maxlength="160" placeholder="Bedroom, on the bedside table" required></label>
@@ -1893,6 +1895,7 @@ function activeSourceEl() {
   return null;
 }
 function showSource(kind) {
+  if (typeof AsthaObservationMemory !== 'undefined') AsthaObservationMemory.reset();
   state.source = kind;
   state.sourceEpoch = (state.sourceEpoch || 0) + 1;
   if (typeof AsthaVisionDetails !== 'undefined') AsthaVisionDetails.sourceChanged();
@@ -2242,6 +2245,7 @@ function captureFrame(maxW = 640) {
   frame.width=Math.round(sw*scale); frame.height=Math.round(sh*scale);
   frame.getContext('2d',{willReadFrequently:true}).drawImage(src,0,0,frame.width,frame.height);
   if (typeof AsthaVisionDetails !== 'undefined') AsthaVisionDetails.capture(frame);
+  if (typeof AsthaObservationMemory !== 'undefined') AsthaObservationMemory.capture(frame);
   return frame;
 }
 
@@ -2264,7 +2268,7 @@ async function runCoco(frame) {
   }
   if (typeof AsthaVisionDetails !== 'undefined') AsthaVisionDetails.complete(frame);
   const area = frame.width * frame.height;
-  return preds.filter(p => p.score >= confThresh && COCO_TO_ID[p.class]).map(p => ({
+  const objects = preds.filter(p => p.score >= confThresh && COCO_TO_ID[p.class]).map(p => ({
     id: COCO_TO_ID[p.class],
     detectorId: COCO_TO_ID[p.class], detectorScore: p.score,
     score: p.score,
@@ -2273,6 +2277,8 @@ async function runCoco(frame) {
     prox: proxFromArea((p.bbox[2] * p.bbox[3]) / area),
     src: engine.coco.type || 'coco',
   }));
+  if (typeof AsthaObservationMemory !== 'undefined') AsthaObservationMemory.observeLocal(frame, objects);
+  return objects;
 }
 
 function posFromX(cx, w) { const th = w / 3; return cx < th ? 'left' : cx > 2 * th ? 'right' : 'ahead'; }
@@ -3029,7 +3035,7 @@ Object.assign(I18N.en, {
   path_clear: 'No obstacle was detected in this image. I cannot confirm that the path is safe.',
   fall_msg: 'Demonstration: a fall alert would appear here. No fall was detected and no message was sent.', fall_title_card: 'Fall alert demonstration',
   band_connected: 'Simulator', band_title: 'Wearable simulator', ultra_note: 'Simulated sensor values only. No wearable is connected.',
-  memory_help: 'Save an object with a meaningful location. Camera observations are saved only when you ask.', memory_empty: 'No memories yet. Add an object and where you last saw it.',
+  memory_help: 'Save an object and its location, or enable automatic memory below. Camera observations describe what was seen; current locations are not confirmed.', memory_empty: 'No memories yet. Add an object and where you last saw it.',
   engine_help: 'Vision and OCR run in the browser after downloading models. Downloads require internet and can be large. Browser speech recognition may use an online service.',
   hw_panel: 'Developer tools', backend_help: 'This tests only the server health endpoint. Cloud reasoning is not connected.', backend_connected: 'Health check passed', backend_ok_msg: 'The server health check passed. AI actions still run in this browser.',
   footer: 'Astha · Browser prototype · Built for voice, reading and personal memory.',
