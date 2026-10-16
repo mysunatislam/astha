@@ -5,12 +5,21 @@ const AsthaPiCamera = (() => {
     reconnected: 'pi_reconnected', paused: 'pi_paused', pairing_rejected: 'pi_pairing_rejected', stale_frame: 'pi_stale_frame',
     frame_timeout: 'pi_frame_timeout', connection_lost: 'pi_connection_lost', invalid_origin: 'pi_invalid_origin',
     invalid_pairing_token: 'pi_invalid_pairing_token', models: 'pi_models', error: 'pi_error' };
-  let generation = 0, currentStatus = 'stopped', booted = false, deviceLine = '';
+  let generation = 0, currentStatus = 'stopped', booted = false, deviceLine = '', quietAttempt = false;
+  const listeners = new Set();
   const SENSOR_KEYS = { ok: 'pi_sensor_ok', out_of_range: 'pi_sensor_out_of_range', no_echo_start: 'pi_sensor_no_echo_start', error: 'pi_sensor_error', no_data: 'pi_sensor_no_data' };
   let sensorStatus = 'no_data', sensorMetres = null, sensorExpiry = null;
   const element = id => document.getElementById(id);
   const key = status => STATUS_KEYS[Object.hasOwn(STATUS_KEYS, status) ? status : 'error'];
   const label = status => t(key(status));
+  const failure = code => Object.assign(new Error(code), { code });
+  // The remembered-kit manager follows every change. A listener that returns true has
+  // spoken about the change itself, so the generic sentence is not said as well.
+  function emit(state, code = null, quiet = false) {
+    let claimed = false;
+    for (const listener of listeners) { try { claimed = listener({ state, code, quiet }) === true || claimed; } catch {} }
+    return claimed;
+  }
   function renderSensor() {
     for (const prefix of ['pi-camera', 'vision']) {
       const status = element(prefix + '-sensor-status'), value = element(prefix + '-sensor-value');
@@ -32,6 +41,11 @@ const AsthaPiCamera = (() => {
     if (typeof invalidateMeasuredDistances === 'function') invalidateMeasuredDistances();
     renderSensor();
   }
+  // A picture from before the link dropped must never look live to a sighted helper either.
+  function clearPreview() {
+    const preview = element('pi-preview');
+    if (preview) { preview.getContext('2d')?.clearRect(0, 0, preview.width, preview.height); preview.hidden = true; }
+  }
   // Connection changes are spoken: a blind user cannot see the status line change.
   function speakStatus(status, important) {
     if (typeof announce !== 'function' || typeof I18N === 'undefined') return;
@@ -50,15 +64,17 @@ const AsthaPiCamera = (() => {
     renderSensor();
   }
   function setStatus(next) { currentStatus = Object.hasOwn(STATUS_KEYS, next) ? next : 'error'; refreshLabels(); }
-  function stop({ clearSource = true } = {}) {
-    const owned = currentStatus === 'connecting' || typeof state !== 'undefined' && state.source === 'pi';
+  function stop({ clearSource = true, quietly = false } = {}) {
+    // A background reconnection attempt that never produced a picture owns nothing yet:
+    // failing it must not cut off speech or work that belongs to the user's current task.
+    const owned = currentStatus === 'connecting' && !quietAttempt || typeof state !== 'undefined' && state.source === 'pi';
+    const wasActive = currentStatus !== 'stopped';
     generation++;
     if (typeof PiCamera !== 'undefined') PiCamera.stop();
     // A distance from a camera that is no longer connected says nothing about now.
     clearSensor();
     const token = element('pi-camera-token'); if (token) token.value = '';
-    const preview = element('pi-preview');
-    if (preview) { preview.getContext('2d')?.clearRect(0, 0, preview.width, preview.height); preview.hidden = true; }
+    clearPreview();
     deviceLine = '';
     if (owned) {
       stopLiveLoop();
@@ -69,23 +85,27 @@ const AsthaPiCamera = (() => {
       if (clearSource && state.source === 'pi') showSource(null);
       if (typeof setCaption === 'function') setCaption(t('pi_title'), label('stopped'), 'system');
     }
+    quietAttempt = false;
     setStatus('stopped');
+    if (wasActive && !quietly) emit('stopped');
   }
-  async function connect(event) {
-    event?.preventDefault();
-    if (currentStatus === 'connecting') return;
-    const origin = element('pi-camera-origin')?.value.trim();
-    let token = element('pi-camera-token')?.value.trim();
-    if (element('pi-camera-token')) element('pi-camera-token').value = '';
+  // Connects to one camera address with a pairing code. Resolves once a fresh picture has
+  // been decoded; rejects with a code otherwise. A quiet attempt is a background
+  // reconnection: it never replaces another source and never speaks a failure.
+  async function open({ origin, token, quiet = false } = {}) {
+    if (quiet && (currentStatus === 'connecting' || typeof state !== 'undefined' && (state.source && state.source !== 'pi' || state.cameraPending))) throw failure('busy');
+    // The user's own Connect replaces a background attempt that has not produced a picture.
+    if (!quiet && currentStatus === 'connecting' && !quietAttempt) throw failure('busy');
     const interval = element('pi-camera-saver')?.checked ? 1000 : 250;
     // Stop the previous source first. A new frame is the only way to activate Pi mode.
-    if (typeof stopCamera === 'function') stopCamera();
-    stop();
+    if ((!quiet || typeof state !== 'undefined' && state.source) && typeof stopCamera === 'function') stopCamera();
+    stop({ quietly: true });
     const mine = ++generation;
+    quietAttempt = quiet;
     setStatus('connecting');
-    let initialized = false, wasLost = false;
+    let initialized = false, wasLost = false, finalCode = null;
     try {
-      if (typeof PiCamera === 'undefined') throw new Error('transport unavailable');
+      if (typeof PiCamera === 'undefined') throw failure('error');
       await PiCamera.connect({ origin, token, interval,
         onFrame(bitmap) {
           if (mine !== generation || document.hidden) return;
@@ -95,7 +115,7 @@ const AsthaPiCamera = (() => {
           preview.getContext('2d').drawImage(bitmap, 0, 0);
           preview.hidden = false;
           if (!initialized) {
-            initialized = true;
+            initialized = true; quietAttempt = false;
             state.sceneKey = null;
             showSource('pi'); preview.hidden = false;
             // The existing detector/CLIP loops consume the same captureFrame path.
@@ -124,7 +144,10 @@ const AsthaPiCamera = (() => {
         onStatus(status) {
           if (mine !== generation) return;
           if (status.state === 'connected') {
-            setStatus('connected'); speakStatus(wasLost ? 'reconnected' : 'connected', true); wasLost = false;
+            setStatus('connected');
+            const claimed = emit('connected', wasLost ? 'reconnected' : null, quiet && !wasLost);
+            if (!claimed) speakStatus(wasLost ? 'reconnected' : 'connected', true);
+            wasLost = false;
             if (!deviceLine && typeof PiCamera.describe === 'function') PiCamera.describe().then(info => {
               if (mine !== generation || !info) return;
               deviceLine = [info.model, info.backend, info.width && info.height ? info.width + '×' + info.height : '',
@@ -132,10 +155,13 @@ const AsthaPiCamera = (() => {
               refreshLabels();
             });
           } else if (status.state === 'reconnecting') {
-            clearSensor();
+            clearSensor(); clearPreview();
             // A picture taken before the link dropped must not answer a question asked now.
             if (typeof AsthaExperience !== 'undefined') AsthaExperience.invalidate();
-            setStatus('reconnecting'); if (!wasLost && status.code !== 'resumed') speakStatus('reconnecting', false); wasLost = true;
+            setStatus('reconnecting');
+            emit('reconnecting', status.code);
+            if (!wasLost && status.code !== 'resumed') speakStatus('reconnecting', false);
+            wasLost = true;
           } else if (status.state === 'paused') {
             if (state.source === 'pi') {
               stopLiveLoop();
@@ -143,19 +169,48 @@ const AsthaPiCamera = (() => {
               clearSensor();
               // Invalidate pre-pause vision and pending answers without ending the pairing.
               showSource('pi');
-              const preview = element('pi-preview');
-              if (preview) { preview.getContext('2d')?.clearRect(0, 0, preview.width, preview.height); preview.hidden = true; }
+              clearPreview();
             }
             if (typeof AsthaExperience !== 'undefined') AsthaExperience.invalidate();
             setStatus('paused');
-          } else if (status.state === 'error') { stop(); setStatus(status.code); speakStatus(status.code, true); }
+            emit('paused');
+          } else if (status.state === 'error') {
+            finalCode = status.code;
+            const silent = quietAttempt && !initialized;
+            stop({ quietly: true }); setStatus(status.code);
+            const claimed = emit('error', status.code);
+            if (!silent && !claimed) speakStatus(status.code, true);
+          }
         },
       });
+      if (mine !== generation) throw failure('stopped');
+      return true;
     } catch (error) {
-      if (mine !== generation) return;
-      const code = typeof error.code === 'string' ? error.code : 'error';
-      stop(); setStatus(code); speakStatus(code, true);
-    } finally { token = ''; }
+      const code = finalCode || (typeof error.code === 'string' ? error.code : 'error');
+      if (mine === generation) {
+        const silent = quiet && !initialized;
+        stop({ quietly: true }); setStatus(code);
+        if (!silent) speakStatus(code, true);
+      }
+      throw failure(code);
+    }
+  }
+  // The pairing form. With "remember" ticked, a code that worked is sealed on this device
+  // so ASTHA can reconnect by itself next time. With a ClipCam already remembered, an empty
+  // code means "this is its new address": the sealed code is used and never retyped.
+  async function connect(event) {
+    event?.preventDefault();
+    if (currentStatus === 'connecting' && !quietAttempt) return;
+    const origin = element('pi-camera-origin')?.value.trim();
+    let token = element('pi-camera-token')?.value.trim();
+    if (element('pi-camera-token')) element('pi-camera-token').value = '';
+    const remember = element('pi-camera-remember')?.checked === true;
+    const kit = typeof AsthaCameraKit !== 'undefined' ? AsthaCameraKit : null;
+    try {
+      if (!token && kit?.remembered()) { await kit.useAddress(origin); return; }
+      await open({ origin, token });
+      if (remember && kit) await kit.remember({ origin, token });
+    } catch {} finally { token = ''; }
   }
   function boot() {
     if (booted) return;
@@ -163,10 +218,14 @@ const AsthaPiCamera = (() => {
     const preview = element('pi-preview'), viewport = element('viewport');
     if (preview && viewport) viewport.insertBefore(preview, element('overlay'));
     element('pi-camera-form')?.addEventListener('submit', connect);
-    element('pi-camera-stop')?.addEventListener('click', () => { stop(); element('pi-camera-connect')?.focus(); });
+    element('pi-camera-stop')?.addEventListener('click', () => {
+      if (typeof AsthaCameraKit !== 'undefined') AsthaCameraKit.userStopped();
+      stop(); element('pi-camera-connect')?.focus();
+    });
     window.addEventListener('pagehide', () => stop());
     refreshLabels();
   }
-  return { boot, connect, stop, refreshLabels, frame: () => typeof PiCamera !== 'undefined' ? PiCamera.getFrame() : null,
+  return { boot, connect, open, stop, refreshLabels, subscribe: listener => { listeners.add(listener); return () => listeners.delete(listener); },
+    frame: () => typeof PiCamera !== 'undefined' ? PiCamera.getFrame() : null,
     sourceLabel: () => t('pi_source'), get status() { return currentStatus; } };
 })();

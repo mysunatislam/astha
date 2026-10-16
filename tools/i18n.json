@@ -990,8 +990,8 @@
    "ওয়াই-ফাই ক্যামেরা জুড়ুন"
   ],
   "pi_help": [
-   "Keep the camera and this phone on the same Wi-Fi. Enter the camera's secure address and its private pairing code. The code is kept only until you disconnect or close Astha.",
-   "ক্যামেরা ও এই ফোন একই ওয়াই-ফাইয়ে রাখুন। ক্যামেরার সুরক্ষিত ঠিকানা ও ব্যক্তিগত পেয়ারিং কোড দিন। সংযোগ বন্ধ বা আস্থা বন্ধ না করা পর্যন্তই কোডটি রাখা হয়।"
+   "Keep the camera and this phone on the same Wi-Fi. Enter the camera's secure address and its private pairing code. Tick Remember to pair only once; otherwise the code is kept only until you disconnect or close Astha.",
+   "ক্যামেরা ও এই ফোন একই ওয়াই-ফাইয়ে রাখুন। ক্যামেরার সুরক্ষিত ঠিকানা ও ব্যক্তিগত পেয়ারিং কোড দিন। একবারই জুড়তে ‘মনে রাখুন’ বাছাই করুন; না হলে সংযোগ বন্ধ বা আস্থা বন্ধ না করা পর্যন্তই কোডটি রাখা হয়।"
   ],
   "pi_address": [
    "Camera HTTPS address",
@@ -1080,6 +1080,150 @@
   "pi_source": [
    "Paired Wi-Fi camera · Current view",
    "যুক্ত ওয়াই-ফাই ক্যামেরা · বর্তমান দৃশ্য"
+  ],
+  "pi_remember": [
+   "Remember this ClipCam on this device and reconnect by itself",
+   "এই ডিভাইসে ক্লিপক্যামটি মনে রাখুন এবং নিজে থেকেই যুক্ত হোক"
+  ],
+  "kit_title": [
+   "Your ASTHA ClipCam",
+   "আপনার আস্থা ক্লিপক্যাম"
+  ],
+  "kit_none": [
+   "No ASTHA ClipCam is remembered on this device. Pair it once on the Devices page.",
+   "এই ডিভাইসে কোনো আস্থা ক্লিপক্যাম মনে রাখা নেই। ডিভাইস পাতায় একবার জুড়ে নিন।"
+  ],
+  "kit_saved": [
+   "Your ASTHA ClipCam is remembered but not connected. Say: connect to my camera.",
+   "আপনার আস্থা ক্লিপক্যাম মনে রাখা আছে, তবে এখন যুক্ত নয়। বলুন: ক্যামেরা সংযোগ করো।"
+  ],
+  "kit_looking": [
+   "Looking for your ASTHA ClipCam.",
+   "আপনার আস্থা ক্লিপক্যাম খোঁজা হচ্ছে।"
+  ],
+  "kit_connected": [
+   "Your ASTHA ClipCam is connected.",
+   "আপনার আস্থা ক্লিপক্যাম যুক্ত হয়েছে।"
+  ],
+  "kit_interrupted": [
+   "ClipCam connection interrupted. Reconnecting automatically.",
+   "ক্লিপক্যামের সংযোগ বিঘ্নিত হয়েছে। নিজে থেকেই আবার যুক্ত করার চেষ্টা চলছে।"
+  ],
+  "kit_waiting": [
+   "ClipCam not found yet. The phone camera is still available. Astha will keep looking while it is open.",
+   "ক্লিপক্যাম এখনো পাওয়া যায়নি। ফোনের ক্যামেরা ব্যবহার করা যাবে। আস্থা খোলা থাকলে খোঁজা চলবে।"
+  ],
+  "kit_camera_unavailable": [
+   "Your ClipCam answered, but its camera is not sending fresh pictures. Check the camera cable. Astha will keep trying.",
+   "ক্লিপক্যাম সাড়া দিয়েছে, কিন্তু এর ক্যামেরা নতুন ছবি পাঠাচ্ছে না। ক্যামেরার তার দেখুন। আস্থা চেষ্টা চালিয়ে যাবে।"
+  ],
+  "kit_paused": [
+   "ClipCam paused while Astha is in the background. No pictures are taken.",
+   "আস্থা পেছনে থাকায় ক্লিপক্যাম থামানো আছে। কোনো ছবি নেওয়া হচ্ছে না।"
+  ],
+  "kit_rejected": [
+   "Your ClipCam no longer accepts the saved pairing, so Astha forgot it. Pair it again on the Devices page.",
+   "আপনার ক্লিপক্যাম সংরক্ষিত পেয়ারিং আর গ্রহণ করছে না, তাই আস্থা এটি ভুলে গেছে। ডিভাইস পাতায় আবার জুড়ে নিন।"
+  ],
+  "kit_mismatch": [
+   "The device at your ClipCam's address could not prove it is your paired ClipCam, so Astha did not send it the pairing code. If you changed the ClipCam's code, pair it again on the Devices page.",
+   "আপনার ক্লিপক্যামের ঠিকানায় যে ডিভাইস সাড়া দিয়েছে, সেটি আপনার জোড়া ক্লিপক্যাম বলে প্রমাণ দিতে পারেনি, তাই আস্থা তাকে পেয়ারিং কোড পাঠায়নি। ক্লিপক্যামের কোড বদলে থাকলে ডিভাইস পাতায় আবার জুড়ে নিন।"
+  ],
+  "kit_other_source": [
+   "The phone camera or a photo is in use. Say: connect to my camera, to switch to the ClipCam.",
+   "ফোনের ক্যামেরা বা ছবি ব্যবহার হচ্ছে। ক্লিপক্যামে যেতে বলুন: ক্যামেরা সংযোগ করো।"
+  ],
+  "kit_storage_failed": [
+   "This device could not keep the ClipCam pairing safely. You can still connect with the code each time.",
+   "এই ডিভাইস ক্লিপক্যামের পেয়ারিং নিরাপদে রাখতে পারেনি। প্রতিবার কোড দিয়ে যুক্ত করতে পারবেন।"
+  ],
+  "kit_detail": [
+   "Address: {address}. Camera: {model}.",
+   "ঠিকানা: {address}। ক্যামেরা: {model}।"
+  ],
+  "kit_model_unknown": [
+   "not reported yet",
+   "এখনো জানানো হয়নি"
+  ],
+  "kit_storage_android": [
+   "The pairing code is sealed by this phone's Android Keystore and never leaves the phone.",
+   "পেয়ারিং কোডটি এই ফোনের অ্যান্ড্রয়েড কিস্টোরে সুরক্ষিত, এবং ফোনের বাইরে যায় না।"
+  ],
+  "kit_storage_browser": [
+   "The pairing code is kept encrypted in this browser only. Browser storage is not hardware-protected; the Android app protects it more strongly.",
+   "পেয়ারিং কোডটি শুধু এই ব্রাউজারে এনক্রিপ্ট করে রাখা। ব্রাউজারের সংরক্ষণ হার্ডওয়্যার-সুরক্ষিত নয়; অ্যান্ড্রয়েড অ্যাপ একে আরও শক্তভাবে সুরক্ষিত রাখে।"
+  ],
+  "kit_storage_none": [
+   "This browser cannot remember a ClipCam securely. The code is kept only until you disconnect.",
+   "এই ব্রাউজার ক্লিপক্যাম নিরাপদে মনে রাখতে পারে না। সংযোগ বন্ধ না করা পর্যন্তই কোড রাখা হয়।"
+  ],
+  "kit_auto": [
+   "Reconnect automatically while Astha is open",
+   "আস্থা খোলা থাকলে নিজে থেকেই আবার যুক্ত হবে"
+  ],
+  "kit_connect": [
+   "Connect my ClipCam",
+   "আমার ক্লিপক্যাম যুক্ত করুন"
+  ],
+  "kit_disconnect": [
+   "Disconnect",
+   "সংযোগ বিচ্ছিন্ন করুন"
+  ],
+  "kit_forget": [
+   "Forget this ClipCam",
+   "এই ক্লিপক্যাম ভুলে যান"
+  ],
+  "kit_code_required": [
+   "Needed the first time only, when Remember is ticked.",
+   "‘মনে রাখুন’ বাছাই করা থাকলে শুধু প্রথমবার লাগবে।"
+  ],
+  "kit_code_optional": [
+   "Your ClipCam is remembered. To change its address, enter only the new address and leave the code empty.",
+   "আপনার ক্লিপক্যাম মনে রাখা আছে। ঠিকানা বদলাতে শুধু নতুন ঠিকানা দিন, কোড খালি রাখুন।"
+  ],
+  "kit_remembered": [
+   "ClipCam remembered on this device. Next time, Astha connects to it by itself.",
+   "এই ডিভাইসে ক্লিপক্যাম মনে রাখা হয়েছে। পরেরবার আস্থা নিজে থেকেই যুক্ত হবে।"
+  ],
+  "kit_status_live": [
+   "Your ASTHA ClipCam is connected and the picture is live.",
+   "আপনার আস্থা ক্লিপক্যাম যুক্ত আছে, ছবি এখনকার।"
+  ],
+  "kit_status_no_fresh": [
+   "Your ClipCam is connected, but no fresh picture has arrived in the last few seconds.",
+   "ক্লিপক্যাম যুক্ত আছে, কিন্তু গত কয়েক সেকেন্ডে নতুন ছবি আসেনি।"
+  ],
+  "kit_lost_keep_looking": [
+   "The ClipCam connection was lost. The phone camera is still available. Astha will keep looking while it is open.",
+   "ক্লিপক্যামের সংযোগ চলে গেছে। ফোনের ক্যামেরা ব্যবহার করা যাবে। আস্থা খোলা থাকলে খোঁজা চলবে।"
+  ],
+  "kit_disconnected": [
+   "ClipCam disconnected. It stays remembered. Say: connect to my camera, to use it again.",
+   "ক্লিপক্যাম বিচ্ছিন্ন করা হয়েছে, তবে মনে রাখা আছে। আবার ব্যবহার করতে বলুন: ক্যামেরা সংযোগ করো।"
+  ],
+  "kit_forgotten": [
+   "ClipCam forgotten. Its pairing code was removed from this device.",
+   "ক্লিপক্যাম ভুলে যাওয়া হয়েছে। এর পেয়ারিং কোড এই ডিভাইস থেকে মুছে ফেলা হয়েছে।"
+  ],
+  "kit_auto_on": [
+   "Automatic reconnection is on.",
+   "নিজে থেকে আবার যুক্ত হওয়া চালু।"
+  ],
+  "kit_auto_off": [
+   "Automatic reconnection is off. Say: connect to my camera, when you want it.",
+   "নিজে থেকে আবার যুক্ত হওয়া বন্ধ। প্রয়োজন হলে বলুন: ক্যামেরা সংযোগ করো।"
+  ],
+  "kit_forget_confirm": [
+   "Forget your ClipCam? You would need its pairing code again. Say yes to forget it, or no to keep it.",
+   "ক্লিপক্যাম ভুলে যাব? আবার পেয়ারিং কোড লাগবে। ভুলে যেতে বলুন হ্যাঁ, রাখতে বলুন না।"
+  ],
+  "kit_forget_cancelled": [
+   "Your ClipCam is still remembered.",
+   "আপনার ক্লিপক্যাম মনে রাখা আছে।"
+  ],
+  "kit_forget_dialog": [
+   "Forget this ClipCam? Its pairing code will be removed from this device, and you will need it to pair again.",
+   "এই ক্লিপক্যাম ভুলে যাবেন? এর পেয়ারিং কোড এই ডিভাইস থেকে মুছে যাবে, আবার জুড়তে কোডটি লাগবে।"
   ],
   "braille_practice_off": [
    "Start keyboard practice",

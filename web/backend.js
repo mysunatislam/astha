@@ -23,6 +23,8 @@
   }
   window.ASTHA_CLEAR_ACCOUNT = function ({ logout = false } = {}) {
     if (typeof AsthaObservationMemory !== 'undefined') AsthaObservationMemory.reset();
+    // The next person to use this phone must not inherit a connected camera.
+    if (typeof AsthaCameraKit !== 'undefined') AsthaCameraKit.accountCleared();
     sessionGeneration += 1;
     if (logout) logoutPending = true;
     try { localStorage.removeItem(LAST_ACCOUNT); if (logout) localStorage.setItem(PENDING_LOGOUT, '1'); } catch (e) {}

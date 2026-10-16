@@ -41,6 +41,7 @@ function refreshStateLabels() {
   if (typeof updateSourceStatus === 'function') updateSourceStatus();
   if (typeof AsthaExperience !== 'undefined') AsthaExperience.refreshLabels();
   if (typeof AsthaPiCamera !== 'undefined') AsthaPiCamera.refreshLabels();
+  if (typeof AsthaCameraKit !== 'undefined') AsthaCameraKit.render();
   if (typeof AsthaBraille !== 'undefined') AsthaBraille.refreshLabels();
   if (typeof AsthaScreenAccess !== 'undefined') AsthaScreenAccess.refreshLabels();
   if (typeof AsthaMessages !== 'undefined') AsthaMessages.refreshLabels();

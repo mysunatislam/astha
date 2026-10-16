@@ -619,6 +619,128 @@ public class AsthaNativePlugin extends Plugin {
         call.resolve(result);
     }
 
+    // ---- The remembered ASTHA ClipCam --------------------------------------------------
+    // Sealed by an Android Keystore key in app-private storage that is excluded from backups.
+    // Rejections carry only a fixed code; no address, code or record content is logged.
+
+    private static final String CAMERA_PAIRING = "astha_camera_pairing";
+    private CameraPairingVault pairingVault;
+
+    private synchronized CameraPairingVault pairingVault() {
+        if (pairingVault == null) {
+            SharedPreferences stored = getContext().getSharedPreferences(CAMERA_PAIRING, Context.MODE_PRIVATE);
+            pairingVault = new CameraPairingVault(new CameraPairingVault.Storage() {
+                @Override public String get(String key) { return stored.getString(key, null); }
+                @Override public void put(String key, String value) {
+                    if (!stored.edit().putString(key, value).commit()) throw new IllegalStateException("not_saved");
+                }
+                @Override public void remove(String key) { stored.edit().remove(key).commit(); }
+            }, new KeystorePairingCrypto());
+        }
+        return pairingVault;
+    }
+
+    private static CameraPairingVault.Record pairingFields(PluginCall call, CameraPairingVault.Record base) throws CameraPairingVault.Failure {
+        CameraPairingVault.Record record = base == null ? new CameraPairingVault.Record() : base;
+        if (base == null || call.getData().has("origin")) record.origin = call.getString("origin");
+        if (base == null) record.token = call.getString("token");
+        if (base == null || call.getData().has("fallbacks")) {
+            record.fallbacks = new ArrayList<>();
+            JSArray list = call.getArray("fallbacks");
+            for (int i = 0; list != null && i < list.length(); i++) {
+                Object item = list.opt(i);
+                if (!(item instanceof String)) throw new CameraPairingVault.Failure("invalid_pairing");
+                record.fallbacks.add((String) item);
+            }
+        }
+        if (base == null || call.getData().has("device")) {
+            JSObject device = call.getObject("device");
+            record.deviceId = device == null ? null : device.getString("id");
+            record.deviceName = device == null ? null : device.getString("name");
+            record.model = device == null ? null : device.getString("model");
+            record.backend = device == null ? null : device.getString("backend");
+            record.proof = device != null && Boolean.TRUE.equals(device.getBool("proof"));
+        }
+        if (base == null || call.getData().has("autoConnect")) record.autoConnect = !Boolean.FALSE.equals(call.getBoolean("autoConnect", true));
+        return record;
+    }
+
+    private static JSObject pairingResult(CameraPairingVault.Record record, boolean withToken) {
+        JSObject result = new JSObject();
+        result.put("found", record != null);
+        if (record == null) return result;
+        result.put("origin", record.origin);
+        JSArray fallbacks = new JSArray();
+        for (String fallback : record.fallbacks) fallbacks.put(fallback);
+        result.put("fallbacks", fallbacks);
+        JSObject device = new JSObject();
+        if (record.deviceId != null) device.put("id", record.deviceId);
+        if (record.deviceName != null) device.put("name", record.deviceName);
+        if (record.model != null) device.put("model", record.model);
+        if (record.backend != null) device.put("backend", record.backend);
+        if (record.proof) device.put("proof", true);
+        result.put("device", device);
+        result.put("autoConnect", record.autoConnect);
+        if (withToken) result.put("token", record.token);
+        return result;
+    }
+
+    @PluginMethod
+    public void cameraPairingSave(PluginCall call) {
+        try {
+            CameraPairingVault.Record record = CameraPairingVault.checked(pairingFields(call, null));
+            pairingVault().save(call.getString("profile"), record);
+            call.resolve(pairingResult(record, false));
+        } catch (CameraPairingVault.Failure failure) {
+            call.reject("The camera pairing was not saved.", failure.code);
+        }
+    }
+
+    @PluginMethod
+    public void cameraPairingLoad(PluginCall call) {
+        try {
+            call.resolve(pairingResult(pairingVault().load(call.getString("profile")), true));
+        } catch (CameraPairingVault.Failure failure) {
+            call.reject("The camera pairing could not be read.", failure.code);
+        }
+    }
+
+    @PluginMethod
+    public void cameraPairingSummary(PluginCall call) {
+        try {
+            call.resolve(pairingResult(pairingVault().load(call.getString("profile")), false));
+        } catch (CameraPairingVault.Failure failure) {
+            call.reject("The camera pairing could not be read.", failure.code);
+        }
+    }
+
+    @PluginMethod
+    public void cameraPairingUpdate(PluginCall call) {
+        try {
+            String profile = call.getString("profile");
+            CameraPairingVault.Record record = pairingVault().load(profile);
+            if (record == null) {
+                call.resolve(pairingResult(null, false));
+                return;
+            }
+            record = CameraPairingVault.checked(pairingFields(call, record));
+            pairingVault().save(profile, record);
+            call.resolve(pairingResult(record, false));
+        } catch (CameraPairingVault.Failure failure) {
+            call.reject("The camera pairing was not updated.", failure.code);
+        }
+    }
+
+    @PluginMethod
+    public void cameraPairingForget(PluginCall call) {
+        try {
+            pairingVault().forget(call.getString("profile"));
+            call.resolve();
+        } catch (CameraPairingVault.Failure failure) {
+            call.reject("The camera pairing could not be removed.", failure.code);
+        }
+    }
+
     // ---- Reading other apps, only after explicit opt-in --------------------------------
 
     private SharedPreferences preferences() {

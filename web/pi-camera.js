@@ -248,6 +248,50 @@
     schedule(current, 0);
     if (current.telemetry) scheduleTelemetry(current, 0);
   }
+  function base64url(bytes) {
+    let text = '';
+    for (const byte of bytes) text += String.fromCharCode(byte);
+    return win.btoa(text).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+  function checkedOrigin(origin) {
+    let endpoint;
+    try { endpoint = new URL(origin); } catch { throw fail('invalid_origin'); }
+    if (endpoint.protocol !== 'https:' || endpoint.username || endpoint.password || endpoint.pathname !== '/' || endpoint.search || endpoint.hash) throw fail('invalid_origin');
+    return endpoint.origin;
+  }
+  // Before a remembered pairing code is sent anywhere, a camera that supports it proves it
+  // already holds that code: it signs a fresh random challenge with it. A different device
+  // at the same address cannot, so it never receives the code. An older camera script
+  // without /hello answers 401 here and is recognised only through its TLS certificate.
+  async function verify({ origin, token, deviceId } = {}) {
+    const base = checkedOrigin(origin);
+    if (typeof token !== 'string' || !/^[A-Za-z0-9_-]{43,128}$/.test(token)) throw fail('invalid_pairing_token');
+    if (!win.crypto?.subtle || !win.crypto.getRandomValues || typeof win.btoa !== 'function' || typeof TextEncoder !== 'function') return { reachable: true, supported: false };
+    const nonce = base64url(win.crypto.getRandomValues(new Uint8Array(18)));
+    const endpoint = new URL('/hello', base);
+    endpoint.searchParams.set('nonce', nonce);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), TIMEOUT);
+    let response, body;
+    try {
+      response = await win.fetch(endpoint.href, { method: 'GET', mode: 'cors', credentials: 'omit', cache: 'no-store', redirect: 'error',
+        headers: { Accept: 'application/json' }, signal: controller.signal });
+      if (response.status !== 200) return { reachable: true, supported: false };
+      body = await response.text();
+    } catch { return { reachable: false, supported: false }; }
+    finally { clearTimeout(timeout); }
+    let reply;
+    try { reply = body.length <= 1024 ? JSON.parse(body) : null; } catch { reply = null; }
+    if (reply?.v !== 1 || typeof reply.device_id !== 'string' || !/^[A-Za-z0-9_-]{16,64}$/.test(reply.device_id) ||
+        typeof reply.proof !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(reply.proof)) throw fail('identity_mismatch');
+    const encoder = new TextEncoder();
+    const key = await win.crypto.subtle.importKey('raw', encoder.encode(token), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+    const expected = base64url(new Uint8Array(await win.crypto.subtle.sign('HMAC', key, encoder.encode('astha-hello-v1\n' + nonce + '\n' + reply.device_id))));
+    let difference = expected.length ^ reply.proof.length;
+    for (let i = 0; i < expected.length; i++) difference |= expected.charCodeAt(i) ^ reply.proof.charCodeAt(i);
+    if (difference || deviceId && reply.device_id !== deviceId) throw fail('identity_mismatch');
+    return { reachable: true, supported: true, deviceId: reply.device_id };
+  }
   // What the camera reports about itself, for the connection status line. Display only.
   async function describe() {
     const current = session;
@@ -267,13 +311,18 @@
       for (const key of ['model', 'os', 'backend']) if (typeof raw[key] === 'string') info[key] = raw[key].replace(/[^\x20-\x7e]/g, '').slice(0, 80);
       for (const key of ['width', 'height', 'fps']) if (Number.isFinite(raw[key]) && raw[key] > 0 && raw[key] < 10000) info[key] = raw[key];
       if (raw.telemetry === true) info.telemetry = true;
+      // A stable identity and the Pi's own host name, from camera scripts that report them.
+      if (typeof raw.device_id === 'string' && /^[A-Za-z0-9_-]{16,64}$/.test(raw.device_id)) info.deviceId = raw.device_id;
+      if (typeof raw.name === 'string' && /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/i.test(raw.name)) info.name = raw.name.toLowerCase();
+      if (raw.hello === true) info.hello = true;
+      info.origin = current.origin;
       return info;
     } catch { return null; }
     finally { clearTimeout(timeout); }
   }
   const fresh = () => Boolean(session?.connected && !session.paused && clock() < session.freshUntil);
-  win.PiCamera = Object.freeze({ connect, stop: () => stop(), pause, resume, describe, active: fresh,
-    paired: () => Boolean(session), status: () => session?.status || 'stopped',
+  win.PiCamera = Object.freeze({ connect, stop: () => stop(), pause, resume, describe, verify, active: fresh,
+    paired: () => Boolean(session), status: () => session?.status || 'stopped', origin: () => session?.origin || null,
     getFrame: () => fresh() ? session.frame : null });
   win.addEventListener('pagehide', () => stop());
   document.addEventListener('visibilitychange', () => { if (document.hidden) pause(); else resume(); });
