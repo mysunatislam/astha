@@ -695,7 +695,10 @@
   .astha-app .brand-mark, .astha-app .brand h1 .pill { display: none; }
   .astha-app .brand h1 { font-size: 1.75rem; font-weight: 600; text-transform: lowercase; }
   .astha-app .brand-logo { display: block; width: 192px; max-width: 100%; height: auto; aspect-ratio: 3 / 1; object-fit: contain; }
-  html:is([data-theme="clinical-yellow"], [data-theme="monochrome"], [data-theme="navy-cyan"]) .astha-app .brand-logo { background: #fffaf4; border-radius: 8px; }
+  .astha-app .brand-logo-dark { display: none; }
+  /* The dark themes get the same emblem recoloured with their cream and muted mulberry. */
+  html:is([data-theme="clinical-yellow"], [data-theme="monochrome"], [data-theme="navy-cyan"]) .astha-app .brand-logo-light { display: none; }
+  html:is([data-theme="clinical-yellow"], [data-theme="monochrome"], [data-theme="navy-cyan"]) .astha-app .brand-logo-dark { display: block; }
   .astha-app .brand p { margin-top: 2px; font-size: .85rem; color: var(--muted); }
   .astha-app[data-view] .controls { flex-wrap: wrap; justify-content: flex-end; width: auto; margin-left: auto; }
   .astha-app:not([data-view="settings"]) .controls > :not(.icon-btn) { display: none; }
@@ -807,7 +810,7 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
     </div>
     <div>
-      <h1><img class="brand-logo" src="brand/astha-mulberry-apricot-v1.png" width="576" height="192" alt="Astha" data-i18n-alt="brand_logo_alt" decoding="async"> <span class="pill ok"><span class="dot pulse"></span><span data-i18n="badge_clinical">Prototype</span></span></h1>
+      <h1><img class="brand-logo brand-logo-light" src="brand/astha-mulberry-apricot-v1.png" width="576" height="192" alt="Astha" data-i18n-alt="brand_logo_alt" decoding="async"><img class="brand-logo brand-logo-dark" src="brand/astha-mulberry-apricot-dark-v1.png" width="576" height="192" alt="Astha" data-i18n-alt="brand_logo_alt" decoding="async"> <span class="pill ok"><span class="dot pulse"></span><span data-i18n="badge_clinical">Prototype</span></span></h1>
       <p data-i18n="tagline">Real-time AI visual companion for blind and low-vision users</p>
     </div>
   </div>

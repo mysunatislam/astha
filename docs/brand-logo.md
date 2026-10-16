@@ -2,7 +2,7 @@
 
 The user-provided **ASTHA Purple Winged Emblem Logo.png** was edited with the built-in image tool. The app's existing colour tokens were preserved. The selected transparent logo uses mulberry `#412b43` / `#302032`, apricot `#efa36a` and cream `#fffaf4`.
 
-Final project asset: `web/brand/astha-mulberry-apricot-v1.png`, 576 × 192 RGBA PNG. A proportional Lanczos resize reduced the generated 2172 × 724 output for the 192 × 64 header; no recolouring or geometry edits were performed by code. The full wordmark remains in the existing level-one heading with translated English/Bangla alternative text. A cream backing is used only for the logo under the pre-existing dark contrast themes. Theme controls and palette tokens are unchanged.
+Final project asset: `web/brand/astha-mulberry-apricot-v1.png`, 576 × 192 RGBA PNG. A proportional Lanczos resize reduced the generated 2172 × 724 output for the 192 × 64 header; no recolouring or geometry edits were performed by code. The full wordmark remains in the existing level-one heading with translated English/Bangla alternative text. The dark contrast themes (clinical yellow, monochrome, navy cyan) show `web/brand/astha-mulberry-apricot-dark-v1.png` instead: the same pixels and alpha, so the shape is identical, recoloured by a script with theme colours only. The mulberry body becomes cream `#fffaf4`, the cream highlights become muted mulberry `#82717e` (`--border-strong`), and apricot is unchanged. Only one of the two images is displayed, so a screen reader announces the alt text once. Theme controls and palette tokens are unchanged.
 
 The versioned image is included in the offline shell and the build cache hash. Existing mobile app icons and the assistant avatar are unchanged.
 
