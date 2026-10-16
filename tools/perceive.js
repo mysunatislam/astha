@@ -397,6 +397,8 @@ function objLabelWithArticle(o) {
 
 // ---- Hazard decision, now aware of toys, screens and distance ----
 function isHazard(o) {
+  // A detected person, including a nearby one, is an observation rather than a hazard class.
+  if (o.id === 'person') return false;
   const f = o.flags || {};
   if (f.onScreen || f.toy || f.picture || f.doubtful || o.hazardMuted) return false;
   if (o.id === 'stairs' || o.id === 'drop_off') {
@@ -451,7 +453,7 @@ function sceneSummary(opts = {}) {
   if (!all.length) return { en: t('nothing_seen'), bn: tBn('nothing_seen') };
   if (graph.room && ROOM_WORDS[graph.room]) { en.push(`You seem to be ${ROOM_WORDS[graph.room][0]}.`); bn.push(`আপনি সম্ভবত ${ROOM_WORDS[graph.room][1]} আছেন।`); }
   // Hazards and approaching things first.
-  const hz = all.filter(o => isHazard(o) || (o.motion && o.motion.dir === 'toward' && (o.id === 'person' || VEHICLE_IDS.has(o.id))));
+  const hz = all.filter(o => isHazard(o) || (o.motion && o.motion.dir === 'toward' && VEHICLE_IDS.has(o.id)));
   hz.slice(0, 2).forEach(o => {
     const d = distPhrase(o, false), dB = distPhrase(o, true);
     const mv = o.motion && o.motion.dir === 'toward' ? ', ' + motionPhrase(o.motion, false) : '';

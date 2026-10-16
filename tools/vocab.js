@@ -1,5 +1,5 @@
 // COCO classes + everyday objects with Bangla mapping, hazard labels and memory aliases
-v('person', 'person', 'মানুষ', { coco: 'person', hz: 'close', al: ['person', 'people', 'মানুষ', 'লোক'] });
+v('person', 'person', 'মানুষ', { coco: 'person', al: ['person', 'people', 'মানুষ', 'লোক'] });
 v('bicycle', 'bicycle', 'সাইকেল', { coco: 'bicycle', hz: 'close', al: ['bicycle', 'cycle', 'সাইকেল'] });
 v('car', 'car', 'গাড়ি', { coco: 'car', hz: 'always', al: ['car', 'vehicle', 'গাড়ি'] });
 v('motorcycle', 'motorcycle', 'মোটরসাইকেল', { coco: 'motorcycle', hz: 'always', al: ['motorcycle', 'bike', 'মোটরসাইকেল', 'বাইক'] });

@@ -16,9 +16,9 @@ const between = (source, start, end) => {
 const voiceSource = between(moduleSource, 'const VoiceEngine = {', 'function startReader(');
 const liveSource = between(built, 'function afterLiveUpdate() {', '\nfunction showHazard(');
 
-function harness({ mode = 'road', audio = true, deviceVoice = true, voiceLang = 'en', banglaVoice = false } = {}) {
+function harness({ mode = 'road', audio = true, deviceVoice = true, voiceLang = 'en', banglaVoice = false, realPersonRules = false } = {}) {
   let now = 500000;
-  const timers = [], captions = [], earcons = [], haptics = [], banners = [], logs = [], cancelled = [];
+  const timers = [], captions = [], earcons = [], haptics = [], banners = [], logs = [], cancelled = [], colors = [];
   const synth = {
     current: null, spoken: [],
     get speaking() { return Boolean(this.current); },
@@ -28,7 +28,8 @@ function harness({ mode = 'road', audio = true, deviceVoice = true, voiceLang = 
     finish() { const utterance = this.current; this.current = null; utterance?.onend?.(); },
   };
   const nodes = new Map();
-  const element = id => { if (!nodes.has(id)) nodes.set(id, { value: '1', textContent: '', hidden: true, setAttribute() {}, addEventListener() {}, focus() {} }); return nodes.get(id); };
+  const element = id => { if (!nodes.has(id)) nodes.set(id, { value: '1', textContent: '', hidden: true, setAttribute() {}, addEventListener() {}, focus() {},
+    getContext() { return { clearRect() {}, strokeRect() { colors.push(this.strokeStyle); }, fillRect() {}, fillText() {}, setLineDash() {}, measureText: text => ({ width: text.length * 8 }) }; } }); return nodes.get(id); };
   const world = [];
   const context = vm.createContext({
     console, Promise, Map, Set, Math, JSON, Object, Array, String, Number, Boolean, RegExp, Error,
@@ -49,6 +50,7 @@ function harness({ mode = 'road', audio = true, deviceVoice = true, voiceLang = 
     worldSorted: () => world, isHazard: object => Boolean(object.hazard),
     narrateMotion: () => false, cloudReady: () => false, heartPointAt() {}, STRICT_COCO: new Set(), VOCAB_BY_ID: {}, privacyMode: false,
     objLabel: object => object.id, objLabelBn: object => object.id, objLabelWithArticle: object => 'a ' + object.id,
+    article: () => 'a', esc: text => text, themeAccent: () => '#ffd700',
     setMode: next => { context.state.shield = next === 'auto'; context.state.narrate = next === 'auto'; },
     announce: (en, bn) => context.speak(en, bn), stopAllSpeech() {}, captureFrame: () => null,
     $: element, document: { hidden: false, body: element('body'), querySelectorAll: () => [], querySelector: selector => element(selector), addEventListener() {} },
@@ -58,9 +60,22 @@ function harness({ mode = 'road', audio = true, deviceVoice = true, voiceLang = 
   context.window = { speechSynthesis: synth, ASTHA_ACCOUNT_ID: 'a', ASTHA_LOCAL_ACCOUNT_ID: 'a' };
   vm.runInContext(read('tools/experience.js') + '\n' + voiceSource + '\n' + liveSource +
     '\nglobalThis.experience = AsthaExperience; globalThis.engine = VoiceEngine; globalThis.live = afterLiveUpdate;', context);
+  if (realPersonRules) {
+    const actual = name => {
+      const matches = [...built.matchAll(new RegExp('^function ' + name + '\\(', 'gm'))];
+      assert(matches.length, 'generated function missing: ' + name);
+      const start = matches.at(-1).index; return built.slice(start, built.indexOf('\n}', start) + 2);
+    };
+    const vocabulary = between(built, 'const VOCAB = [];', '\nconst COCO_TO_ID =');
+    const movement = between(built, 'const REAL_MOBILE_AGENTS =', '\n// ---- Understanding what was said');
+    const velocity = between(built, 'const ApproachVelocityTracker =', '\n// ---- Real-Time Stairs,');
+    vm.runInContext(vocabulary + '\n' + read('tools/perceive.js') + '\n' + movement + '\n' + velocity + '\n' + actual('drawOverlay') + '\n' + actual('renderSeen') +
+      '\nglobalThis.velocity = ApproachVelocityTracker;', context);
+    context.state.lastCocoPreds = [];
+  }
   context.experience.setContext(mode, true);
   const settle = async () => { for (let i = 0; i < 12; i++) await Promise.resolve(); };
-  return { context, synth, timers, captions, earcons, haptics, banners, logs, cancelled, world, settle, nodes,
+  return { context, synth, timers, captions, earcons, haptics, banners, logs, cancelled, world, settle, nodes, colors,
     experience: context.experience, engine: context.engine, live: context.live, speak: (en, bn) => context.speak(en, bn),
     advance: ms => { now += ms; } };
 }
@@ -117,6 +132,80 @@ test('a person or furniture warning never interrupts an answer and is an ordinar
   assert.equal(h.synth.current.text, 'Watch out! Person approaching rapidly on your left!');
   assert.equal(h.synth.current.rate, 1, 'an update is not delivered as an emergency');
   assert.deepEqual(h.earcons, ['hazard']); assert.equal(h.engine.criticalUntil, 0);
+});
+
+const person = (size = 380, extra = {}) => ({ id: 'person', score: 0.9, src: 'coco', pos: 'ahead', prox: 'very_close',
+  bbox: [320 - size / 2, 240 - size / 2, size, size], first: 500000, ...extra });
+
+test('the shipped person detector box, seen chip and summary stay ordinary observations even nearby or moving', () => {
+  for (const motion of [null, { dir: 'toward', fast: true }, { dir: 'left', fast: false }]) {
+    const h = harness({ realPersonRules: true }), object = person(380, { motion }); h.world.push(object);
+    assert.equal(h.context.isHazard(object), false);
+    h.context.drawOverlay({ width: 640, height: 480 }, [object], []);
+    assert.equal(h.colors.at(-1), '#ffd700', 'ordinary person boxes use the normal detector color');
+    h.context.renderSeen();
+    assert.doesNotMatch(h.nodes.get('seen-row').innerHTML, /hazard-chip/);
+    assert.doesNotMatch(h.nodes.get('seen-list').innerHTML, /tag hz/);
+    const summary = h.context.sceneSummary();
+    assert.match(summary.en, /person/); assert.doesNotMatch(summary.en, /Careful|danger|attack|collision|threat/i);
+    assert.doesNotMatch(summary.bn, /সাবধান|বিপদ|আক্রমণ/);
+  }
+});
+
+test('a stationary person does not show a banner, sound a hazard earcon or interrupt an answer', async () => {
+  for (const mode of ['ask', 'road']) {
+    const h = harness({ mode, realPersonRules: true }), object = person(); h.world.push(object);
+    h.speak('Here is the answer to your question.', ''); await h.settle();
+    for (let frame = 0; frame < 5; frame++) {
+      assert.equal(h.context.velocity.evaluate(640, 480, [object]), null);
+      h.live(); h.advance(280);
+    }
+    assert.deepEqual(h.cancelled, []); assert.equal(h.synth.current.text, 'Here is the answer to your question.');
+    assert.equal(h.banners.some(Boolean), false); assert.deepEqual(h.earcons, []);
+    assert.equal(h.captions.some(caption => caption.tone === 'danger'), false);
+  }
+});
+
+test('requested surroundings mode still narrates ordinary person movement without a danger tone', async () => {
+  const h = harness({ realPersonRules: true }); h.world.push(person(150, { motion: { dir: 'toward', fast: true } }));
+  h.live(); await h.settle();
+  assert.match(h.synth.current.text, /person.*coming closer/);
+  assert.equal(h.captions.at(-1).agent, 'vision'); assert.equal(h.captions.at(-1).tone, null);
+  assert.deepEqual(h.earcons, []); assert.equal(h.banners.some(Boolean), false);
+});
+
+test('person approach updates need sustained frames and monitoring, and wait for a spoken answer', async () => {
+  for (const mode of ['ask', 'road']) {
+    const h = harness({ mode, realPersonRules: true });
+    assert.equal(h.context.velocity.evaluate(640, 480, [person(170)]), null); h.advance(280);
+    assert.equal(h.context.velocity.evaluate(640, 480, [person(220)]), null, 'two boxes alone do not establish a sustained approach'); h.advance(280);
+    const alert = h.context.velocity.evaluate(640, 480, [person(300)]);
+    if (mode === 'ask') { assert.equal(alert, null); assert.equal(h.experience.acceptHazard('body_collision'), null); continue; }
+    assert.equal(alert?.type, 'body_collision'); assert.match(alert.en, /appears to be getting closer/);
+    assert.doesNotMatch(alert.en, /attack|intention|will collide|rapidly/i);
+    h.speak('Your requested answer is still being spoken.', ''); await h.settle();
+    h.engine.emergencyAlert(alert.en, alert.bn, alert.type);
+    assert.deepEqual(h.cancelled, []); assert.equal(h.banners.some(Boolean), false);
+    h.synth.finish(); await h.settle(); h.advance(5000);
+    h.engine.emergencyAlert(alert.en, alert.bn, alert.type); await h.settle();
+    assert.equal(h.synth.current.text, alert.en); assert.equal(h.engine.criticalUntil, 0);
+  }
+});
+
+test('person evidence excludes pictures, weak detections and source changes while monitored stairs and vehicles remain hazards', () => {
+  for (const extra of [{ flags: { onScreen: true } }, { flags: { toy: true } }, { flags: { picture: true } }, { score: 0.4 }]) {
+    const h = harness({ realPersonRules: true });
+    for (const size of [170, 220, 300, 380]) { assert.equal(h.context.velocity.evaluate(640, 480, [person(size, extra)]), null); h.advance(280); }
+  }
+  const h = harness({ realPersonRules: true });
+  h.context.velocity.evaluate(640, 480, [person(170)]); h.advance(280);
+  h.context.velocity.evaluate(640, 480, [person(220)]); h.advance(280); h.context.state.sourceEpoch++;
+  assert.equal(h.context.velocity.evaluate(640, 480, [person(300)]), null, 'a different source starts new motion evidence');
+  const vehicle = person(330, { id: 'car' });
+  assert.equal(h.context.isHazard(vehicle), true); assert.equal(h.context.isHazard({ id: 'stairs', score: 0.8 }), true);
+  const alert = h.context.velocity.evaluate(640, 480, [vehicle]); assert.equal(alert?.type, 'vehicle_collision');
+  h.engine.emergencyAlert(alert.en, alert.bn, alert.type);
+  assert(h.earcons.includes('emergency')); assert(h.banners.includes(true));
 });
 
 test('image-derived hazards are not announced unless ASTHA was asked to watch', () => {

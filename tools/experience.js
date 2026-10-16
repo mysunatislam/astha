@@ -53,6 +53,7 @@ const AsthaExperience = (() => {
   const hazardPriority = type => CRITICAL_HAZARDS.has(String(type)) ? 'critical' : 'medium';
   // 'critical', 'medium' or null. A nearby person, table or chair never outranks an answer.
   function acceptHazard(type) {
+    if (type === 'body_collision' && !monitoring()) return null;
     const priority = hazardPriority(type);
     return admit(priority, 'hazard:' + type) ? priority : null;
   }
