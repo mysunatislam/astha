@@ -126,6 +126,8 @@ const AsthaExperience = (() => {
     // A message being answered owns the next request, as the guide does.
     if (typeof AsthaMessages !== 'undefined' && AsthaMessages.route(query)) return true;
     if (typeof AsthaObservationMemory !== 'undefined' && AsthaObservationMemory.route(query)) return true;
+    // "Which AI are you using?" and "are you online?" are answered from what actually happened.
+    if (typeof AsthaAiStatus !== 'undefined' && AsthaAiStatus.route(query)) return true;
     // A complete greeting or identity question is local; quoted words and reading tasks
     // keep their normal route. A guided setup or message reply still owns its next answer.
     const greeting = q.normalize('NFC').replace(/[.!?।\s]+$/, '');

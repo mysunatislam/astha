@@ -1008,6 +1008,17 @@
         </table>
       </section>
 
+      <section id="ai-status" class="card" aria-labelledby="ai-status-title">
+        <h3 id="ai-status-title" data-i18n="ai_status_title">Which AI is working</h3>
+        <p class="help" data-i18n="ai_status_help">Boxes on the picture always come from the detector on this device. Spoken descriptions come from the online service only when it is allowed and answers; otherwise this device answers. No picture, request text or key is kept here.</p>
+        <dl aria-live="off">
+          <dt data-i18n="ai_row_camera">Pictures</dt><dd id="ai-status-camera"></dd>
+          <dt data-i18n="ai_row_boxes">Boxes and labels</dt><dd id="ai-status-boxes"></dd>
+          <dt data-i18n="ai_row_online">Spoken descriptions</dt><dd id="ai-status-online"></dd>
+          <dt data-i18n="ai_row_last">Last online request</dt><dd id="ai-status-last"></dd>
+        </dl>
+      </section>
+
       <details id="vision-debug" class="card">
         <summary data-i18n="debug_title">Vision diagnostics</summary>
         <p class="help" data-i18n="debug_help">The preview and boxes above use actual model results. Scores are model scores, not verified accuracy. Timing is collected only while this panel is open and stays on this device.</p>
@@ -2494,7 +2505,14 @@ function afterLiveUpdate() {
   if (privacyTransition) return;
   const now = Date.now();
   if (state.shield) {
-    const hz = worldSorted().filter(isHazard).filter(o => {
+    // A warning needs current, repeated evidence. Something not seen in the last 1.5 s says
+    // nothing about now, and one frame of a large nearby-looking box is often detector
+    // noise, so ordinary obstacles wait for a second sighting. Stairs, drop-offs and
+    // vehicles are never delayed.
+    const immediate = o => o.id === 'stairs' || o.id === 'drop_off' || (VOCAB_BY_ID[o.id] || {}).hz === 'always';
+    const current = o => !Number.isFinite(o.last) || now - o.last <= 1500;
+    const repeated = o => immediate(o) || !Number.isFinite(o.first) || !Number.isFinite(o.last) || o.last - o.first >= 250;
+    const hz = worldSorted().filter(isHazard).filter(o => current(o) && repeated(o)).filter(o => {
       const cd = (o.id === 'stairs' || o.id === 'drop_off' || o.id === 'car') ? 3000 : 6000;
       return (state.hazardCooldown.get(o.id) || 0) < now - cd;
     });
@@ -2529,7 +2547,7 @@ function afterLiveUpdate() {
       state.announced.set(o.id, now);
       return;
     }
-    if (!worldSorted().some(isHazard)) showHazard(false);
+    if (!worldSorted().some(o => isHazard(o) && current(o))) showHazard(false);
   }
   // Personal memories are saved only by an explicit remember or placement request.
   if (!state.narrate) return;

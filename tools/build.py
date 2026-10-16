@@ -592,14 +592,15 @@ messages_js = (HERE / "messages.js").read_text(encoding="utf-8")
 sensors_js = (HERE / "sensors.js").read_text(encoding="utf-8")
 diagnostics_js = (HERE / "diagnostics.js").read_text(encoding="utf-8")
 diagnostics_ui_js = (HERE / "diagnostics-ui.js").read_text(encoding="utf-8")
+ai_status_js = (HERE / "ai-status.js").read_text(encoding="utf-8")
 vision_details_js = (HERE / "vision-details.js").read_text(encoding="utf-8")
-rep("\n(function boot() {", i18n_data + i18n_js.rstrip("\n") + "\n" + diagnostics_js.rstrip("\n") + "\n" + diagnostics_ui_js.rstrip("\n") + "\n" + vision_details_js.rstrip("\n") + "\n" + module.rstrip("\n") + "\n" + eye_js.rstrip("\n") + "\n" + cloud_js.rstrip("\n") + "\n" + agent_js.rstrip("\n") + "\n" + perceive_js.rstrip("\n") + "\n" + spatial_js.rstrip("\n") + "\n" + offline_js.rstrip("\n") + "\n" + account_js.rstrip("\n") + "\n" + experience_js.rstrip("\n") + "\n" + pi_ui_js.rstrip("\n") + "\n" + braille_js.rstrip("\n") + "\n" + sensors_js.rstrip("\n") + "\n" + screen_js.rstrip("\n") + "\n" + messages_js.rstrip("\n") + "\n\n(function boot() {")
+rep("\n(function boot() {", i18n_data + i18n_js.rstrip("\n") + "\n" + diagnostics_js.rstrip("\n") + "\n" + diagnostics_ui_js.rstrip("\n") + "\n" + ai_status_js.rstrip("\n") + "\n" + vision_details_js.rstrip("\n") + "\n" + module.rstrip("\n") + "\n" + eye_js.rstrip("\n") + "\n" + cloud_js.rstrip("\n") + "\n" + agent_js.rstrip("\n") + "\n" + perceive_js.rstrip("\n") + "\n" + spatial_js.rstrip("\n") + "\n" + offline_js.rstrip("\n") + "\n" + account_js.rstrip("\n") + "\n" + experience_js.rstrip("\n") + "\n" + pi_ui_js.rstrip("\n") + "\n" + braille_js.rstrip("\n") + "\n" + sensors_js.rstrip("\n") + "\n" + screen_js.rstrip("\n") + "\n" + messages_js.rstrip("\n") + "\n\n(function boot() {")
 rep("  renderSpatialLayout();\n  enhancementBoot();\n})();", "  renderSpatialLayout();\n  enhancementBoot();\n  companionBoot();\n  eyeBoot();\n  cloudBoot();\n})();")
 
 # ---- boot(): expose it instead of self-invoking, so backend.js can run it after sign-in ----
 rep('(function boot() {', 'window.__asthaBoot = function boot() {')
 rep('  companionBoot();\n  eyeBoot();\n  cloudBoot();\n})();',
-    '  companionBoot();\n  eyeBoot();\n  cloudBoot();\n  offlineBoot();\n  AsthaExperience.boot();\n  AsthaPiCamera.boot();\n  AsthaBraille.boot();\n  AsthaScreenAccess.boot();\n  AsthaMessages.boot();\n  AsthaDiagnosticsUI.boot();\n  AsthaVisionDetails.boot();\n  refreshMemory();\n  refreshRooms();\n'
+    '  companionBoot();\n  eyeBoot();\n  cloudBoot();\n  offlineBoot();\n  AsthaExperience.boot();\n  AsthaPiCamera.boot();\n  AsthaBraille.boot();\n  AsthaScreenAccess.boot();\n  AsthaMessages.boot();\n  AsthaDiagnosticsUI.boot();\n  AsthaAiStatus.boot();\n  AsthaVisionDetails.boot();\n  refreshMemory();\n  refreshRooms();\n'
     '};')
 # Page navigation, the personal setup assessment and the connected-devices page.
 assessment_html = (HERE / "assessment.html").read_text(encoding="utf-8").replace('<div id="pi-connection-slot"></div>', '<div id="pi-connection-slot">' + (HERE / "pi-camera-controls.html").read_text(encoding="utf-8") + '</div>')

@@ -304,3 +304,54 @@ test('Bangla text with no English equivalent is reported as unspoken, and an int
   h.engine.stop(true); release(false); await h.settle();
   assert.equal(h.synth.spoken.length, 0); assert.deepEqual(stops, [true]);
 });
+
+// Obstacle warnings need current, repeated evidence; an object class alone is not enough.
+const obstacle = (id, extra = {}) => ({ id, src: 'coco', score: 0.9, pos: 'ahead', prox: 'very_close', bbox: [200, 120, 240, 300], ...extra });
+
+test('stationary furniture: a far chair is an observation, a chair seen twice very close is a cautious obstacle notice', async () => {
+  const h = harness({ realPersonRules: true }), now = 500000;
+  h.world.push(obstacle('chair', { prox: 'far', first: now - 2000, last: now }));
+  h.live(); await h.settle();
+  assert.equal(h.captions.some(caption => caption.tone === 'danger'), false); assert.deepEqual(h.earcons, []);
+  assert.match(h.synth.current.text, /^new_object:/, 'it is still described as an ordinary observation');
+  h.synth.finish(); await h.settle();
+  h.world.length = 0; h.world.push(obstacle('chair', { first: now - 600, last: now }));
+  h.live(); await h.settle();
+  assert.equal(h.synth.current.text, 'hazard_msg:chair,pos_ahead,prox_very_close');
+  assert.deepEqual(h.earcons, ['hazard'], 'an ordinary obstacle, not an emergency'); assert.equal(h.engine.criticalUntil, 0);
+});
+
+test('noisy detections: one frame of a nearby-looking box, a doubtful box or a weak open-vocabulary match does not warn', async () => {
+  const h = harness({ realPersonRules: true }), now = 500000;
+  h.context.state.narrate = false;   // only the warning path is under test here
+  const chair = obstacle('chair', { first: now, last: now });
+  h.world.push(chair, obstacle('bench', { first: now - 900, last: now, flags: { doubtful: true } }),
+    { id: 'box', src: 'clip', score: 0.39, pos: 'ahead', first: now - 900, last: now });
+  h.live(); await h.settle();
+  assert.equal(h.synth.spoken.length, 0); assert.deepEqual(h.earcons, []);
+  h.advance(300); chair.last = now + 300;   // the next frame shows it again
+  h.live(); await h.settle();
+  assert.equal(h.synth.current.text, 'hazard_msg:chair,pos_ahead,prox_very_close', 'a repeated sighting is not suppressed');
+});
+
+test('stale evidence: an obstacle not seen for 1.5 s is not announced and its banner is cleared', async () => {
+  const h = harness({ realPersonRules: true }), now = 500000;
+  h.context.state.narrate = false;
+  h.world.push(obstacle('chair', { first: now - 3000, last: now - 2000 }));
+  h.live(); await h.settle();
+  assert.equal(h.synth.spoken.length, 0); assert.deepEqual(h.earcons, []);
+  assert.equal(h.banners.at(-1), false, 'no warning banner for something that is no longer in view');
+});
+
+test('without a distance sensor, stairs still warn at once and image-estimated obstacles still warn after a second sighting', async () => {
+  const h = harness({ realPersonRules: true }), now = 500000;
+  h.world.push({ id: 'stairs', score: 0.8, pos: 'ahead', first: now, last: now });
+  h.live(); await h.settle();
+  assert.equal(h.synth.current.text, 'Warning! Stairs directly ahead!', 'a single sighting of stairs is never delayed');
+  h.synth.finish(); await h.settle(); h.world.length = 0; h.advance(7000);
+  const estimated = obstacle('chair', { near01: 0.85, distM: null, distMeasured: false, first: now + 6500, last: now + 7000 });
+  h.world.push(estimated);
+  h.live(); await h.settle();
+  assert.equal(h.synth.current.text, 'hazard_msg:chair,pos_ahead,prox_very_close');
+  assert.doesNotMatch(h.synth.current.text, /measured|cm|metre/i, 'an image estimate is never presented as a measurement');
+});
