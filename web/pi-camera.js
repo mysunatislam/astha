@@ -194,14 +194,19 @@
     clearTimeout(current.telemetryTimer);
     current.telemetryTimer = setTimeout(async () => {
       if (session !== current || current.paused || !current.telemetry) return;
+      const telemetryGeneration = current.telemetryGeneration, began = clock();
       const reply = await getJson(current, '/telemetry', TELEMETRY_TIMEOUT);
-      if (session !== current || current.paused) return;
-      if (reply.status === 401 || reply.status === 403) { current.telemetry = false; return; }   // the picture link reports the pairing
+      if (session !== current || current.paused || telemetryGeneration !== current.telemetryGeneration) return;
       const reading = reply.status === 200 ? distanceReading(reply.value) : null;
-      if (reading && reading.seq !== current.telemetrySeq) {
-        current.telemetrySeq = reading.seq;
+      if (reading) reading.ageMs += Math.max(0, clock() - began);
+      if (!reading || reading.ageMs > 1000 || reading.seq < current.telemetrySeq) {
+        try { current.onTelemetry?.({ distanceM: null, status: 'no_data', ageMs: 0 }); } catch {}
+      }
+      else if (reading.status !== 'ok' || reading.seq > current.telemetrySeq) {
+        current.telemetrySeq = Math.max(current.telemetrySeq, reading.seq);
         try { current.onTelemetry?.(reading); } catch {}
       }
+      if (reply.status === 401 || reply.status === 403) { current.telemetry = false; return; }   // the picture link reports the pairing
       scheduleTelemetry(current);
     }, delay);
   }
@@ -216,7 +221,7 @@
     const pace = Number.isFinite(interval) ? Math.min(5000, Math.max(DEFAULT_INTERVAL, Math.round(interval))) : DEFAULT_INTERVAL;
     const current = { origin: endpoint.origin, token, onFrame, onStatus, onTelemetry, generation, sequence: 0, connected: false, everConnected: false,
       frame: null, freshUntil: 0, interval: pace, retry: 0, lostAt: 0, resync: false, paused: false, cameraRun: '',
-      telemetryChecked: false, telemetry: false, telemetryTimer: null, telemetrySeq: -1 };
+      telemetryChecked: false, telemetry: false, telemetryTimer: null, telemetrySeq: -1, telemetryGeneration: 0 };
     session = current;
     notify(current, 'connecting');
     try { await pull(current); if (session === current) schedule(current); }
@@ -228,6 +233,7 @@
     const current = session;
     if (!current || current.paused) return;
     current.paused = true;
+    current.telemetryGeneration++;
     clearTimeout(current.timer);
     clearTimeout(current.telemetryTimer);
     current.controller?.abort();

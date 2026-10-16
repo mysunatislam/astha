@@ -1338,6 +1338,30 @@
   "pi_distance_sensor": [
    "distance sensor",
    "দূরত্ব সেন্সর"
+  ],
+  "pi_sensor_ok": [
+   "Ultrasonic: current measurement. Accuracy is unverified.",
+   "আল্ট্রাসনিক: বর্তমান মাপ পাওয়া যাচ্ছে। নির্ভুলতা যাচাই হয়নি।"
+  ],
+  "pi_sensor_out_of_range": [
+   "Ultrasonic: invalid or out-of-range reading; distance unknown. This does not mean the path is clear.",
+   "আল্ট্রাসনিক: মাপ অবৈধ বা সীমার বাইরে; দূরত্ব জানা নেই। এর অর্থ পথ খালি নয়।"
+  ],
+  "pi_sensor_no_echo_start": [
+   "Ultrasonic: echo did not start; distance unknown. This does not mean the path is clear.",
+   "আল্ট্রাসনিক: প্রতিধ্বনি শুরু হয়নি; দূরত্ব জানা নেই। এর অর্থ পথ খালি নয়।"
+  ],
+  "pi_sensor_error": [
+   "Ultrasonic: sensor error; distance unknown.",
+   "আল্ট্রাসনিক: সেন্সরে ত্রুটি; দূরত্ব জানা নেই।"
+  ],
+  "pi_sensor_no_data": [
+   "Ultrasonic: no fresh data; distance unknown.",
+   "আল্ট্রাসনিক: নতুন তথ্য নেই; দূরত্ব জানা নেই।"
+  ],
+  "pi_sensor_value": [
+   "Current sensor reading: {cm} cm.",
+   "সেন্সরের বর্তমান মাপ: {cm} সেন্টিমিটার।"
   ]
  },
  "hooks": [

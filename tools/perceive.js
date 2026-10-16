@@ -208,6 +208,7 @@ function applyMeasuredDistance(objs, frame, reading) {
   if (best) {
     const o = best.o;
     o.distM = Math.round(m * 100) / 100; o.distMeasured = true; o.distLower = false; o.distWeak = false;
+    o.distMeasuredAt = reading.at; o.distMeasuredEpoch = state.sourceEpoch || 0;
     o.prox = m <= 1.0 ? 'very_close' : m <= 2.5 ? 'near' : 'far';
   }
   return { metres: m, object: best ? best.o : null };
@@ -328,10 +329,22 @@ function measuredPhrase(m, bn) {
   const v = (Math.round(m * 10) / 10).toFixed(1);
   return bn ? `সেন্সরে মাপা ${digits(v)} মিটার দূরে` : `measured at ${v} metres`;
 }
+function currentMeasuredDistance(o) {
+  const reading = state.source === 'pi' && typeof AsthaSensors !== 'undefined' ? AsthaSensors.measured('front') : null;
+  return Boolean(reading && o.distMeasuredAt === reading.at && o.distMeasuredEpoch === (state.sourceEpoch || 0) && o.distM === Math.round(reading.metres * 100) / 100);
+}
+function invalidateMeasuredDistances() {
+  const objects = new Set([...(state.world?.values() || []), ...(state.lastCocoPreds || []), state.scene?.ahead?.object]);
+  for (const o of objects) if (o?.distMeasured) {
+    o.distM = null; o.distMeasured = false; o.distMeasuredAt = null; o.near01 = null; o.prox = null;
+  }
+  if (state.scene) state.scene.ahead = null;
+  state.spatial = null;
+}
 // Returns '' when nothing sensible can be said.
 function distPhrase(o, bn) {
   if (!o) return '';
-  if (o.distMeasured && o.distM != null) return measuredPhrase(o.distM, bn);
+  if (o.distMeasured) return o.distM != null && currentMeasuredDistance(o) ? measuredPhrase(o.distM, bn) : '';
   if (o.distM != null && !o.distWeak) {
     const m = o.distM;
     if (o.distLower || m < 0.75) return bn ? 'হাতের নাগালে' : 'within arm\'s reach';
@@ -539,6 +552,7 @@ function answerWhichRoom() {
 function pathObstacles(excludeId) {
   const fw = (state.scene && state.scene.frameW) || 640, fh = (state.scene && state.scene.frameH) || 480;
   return (state.lastCocoPreds || []).filter(o => o.bbox && o.id !== excludeId && OBSTACLE_IDS.has(o.id) && !(o.flags && (o.flags.onScreen || o.flags.toy || o.flags.picture)))
+    .filter(o => !o.distMeasured || currentMeasuredDistance(o))
     .map(o => { const cx = (o.bbox[0] + o.bbox[2] / 2) / fw, bottom = (o.bbox[1] + o.bbox[3]) / fh; return Object.assign({ cx, bottom }, o); })
     .filter(o => o.cx > 0.25 && o.cx < 0.75 && o.bottom > 0.55 && ((o.distM != null && o.distM <= 2.0) || (o.near01 != null && o.near01 >= 0.6) || o.prox === 'very_close'))
     .sort((a, b) => ((a.distM ?? 9) - (b.distM ?? 9)) || ((b.near01 ?? 0) - (a.near01 ?? 0)));

@@ -170,6 +170,13 @@ anything but the address it is given.
   A connected telemetry feed therefore does not establish a working distance sensor or
   calibrated accuracy. The firmware's status combines pulse timeout and out-of-range
   results; it does not expose raw pulse width to distinguish those cases.
+- A later bounded raw diagnostic recorded 20/20 samples with ECHO high before and after
+  triggering (`echo_before: 1`, `echo_after: 1`) and `width_us: -1`. The input remained
+  high during these observations, and no complete pulse was measured. After the user
+  power-cycled the sensor USB supply, all 33 fresh telemetry samples still reported
+  `out_of_range`. This does not identify a particular failed component or prove a wiring
+  cause; the physical sensor, power, common ground, divider and GPIO connections still
+  need inspection. No persistent firmware, wiring or flash change was made by this check.
 - MPU6050 remained `not_found`. Android hardware behavior, device voice and audio output
   were not tested in this session.
 
@@ -180,6 +187,15 @@ pending recognition and speech, clears stale vision and range readings, and wait
 fresh visible frame before restarting recognition. It still stops a phone camera.
 Its regression tests use simulated frames and lifecycle events;
 physical background/resume behavior must be rechecked after deployment.
+
+The Devices and Detailed views distinguish a fresh ultrasonic measurement from an
+invalid/out-of-range result or missing fresh data. An invalid result or a reading older
+than one second removes the previous number. A missing echo or out-of-range result
+does not establish a clear or safe path. These UI and freshness rules are covered by
+automated fixtures; they do not repair or validate the physical sensor.
+Repeated telemetry sequence numbers do not refresh the reading's lifetime; backwards
+sequences are rejected. If the ESP32 restarts its counter, disconnect and pair again
+before using its measurements, because the existing protocol has no sensor-run identity.
 
 ### Pi camera and ESP32 transport, 15 October 2026
 

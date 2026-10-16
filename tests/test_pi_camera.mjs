@@ -677,8 +677,9 @@ print('Pi HTTP handler fixtures passed; TLS and hardware not exercised.')
   assert.match(result.stdout, /fixtures passed/);
 });
 function uiSetup(transport) {
-  const elements = new Map(), listeners = new Map(), cleared = [], invalidated = [], starts = [], spoken = [];
-  for (const id of ['pi-camera-form', 'pi-camera-origin', 'pi-camera-token', 'pi-camera-status', 'pi-camera-device', 'pi-camera-saver', 'pi-camera-connect', 'pi-camera-stop', 'pi-preview', 'viewport', 'overlay']) elements.set(id, {
+  const elements = new Map(), listeners = new Map(), timers = new Map(), cleared = [], invalidated = [], starts = [], spoken = [];
+  let timerId = 0;
+  for (const id of ['pi-camera-form', 'pi-camera-origin', 'pi-camera-token', 'pi-camera-status', 'pi-camera-device', 'pi-camera-saver', 'pi-camera-connect', 'pi-camera-stop', 'pi-preview', 'viewport', 'overlay', 'pi-camera-sensor-status', 'pi-camera-sensor-value', 'vision-sensor-status', 'vision-sensor-value']) elements.set(id, {
     id, value: id === 'pi-camera-origin' ? ORIGIN : id === 'pi-camera-token' ? TOKEN : '', hidden: true, checked: false, width: 640, height: 480,
     setAttribute(key, value) { this[key] = value; }, addEventListener(key, fn) { listeners.set(id + ':' + key, fn); }, focus() {},
     getContext() { return { clearRect: () => cleared.push(id), drawImage() {} }; }, insertBefore() {},
@@ -689,18 +690,19 @@ function uiSetup(transport) {
     engine: { coco: { status: 'ready' } },
     document: { hidden: false, getElementById: id => elements.get(id), querySelectorAll: () => [], addEventListener: (key, fn) => listeners.set('document:' + key, fn) },
     addEventListener: (key, fn) => listeners.set('window:' + key, fn),
+    setTimeout: (fn, ms) => { timers.set(++timerId, { fn, ms }); return timerId; }, clearTimeout: id => timers.delete(id),
     stopLiveLoop() {}, stopAllSpeech() {}, ensureVisionModels: async () => true, startLiveLoop: () => starts.push(true),
     announce: (en, bn) => spoken.push([en, bn]), setCaption() {},
     AsthaExperience: { invalidate: () => invalidated.push(true), admit: () => true },
   };
-  context.t = key => context.I18N[context.uiLang][key];
+  context.t = (key, params = {}) => { let value = context.I18N[context.uiLang][key]; for (const [name, entry] of Object.entries(params)) value = value.replaceAll('{' + name + '}', entry); return value; };
   context.window = context;
   context.showSource = source => { context.state.source = source; context.state.sourceEpoch++; };
   context.stopCamera = () => { context.state.source = null; };
   vm.createContext(context);
   vm.runInContext(uiSource + '\nwindow.adapter = AsthaPiCamera;', context);
   context.adapter.boot();
-  return { context, elements, listeners, cleared, invalidated, starts, spoken, ui: context.adapter };
+  return { context, elements, listeners, timers, cleared, invalidated, starts, spoken, ui: context.adapter };
 }
 test('Pi UI activates only after a frame, clears the pairing input and stops stale source work', async () => {
   let handlers, live = false, stopped = 0;
@@ -781,7 +783,7 @@ test('distance readings are polled only from a Pi with a sensor, validated, and 
     json('{not json'), json('', 503), json('x'.repeat(3000))]) {
     queue.push(response); await h.run(200); await flush();
   }
-  assert.equal(readings.length, 1);
+    assert.equal(readings.filter(reading => reading.status === 'ok').length, 1);
   queue.push(json(sample(3, { distance_cm: null, distance_status: 'out_of_range' })));
   await h.run(200); await flush();
   assert.deepEqual(plain(readings.at(-1)), { distanceM: null, status: 'out_of_range', seq: 3, ageMs: 40 });
@@ -814,7 +816,7 @@ test('Pi UI passes each distance to the sensor interface with its age and forget
   const h = uiSetup({ async connect(options) { handlers = options; options.onFrame({ width: 640, height: 480 }); options.onStatus({ state: 'connected' }); },
     stop() {}, active: () => true, paired: () => true, getFrame: () => null,
     describe: async () => ({ model: 'Raspberry Pi 4 Model B Rev 1.4', backend: 'picamera2', width: 640, height: 480, telemetry: true }) });
-  h.context.AsthaSensors = { report: (...args) => reports.push(args), clear: () => reports.push('clear') };
+  h.context.AsthaSensors = { report: (...args) => { reports.push(args); return true; }, clear: () => reports.push('clear') };
   await h.ui.connect();
   await new Promise(resolve => setImmediate(resolve));
   assert.equal(h.elements.get('pi-camera-device').textContent, 'Raspberry Pi 4 Model B Rev 1.4 · picamera2 · 640×480 · distance sensor');
@@ -822,7 +824,7 @@ test('Pi UI passes each distance to the sensor interface with its age and forget
   const before = Date.now();
   handlers.onTelemetry({ distanceM: 0.85, status: 'ok', seq: 1, ageMs: 40 });
   handlers.onTelemetry({ distanceM: null, status: 'out_of_range', seq: 2, ageMs: 10 });
-  assert.equal(reports.length, 1);
+  assert.equal(reports.length, 2); assert.equal(reports[1], 'clear', 'invalid telemetry immediately removes the last valid measurement');
   const [channel, metres, origin, at] = reports[0];
   assert.deepEqual([channel, metres, origin], ['front', 0.85, 'ultrasonic']);
   assert.ok(at <= Date.now() - 40 && at >= before - 40, 'the reading is dated by its own age');
@@ -830,4 +832,112 @@ test('Pi UI passes each distance to the sensor interface with its age and forget
   assert.equal(reports.at(-1), 'clear');
   handlers.onTelemetry({ distanceM: 0.5, status: 'ok', seq: 3, ageMs: 0 });
   assert.equal(reports.at(-1), 'clear', 'a reading after Stop is ignored');
+});
+
+test('Pi sensor status clears a good number immediately on invalid data, expiry or disconnect without speech spam', async () => {
+  let handlers, now = 10000;
+  const h = uiSetup({ async connect(options) { handlers = options; options.onFrame({ width: 640, height: 480 }); options.onStatus({ state: 'connected' }); },
+    stop() {}, active: () => true, paired: () => true, getFrame: () => null, describe: async () => null });
+  h.context.Date = class extends Date { static now() { return now; } };
+  h.context.state.world = new Map(); h.context.state.lastCocoPreds = [];
+  const sensors = fs.readFileSync(new URL('../tools/sensors.js', import.meta.url), 'utf8');
+  const perceive = fs.readFileSync(new URL('../tools/perceive.js', import.meta.url), 'utf8');
+  vm.runInContext(sensors + '\n' + perceive + '\nglobalThis.distanceAPI = { sensors: AsthaSensors, applyMeasuredDistance, distPhrase };', h.context);
+  await h.ui.connect(); await new Promise(resolve => setImmediate(resolve));
+  const speechBefore = h.spoken.length;
+  const good = () => handlers.onTelemetry({ distanceM: 0.85, status: 'ok', ageMs: 40 });
+  const status = () => h.elements.get('pi-camera-sensor-status').textContent;
+  const assertSameViews = () => {
+    assert.equal(h.elements.get('vision-sensor-status').textContent, status());
+    assert.equal(h.elements.get('vision-sensor-value').textContent, h.elements.get('pi-camera-sensor-value').textContent);
+    assert.equal(h.elements.get('vision-sensor-value').hidden, h.elements.get('pi-camera-sensor-value').hidden);
+  };
+  good(); assert.match(status(), /current measurement/); assertSameViews();
+  assert.equal(h.elements.get('pi-camera-sensor-value').hidden, false);
+  assert.match(h.elements.get('pi-camera-sensor-value').textContent, /85 cm/);
+  const chair = { id: 'chair', bbox: [200, 100, 240, 280] };
+  h.context.state.world.set('chair', chair); h.context.state.lastCocoPreds = [chair];
+  h.context.distanceAPI.applyMeasuredDistance([chair], { width: 640, height: 480 }, h.context.distanceAPI.sensors.measured());
+  assert.match(h.context.distanceAPI.distPhrase(chair, false), /85 centimetres/);
+  for (const failure of ['out_of_range', 'no_echo_start', 'error', 'no_data']) {
+    good(); handlers.onTelemetry({ distanceM: null, status: failure, ageMs: 0 });
+    assert.equal(h.context.distanceAPI.sensors.measured(), null); assert.equal(chair.distMeasured, false); assert.equal(chair.distM, null);
+    assert.equal(h.elements.get('pi-camera-sensor-value').hidden, true); assertSameViews();
+    assert.match(status(), /distance unknown/);
+    if (['out_of_range', 'no_echo_start'].includes(failure)) assert.match(status(), /does not mean the path is clear/);
+    assert.equal(h.timers.size, 0);
+  }
+  good(); assert.equal(h.timers.size, 1);
+  now += 1001;
+  const expiry = [...h.timers.entries()][0]; h.timers.delete(expiry[0]); expiry[1].fn();
+  assert.equal(h.context.distanceAPI.sensors.measured(), null); assert.match(status(), /no fresh data/); assertSameViews();
+  good(); h.context.uiLang = 'bn'; h.ui.refreshLabels();
+  assert.match(status(), /বর্তমান মাপ/); assert.match(h.elements.get('vision-sensor-value').textContent, /৮৫/);
+  handlers.onTelemetry({ distanceM: null, status: 'out_of_range', ageMs: 0 });
+  assert.match(status(), /সীমার বাইরে/); assertSameViews();
+  for (let i = 0; i < 25; i++) handlers.onTelemetry({ distanceM: null, status: 'out_of_range', ageMs: 0 });
+  assert.equal(h.spoken.length, speechBefore, '5 Hz telemetry never invokes spoken announcements');
+  good(); handlers.onStatus({ state: 'reconnecting', code: 'resumed' });
+  assert.equal(h.context.distanceAPI.sensors.measured(), null); assert.equal(h.timers.size, 0);
+  good(); h.ui.stop(); assert.equal(h.context.distanceAPI.sensors.measured(), null); assert.equal(h.timers.size, 0);
+  assert.equal(h.elements.get('vision-sensor-value').hidden, true);
+});
+
+test('telemetry failures and slow responses invalidate the last range and pre-pause telemetry cannot return after resume', async () => {
+  const json = value => new Response(JSON.stringify(value), { status: 200 });
+  let sequence = 0, response = () => json({ seq: ++sequence, distance_cm: 85, distance_status: 'ok', age_ms: 0 });
+  const readings = [], h = setup(async (url, options) => {
+    if (url.endsWith('/status')) return json({ telemetry: true });
+    if (url.endsWith('/telemetry')) return response(options);
+    return reply({ sequence: String(++sequence) });
+  });
+  const flush = () => new Promise(resolve => setImmediate(resolve));
+  await h.pi.connect({ origin: ORIGIN, token: TOKEN, onTelemetry: reading => readings.push(reading) }); await flush();
+  await h.run(0); assert.equal(readings.at(-1).distanceM, 0.85);
+  for (const failure of [() => new Response('', { status: 503 }), () => json({ bad: true }), () => { throw new Error('offline'); },
+    () => { h.advance(1001); return json({ seq: ++sequence, distance_cm: 85, distance_status: 'ok', age_ms: 0 }); }]) {
+    response = failure; await h.run(200); assert.equal(readings.at(-1).status, 'no_data'); assert.equal(readings.at(-1).distanceM, null);
+  }
+  response = options => new Promise((_, reject) => options.signal.addEventListener('abort', () => reject(new Error('timeout'))));
+  const timeout = h.run(200); await h.run(1500); await timeout;
+  assert.equal(readings.at(-1).status, 'no_data');
+  let release;
+  response = () => new Promise(resolve => { release = resolve; });
+  const old = h.run(200);
+  h.document.hidden = true; h.listeners.get('visibilitychange')();
+  h.document.hidden = false; h.listeners.get('visibilitychange')();
+  const before = readings.length;
+  release(json({ seq: ++sequence, distance_cm: 15, distance_status: 'ok', age_ms: 0 })); await old;
+  assert.equal(readings.length, before, 'old telemetry cannot revive a pre-pause distance');
+  h.pi.stop();
+});
+
+test('sensor status is accessible in Devices and Detailed view with numbers excluded from live announcements', () => {
+  const controls = fs.readFileSync(new URL('../tools/pi-camera-controls.html', import.meta.url), 'utf8');
+  const base = fs.readFileSync(new URL('../tools/base.html', import.meta.url), 'utf8');
+  for (const [html, prefix] of [[controls, 'pi-camera'], [base, 'vision']]) {
+    assert.match(html, new RegExp('<p[^>]+id="' + prefix + '-sensor-status"[^>]+role="status"[^>]+aria-live="polite"'));
+    assert.match(html, new RegExp('<p[^>]+id="' + prefix + '-sensor-value"[^>]+aria-live="off"'));
+  }
+});
+
+test('replayed telemetry cannot refresh distance and invalid duplicate telemetry clears it', async () => {
+  const json = value => new Response(JSON.stringify(value), { status: 200 });
+  const samples = [
+    { seq: 10, distance_cm: 85, distance_status: 'ok', age_ms: 0 },
+    { seq: 10, distance_cm: 85, distance_status: 'ok', age_ms: 0 },
+    { seq: 10, distance_cm: null, distance_status: 'out_of_range', age_ms: 0 },
+    { seq: 9, distance_cm: 30, distance_status: 'ok', age_ms: 0 },
+    { seq: 11, distance_cm: 40, distance_status: 'ok', age_ms: 0 },
+  ];
+  const readings = [], h = setup(async url => url.endsWith('/status') ? json({ telemetry: true }) :
+    url.endsWith('/telemetry') ? json(samples.shift()) : reply());
+  await h.pi.connect({ origin: ORIGIN, token: TOKEN, onTelemetry: reading => readings.push(reading) });
+  await new Promise(resolve => setImmediate(resolve)); await h.run(0);
+  assert.equal(readings.length, 1); assert.equal(readings[0].distanceM, 0.85);
+  await h.run(200); assert.equal(readings.length, 1, 'a repeated valid sequence cannot extend its measurement lifetime');
+  await h.run(200); assert.equal(readings.at(-1).status, 'out_of_range'); assert.equal(readings.at(-1).distanceM, null);
+  await h.run(200); assert.equal(readings.at(-1).status, 'no_data'); assert.equal(readings.at(-1).distanceM, null);
+  await h.run(200); assert.equal(readings.at(-1).distanceM, 0.4);
+  h.pi.stop();
 });

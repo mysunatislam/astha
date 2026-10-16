@@ -17,7 +17,7 @@ function load(extra = {}) {
     t: key => ({ pos_ahead: 'ahead', pos_left: 'to your left' })[key] || key, tBn: key => ({ pos_ahead: 'সামনে' })[key] || key,
     label: id => id, labelBn: id => ({ chair: 'চেয়ার' })[id] || id,
     announce: (en, bn) => spoken.push([en, bn]), withCamera: () => false, worldSorted: () => [], findVocabMatch: () => null,
-    extractTargetItemFromQuery: () => null, heartPointAt() {}, ...extra,
+    extractTargetItemFromQuery: () => null, heartPointAt() {}, VOCAB_BY_ID: {}, withArticle: text => text, article: text => 'a ' + text, ...extra,
   });
   vm.runInContext(sensors + '\n' + perceive + '\nglobalThis.api = { applyMeasuredDistance, annotateGeometry, distPhrase, distMetresText, measuredPhrase, answerHowFar, AsthaSensors };', context);
   return { api: context.api, context, spoken };
@@ -66,9 +66,11 @@ test('measured distances are said as measured numbers; estimates stay "about"', 
   assert.equal(api.measuredPhrase(1.64, false), 'measured at 1.6 metres');
   assert.equal(api.measuredPhrase(0.852, true), 'সেন্সরে মাপা ৮৫ সেন্টিমিটার দূরে');
   assert.equal(api.measuredPhrase(1.64, true), 'সেন্সরে মাপা ১.৬ মিটার দূরে');
-  const measured = { distM: 1.64, distMeasured: true }, estimated = { distM: 1.64 };
+  api.AsthaSensors.report('front', 1.64, 'ultrasonic');
+  const measured = { distM: 1.64, distMeasured: true, distMeasuredAt: api.AsthaSensors.measured().at, distMeasuredEpoch: 0 }, estimated = { distM: 1.64 };
   assert.equal(api.distPhrase(measured, false), 'measured at 1.6 metres');
-  assert.equal(api.distMetresText({ distM: 0.4, distMeasured: true }, false), 'measured at 40 centimetres');
+  api.AsthaSensors.report('front', 0.4, 'ultrasonic');
+  assert.equal(api.distMetresText({ distM: 0.4, distMeasured: true, distMeasuredAt: api.AsthaSensors.measured().at, distMeasuredEpoch: 0 }, false), 'measured at 40 centimetres');
   assert.match(api.distPhrase(estimated, false), /^about /);
   assert.doesNotMatch(api.distPhrase(estimated, false), /measured/);
   assert.doesNotMatch(api.distPhrase(estimated, true), /মাপা/);
@@ -102,4 +104,79 @@ test('"how far" with the Pi sensor answers from the measurement, naming the obje
   context.state.source = 'pi'; api.AsthaSensors.clear();
   api.answerHowFar('how far is it');
   assert.match(spoken.at(-1)[0], /cannot judge a distance/);
+});
+
+test('cached object distances cannot be spoken after invalid, expired, changed or disconnected sensor data', () => {
+  for (const boundary of ['invalid', 'expired', 'changed', 'disconnected', 'source']) {
+    let now = 10000;
+    const { api, context, spoken } = load({ Date: class extends Date { static now() { return now; } } });
+    const chair = object('chair', box(0.5, 0.55, 0.3, 0.4));
+    context.worldSorted = () => [chair]; context.findVocabMatch = () => ({ id: 'chair', en: 'chair', bn: 'চেয়ার' });
+    context.extractTargetItemFromQuery = () => 'chair';
+    context.state.world.set('chair', chair);
+    api.annotateGeometry(chair, FRAME, null); api.AsthaSensors.report('front', 1.6, 'ultrasonic');
+    api.applyMeasuredDistance([chair], FRAME, api.AsthaSensors.measured());
+    assert.equal(api.distPhrase(chair, false), 'measured at 1.6 metres');
+    if (boundary === 'invalid') api.AsthaSensors.report('front', NaN, 'ultrasonic');
+    if (boundary === 'expired') now += 1001;
+    if (boundary === 'changed') api.AsthaSensors.report('front', 0.3, 'ultrasonic');
+    if (boundary === 'disconnected') api.AsthaSensors.clear('front');
+    if (boundary === 'source') context.state.source = 'camera';
+    assert.equal(api.distPhrase(chair, false), '', boundary + ' must not reuse the cached number');
+    assert.equal(api.distMetresText(chair, true), '');
+    api.answerHowFar('how far is the chair');
+    assert.doesNotMatch(spoken.at(-1)[0], /measured|1\.6|clear|safe/i);
+    assert.doesNotMatch(spoken.at(-1)[1], /মাপা|১\.৬/);
+  }
+});
+
+test('a future-dated sensor sample is not current, and clearing front preserves other sensor channels', () => {
+  const { api } = load();
+  api.AsthaSensors.report('front', 0.85, 'ultrasonic', 2000);
+  assert.equal(api.AsthaSensors.measured('front', 1999), null);
+  api.AsthaSensors.report('left', 1.2, 'other', 2000);
+  api.AsthaSensors.clear('front');
+  assert.equal(api.AsthaSensors.measured('front', 2000), null);
+  assert.equal(api.AsthaSensors.measured('left', 2000).metres, 1.2);
+});
+
+test('the actual seeker rechecks a copied measured distance before announcing arrival', async () => {
+  const offline = fs.readFileSync(new URL('../tools/offline.js', import.meta.url), 'utf8');
+  const start = offline.indexOf('const SEEK_TEXT ='), end = offline.indexOf('// "Where is my X?"', start);
+  assert(start >= 0 && end > start);
+  for (const boundary of ['current', 'expired', 'invalid']) {
+    let now = 10000, release;
+    const calls = [], { api, context } = load({ Date: class extends Date { static now() { return now; } },
+      captureFrame: () => FRAME, heartSet() {}, heartTicks() {}, playEarcon() {}, haptic() {} });
+    vm.runInContext(offline.slice(start, end) + '\nglobalThis.seeker = Seeker;', context);
+    const chair = object('chair', box(0.5, 0.5, 0.2, 0.2));
+    api.AsthaSensors.report('front', 0.4, 'ultrasonic');
+    api.applyMeasuredDistance([chair], FRAME, api.AsthaSensors.measured());
+    const cand = { cx: 0.5, cy: 0.5, obj: chair, distM: chair.distM, distMeasured: true, near01: 0.9, areaFrac: 0.04 };
+    const seeker = context.seeker;
+    Object.assign(seeker, { active: true, target: { coco: true, en: 'chair' }, phase: 'found', lastSaidAt: 0,
+      locate: () => new Promise(resolve => { release = resolve; }), say: key => calls.push(key), stop: () => { seeker.active = false; }, schedule() {} });
+    const pending = seeker.tick();
+    if (boundary === 'expired') now += 1001;
+    if (boundary === 'invalid') api.AsthaSensors.report('front', NaN, 'ultrasonic');
+    release(cand); await pending;
+    assert.equal(calls.includes('stop_here'), boundary === 'current', boundary + ' arrival must use a current reading');
+    if (boundary !== 'current') { assert.equal(cand.distM, null); assert.equal(cand.near01, null); assert.equal(seeker.active, true); }
+  }
+});
+
+test('spatial scale anchors and path guidance reject cached measured geometry after expiry', () => {
+  let now = 10000;
+  const { api, context } = load({ Date: class extends Date { static now() { return now; } } });
+  const spatial = fs.readFileSync(new URL('../tools/spatial.js', import.meta.url), 'utf8');
+  vm.runInContext(spatial + '\nDepthEngine.nearnessInBox = () => 0.5; DepthEngine.nearnessInRegion = () => 0.5; globalThis.spatial = AsthaSpatial;', context);
+  const chair = object('chair', box(0.5, 0.5, 0.3, 0.4));
+  api.AsthaSensors.report('front', 0.4, 'ultrasonic');
+  api.applyMeasuredDistance([chair], FRAME, api.AsthaSensors.measured());
+  context.state.lastCocoPreds = [chair];
+  assert.equal(context.spatial.anchorsFrom([chair], FRAME, {}, null).length, 1);
+  assert.equal(context.pathObstacles().length, 1);
+  now += 1001;
+  assert.equal(context.spatial.anchorsFrom([chair], FRAME, {}, null).length, 0);
+  assert.equal(context.pathObstacles().length, 0);
 });

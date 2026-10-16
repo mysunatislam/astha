@@ -58,6 +58,7 @@ const AsthaSpatial = (() => {
     const anchors = [];
     let measuredUsed = false;
     for (const o of objs || []) {
+      if (o.distMeasured && typeof currentMeasuredDistance === 'function' && !currentMeasuredDistance(o)) continue;
       if (!o.bbox || o.distM == null || o.distWeak || o.distLower || (o.flags && (o.flags.onScreen || o.flags.picture || o.flags.toy))) continue;
       const near = DepthEngine.nearnessInBox(map, o.bbox, frame.width, frame.height);
       if (near == null) continue;

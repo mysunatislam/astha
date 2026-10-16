@@ -6,9 +6,32 @@ const AsthaPiCamera = (() => {
     frame_timeout: 'pi_frame_timeout', connection_lost: 'pi_connection_lost', invalid_origin: 'pi_invalid_origin',
     invalid_pairing_token: 'pi_invalid_pairing_token', models: 'pi_models', error: 'pi_error' };
   let generation = 0, currentStatus = 'stopped', booted = false, deviceLine = '';
+  const SENSOR_KEYS = { ok: 'pi_sensor_ok', out_of_range: 'pi_sensor_out_of_range', no_echo_start: 'pi_sensor_no_echo_start', error: 'pi_sensor_error', no_data: 'pi_sensor_no_data' };
+  let sensorStatus = 'no_data', sensorMetres = null, sensorExpiry = null;
   const element = id => document.getElementById(id);
   const key = status => STATUS_KEYS[Object.hasOwn(STATUS_KEYS, status) ? status : 'error'];
   const label = status => t(key(status));
+  function renderSensor() {
+    for (const prefix of ['pi-camera', 'vision']) {
+      const status = element(prefix + '-sensor-status'), value = element(prefix + '-sensor-value');
+      const text = t(SENSOR_KEYS[sensorStatus]);
+      if (status && status.textContent !== text) status.textContent = text;
+      if (value) {
+        value.hidden = sensorMetres == null;
+        let cm = String(Math.round(sensorMetres * 1000) / 10);
+        if (typeof uiLang !== 'undefined' && uiLang === 'bn') cm = cm.replace(/\d/g, digit => '০১২৩৪৫৬৭৮৯'[digit]);
+        const number = sensorMetres == null ? '' : t('pi_sensor_value', { cm });
+        if (value.textContent !== number) value.textContent = number;
+      }
+    }
+  }
+  function clearSensor(status = 'no_data') {
+    clearTimeout(sensorExpiry); sensorExpiry = null;
+    sensorStatus = status; sensorMetres = null;
+    if (typeof AsthaSensors !== 'undefined') AsthaSensors.clear('front');
+    if (typeof invalidateMeasuredDistances === 'function') invalidateMeasuredDistances();
+    renderSensor();
+  }
   // Connection changes are spoken: a blind user cannot see the status line change.
   function speakStatus(status, important) {
     if (typeof announce !== 'function' || typeof I18N === 'undefined') return;
@@ -24,6 +47,7 @@ const AsthaPiCamera = (() => {
     if (element('pi-camera-stop')) element('pi-camera-stop').disabled = !pending && !paired;
     if (element('pi-camera-origin')) element('pi-camera-origin').readOnly = pending;
     const device = element('pi-camera-device'); if (device) { device.textContent = deviceLine; device.hidden = !deviceLine; }
+    renderSensor();
   }
   function setStatus(next) { currentStatus = Object.hasOwn(STATUS_KEYS, next) ? next : 'error'; refreshLabels(); }
   function stop({ clearSource = true } = {}) {
@@ -31,7 +55,7 @@ const AsthaPiCamera = (() => {
     generation++;
     if (typeof PiCamera !== 'undefined') PiCamera.stop();
     // A distance from a camera that is no longer connected says nothing about now.
-    if (typeof AsthaSensors !== 'undefined') AsthaSensors.clear();
+    clearSensor();
     const token = element('pi-camera-token'); if (token) token.value = '';
     const preview = element('pi-preview');
     if (preview) { preview.getContext('2d')?.clearRect(0, 0, preview.width, preview.height); preview.hidden = true; }
@@ -87,8 +111,15 @@ const AsthaPiCamera = (() => {
         },
         // The ultrasonic sensor beside the Pi camera. Its reading is dated by its own age.
         onTelemetry(reading) {
-          if (mine !== generation || typeof AsthaSensors === 'undefined' || reading?.distanceM == null) return;
-          AsthaSensors.report('front', reading.distanceM, 'ultrasonic', Date.now() - reading.ageMs);
+          if (mine !== generation || document.hidden || state.source !== 'pi' || typeof AsthaSensors === 'undefined') return;
+          if (reading?.status !== 'ok') {
+            clearSensor(['out_of_range', 'no_echo_start', 'error'].includes(reading?.status) ? reading.status : 'no_data'); return;
+          }
+          if (!Number.isFinite(reading.ageMs) || reading.ageMs < 0 || reading.ageMs > 1000 ||
+              !AsthaSensors.report('front', reading.distanceM, 'ultrasonic', Date.now() - reading.ageMs)) { clearSensor(); return; }
+          clearTimeout(sensorExpiry);
+          sensorStatus = 'ok'; sensorMetres = reading.distanceM; renderSensor();
+          sensorExpiry = setTimeout(() => { sensorExpiry = null; if (mine === generation) clearSensor(); }, 1001 - reading.ageMs);
         },
         onStatus(status) {
           if (mine !== generation) return;
@@ -101,6 +132,7 @@ const AsthaPiCamera = (() => {
               refreshLabels();
             });
           } else if (status.state === 'reconnecting') {
+            clearSensor();
             // A picture taken before the link dropped must not answer a question asked now.
             if (typeof AsthaExperience !== 'undefined') AsthaExperience.invalidate();
             setStatus('reconnecting'); if (!wasLost && status.code !== 'resumed') speakStatus('reconnecting', false); wasLost = true;
@@ -108,7 +140,7 @@ const AsthaPiCamera = (() => {
             if (state.source === 'pi') {
               stopLiveLoop();
               if (typeof stopAllSpeech === 'function') stopAllSpeech();
-              if (typeof AsthaSensors !== 'undefined') AsthaSensors.clear();
+              clearSensor();
               // Invalidate pre-pause vision and pending answers without ending the pairing.
               showSource('pi');
               const preview = element('pi-preview');

@@ -202,7 +202,7 @@ test('range sensor interface prefers a fresh measurement and labels image guesse
   assert.equal(sensors.fuse(undefined, 'front', 1000), null, 'no measurement and no estimate means no distance is stated');
   for (const [channel, metres] of [['front', NaN], ['front', -1], ['front', 0.001], ['front', 40], ['Front!', 1], [7, 1]]) assert.equal(sensors.report(channel, metres, 'ultrasonic', 1000), false);
   assert.equal(sensors.report('front', 1.25, 'ultrasonic', 1000), true);
-  assert.deepEqual({ ...sensors.fuse(2.4, 'front', 1500) }, { metres: 1.25, source: 'ultrasonic', measured: true });
+  assert.deepEqual({ ...sensors.fuse(2.4, 'front', 1500) }, { metres: 1.25, source: 'ultrasonic', measured: true, at: 1000 });
   assert.equal(sensors.measured('left', 1500), null);
   assert.deepEqual({ ...sensors.fuse(2.4, 'front', 2001) }, { metres: 2.4, source: 'image', measured: false }, 'a stale reading is not reported as current');
   sensors.clear(); assert.equal(sensors.connected, false);

@@ -427,7 +427,7 @@ const Seeker = {
       if (typeof perceptionHook === 'function') perceptionHook(objs, frame, { noDepthKick: true });
       state.lastCocoPreds = objs;
       const hit = objs.filter(o => this.target.ids.includes(o.id) && o.score >= 0.45 && !(o.flags && (o.flags.onScreen || o.flags.picture))).sort((a, b) => b.score - a.score)[0];
-      if (hit) best = { cx: (hit.bbox[0] + hit.bbox[2] / 2) / frame.width, cy: (hit.bbox[1] + hit.bbox[3] / 2) / frame.height, conf: hit.score, obj: hit, distM: hit.distM, distLower: hit.distLower, near01: hit.near01, areaFrac: (hit.bbox[2] * hit.bbox[3]) / (frame.width * frame.height), src: 'coco' };
+      if (hit) best = { cx: (hit.bbox[0] + hit.bbox[2] / 2) / frame.width, cy: (hit.bbox[1] + hit.bbox[3] / 2) / frame.height, conf: hit.score, obj: hit, distM: hit.distM, distLower: hit.distLower, distMeasured: !!hit.distMeasured, near01: hit.near01, areaFrac: (hit.bbox[2] * hit.bbox[3]) / (frame.width * frame.height), src: 'coco' };
     }
     // 2. Open-vocabulary tiles for everything else (and as a second opinion).
     if (!best && engine.clip.status === 'ready' && (!this.target.free || this.textEmbeds)) {
@@ -458,6 +458,9 @@ const Seeker = {
     if (engine.clip.status !== 'ready' && !this.target.coco) { if (now - this.lastSaidAt > 8000) this.say('no_clip'); return this.schedule(1200); }
     const cand = await this.locate(frame);
     if (!this.active) return;
+    if (cand?.distMeasured && (!cand.obj?.distMeasured || !currentMeasuredDistance(cand.obj))) {
+      cand.distM = null; cand.near01 = null;
+    }
     if (!cand) {
       this.missStreak++;
       if (this.phase !== 'search' && this.missStreak >= 4) { this.phase = 'search'; this.centerStreak = 0; this.say('lost'); }
