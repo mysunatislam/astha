@@ -1,13 +1,29 @@
+<section class="card" id="camera-kit-card" aria-labelledby="camera-kit-title">
+  <h4 id="camera-kit-title" data-i18n="kit_title">Your ASTHA ClipCam</h4>
+  <p class="help" id="camera-kit-status" role="status" aria-live="polite" aria-atomic="true" data-i18n="kit_none">No ASTHA ClipCam is remembered on this device. Pair it once below.</p>
+  <p class="help" id="camera-kit-detail"></p>
+  <p class="help" id="camera-kit-storage"></p>
+  <div id="camera-kit-actions" hidden>
+    <label class="setup-check"><input type="checkbox" id="camera-kit-auto"><span data-i18n="kit_auto">Reconnect automatically while Astha is open</span></label>
+    <div class="utility-row">
+      <button class="btn accent" type="button" id="camera-kit-connect" data-i18n="kit_connect">Connect my ClipCam</button>
+      <button class="btn" type="button" id="camera-kit-disconnect" data-i18n="kit_disconnect">Disconnect</button>
+      <button class="btn" type="button" id="camera-kit-forget" data-i18n="kit_forget">Forget this ClipCam</button>
+    </div>
+  </div>
+</section>
 <details class="panel-disclosure" id="pi-camera-panel">
   <summary data-i18n="pi_title">Pair a Wi-Fi camera</summary>
   <form id="pi-camera-form" class="card" aria-describedby="pi-camera-help pi-camera-status" aria-busy="false">
-    <p class="help" id="pi-camera-help" data-i18n="pi_help">Keep the camera and this phone on the same Wi-Fi. Enter the camera's secure address and its private pairing code. The code is kept only until you disconnect or close Astha.</p>
+    <p class="help" id="pi-camera-help" data-i18n="pi_help">Keep the camera and this phone on the same Wi-Fi. Enter the camera's secure address and its private pairing code. Tick Remember to pair only once; otherwise the code is kept only until you disconnect or close Astha.</p>
     <label class="field" for="pi-camera-origin"><span data-i18n="pi_address">Camera HTTPS address</span>
       <input id="pi-camera-origin" type="url" inputmode="url" placeholder="Example: https://astha-pi.local:8443" data-i18n-placeholder="pi_address_example" autocomplete="off" autocapitalize="none" spellcheck="false" required>
     </label>
     <label class="field" for="pi-camera-token"><span data-i18n="pi_pairing">Private pairing code</span>
-      <input id="pi-camera-token" type="password" autocomplete="off" autocapitalize="none" spellcheck="false" minlength="43" maxlength="128" required>
+      <input id="pi-camera-token" type="password" autocomplete="off" autocapitalize="none" spellcheck="false" minlength="43" maxlength="128" required aria-describedby="pi-camera-token-help">
     </label>
+    <p class="help" id="pi-camera-token-help" data-i18n="kit_code_required">Needed the first time only, when Remember is ticked.</p>
+    <label class="setup-check"><input type="checkbox" id="pi-camera-remember" checked><span data-i18n="pi_remember">Remember this ClipCam on this device and reconnect by itself</span></label>
     <label class="setup-check"><input type="checkbox" id="pi-camera-saver"><span data-i18n="pi_saver">Low-data mode: one image per second</span></label>
     <div class="utility-row">
       <button class="btn accent" type="submit" id="pi-camera-connect" data-i18n="pi_connect">Connect camera</button>

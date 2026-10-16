@@ -13,6 +13,15 @@
     try { return await plugin[method](options || {}); }
     catch (error) { throw failure(error); }
   }
+  const found = reply => reply?.found === true ? reply : null;
+  function pairingFields(record) {
+    const fields = {};
+    if (typeof record?.origin === 'string') fields.origin = record.origin;
+    if (Array.isArray(record?.fallbacks)) fields.fallbacks = record.fallbacks.filter(item => typeof item === 'string').slice(0, 4);
+    if (record?.device && typeof record.device === 'object') fields.device = { ...record.device };
+    if (typeof record?.autoConnect === 'boolean') fields.autoConnect = record.autoConnect;
+    return fields;
+  }
   win.AsthaNative = Object.freeze({
     canSpeak: true, canListen: true,
     // Resolves true only when the whole sentence was spoken.
@@ -60,6 +69,15 @@
         return (await screen('replyToMessage', { key: String(key || '').slice(0, 300), text: String(text || '').slice(0, 1000) }))?.sent === true;
       },
       onMessage(handler) { try { quiet(plugin.addListener('message', event => handler(event))); } catch {} },
+    }),
+    // The remembered ASTHA ClipCam, sealed by an Android Keystore key that never leaves
+    // this phone. Records are re-checked by paired-camera-store.js before use.
+    pairing: Object.freeze({
+      async save(profile, record) { return found(await screen('cameraPairingSave', { ...pairingFields(record), token: String(record?.token || ''), profile: String(profile || '') })); },
+      async load(profile) { return found(await screen('cameraPairingLoad', { profile: String(profile || '') })); },
+      async summary(profile) { return found(await screen('cameraPairingSummary', { profile: String(profile || '') })); },
+      async update(profile, changes) { return found(await screen('cameraPairingUpdate', { ...pairingFields(changes), profile: String(profile || '') })); },
+      async forget(profile) { await screen('cameraPairingForget', { profile: String(profile || '') }); return true; },
     }),
     screen: Object.freeze({
       async status() {

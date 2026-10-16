@@ -7,6 +7,8 @@ camera stacks are installed, and names the capture method this script would use.
 Written for Python 3.7+ so it also runs on the legacy OS images an original Model B needs.
 """
 import argparse
+import base64
+import hashlib
 import hmac
 import importlib.util
 import io
@@ -18,6 +20,7 @@ import platform
 import re
 import secrets
 import shutil
+import socket
 import socketserver
 import ssl
 import subprocess
@@ -246,10 +249,13 @@ class Picamera2Source:
     """libcamera stack: Raspberry Pi OS Bullseye and later."""
     name = 'picamera2'
 
-    def __init__(self, width, height, quality, settle_ms, tuning=None):
+    def __init__(self, width, height, quality, settle_ms, tuning=None, controls=None):
         from picamera2 import Picamera2
         self.camera = Picamera2(tuning=tuning) if tuning else Picamera2()
-        self.camera.configure(self.camera.create_video_configuration(main={'size': (width, height), 'format': 'RGB888'}))
+        config = self.camera.create_video_configuration(main={'size': (width, height), 'format': 'RGB888'})
+        if controls:
+            config['controls'] = dict(config.get('controls') or {}, **controls)
+        self.camera.configure(config)
         try:
             self.camera.options['quality'] = quality
         except Exception:
@@ -262,6 +268,10 @@ class Picamera2Source:
         output = io.BytesIO()
         self.camera.capture_file(output, format='jpeg')
         return output.getvalue()
+
+    def metadata(self):
+        """What libcamera reports about the latest picture: exposure, gain, light, focus measure."""
+        return self.camera.capture_metadata()
 
     def stop(self):
         self.camera.stop()
@@ -313,18 +323,65 @@ class CommandSource:
         pass
 
 
-def open_source(backend, width, height, quality, settle_ms, tuning=None):
+def picamera2_controls(sharpness=None, exposure=None):
+    """Optional libcamera controls. Nothing is set unless asked for, so the default picture is unchanged."""
+    controls = {}
+    if sharpness is not None:
+        controls['Sharpness'] = float(sharpness)
+    if exposure == 'short':
+        controls['AeExposureMode'] = 1   # libcamera's Short mode: shorter exposures, less motion blur, more noise
+    return controls
+
+
+def focus_report(samples):
+    """Summarise --focus-probe samples. FocusFoM is the ISP's own sharpness measure: higher is
+    sharper for the same scene and light. It compares lens settings; it is not an absolute grade."""
+    def spread(key):
+        values = sorted(sample[key] for sample in samples if isinstance(sample.get(key), (int, float)))
+        if not values:
+            return None
+        return {'min': values[0], 'median': values[len(values) // 2], 'max': values[-1]}
+    return {'samples': len(samples), 'focus_fom': spread('FocusFoM'), 'exposure_us': spread('ExposureTime'),
+            'analogue_gain': spread('AnalogueGain'), 'lux': spread('Lux'), 'jpeg_bytes': spread('jpeg_bytes')}
+
+
+def open_source(backend, width, height, quality, settle_ms, tuning=None, controls=None):
     if backend == 'picamera2':
-        return Picamera2Source(width, height, quality, settle_ms, tuning)
+        return Picamera2Source(width, height, quality, settle_ms, tuning, controls)
     if backend == 'picamera':
         return LegacyPicameraSource(width, height, quality, settle_ms)
     return CommandSource(backend, width, height, quality, settle_ms, tuning)
 
 
+def unpadded(raw):
+    return base64.urlsafe_b64encode(raw).rstrip(b'=').decode('ascii')
+
+
+def device_id(token):
+    """A stable identity for this pairing. Derived from the token, so it reveals nothing
+    about it, survives restarts and address changes, and changes when the token is replaced."""
+    return unpadded(hmac.new(token.encode('ascii'), b'astha-device-id-v1', hashlib.sha256).digest()[:16])
+
+
+def hello_proof(token, nonce, identity):
+    """Proves this Pi holds the pairing token without sending it: an HMAC of the phone's
+    fresh random challenge. The phone checks it before it sends the token itself."""
+    message = ('astha-hello-v1\n' + nonce + '\n' + identity).encode('ascii')
+    return unpadded(hmac.new(token.encode('ascii'), message, hashlib.sha256).digest())
+
+
+def host_label():
+    """The Pi's own host name when it is a plain DNS label, for <name>.local discovery."""
+    name = socket.gethostname().split('.')[0].lower()
+    return name if re.fullmatch(r'[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?', name) else ''
+
+
 def make_handler(frames, token, origins, info=None, telemetry=None):
     info = dict(info or {})
-    paths = ('/frame', '/status', '/telemetry') if telemetry else ('/frame', '/status')
+    paths = ('/frame', '/status', '/hello', '/telemetry') if telemetry else ('/frame', '/status', '/hello')
     run = str(info.pop('run', '') or secrets.token_urlsafe(8))
+    identity = device_id(token)
+    info.update(device_id=identity, hello=True)
     status_body = json.dumps(info, sort_keys=True).encode('utf-8')
 
     class Handler(BaseHTTPRequestHandler):
@@ -375,11 +432,21 @@ def make_handler(frames, token, origins, info=None, telemetry=None):
             if self.headers.get('Origin') not in origins:
                 self.reply(403)
                 return
+            parsed = urlsplit(self.path)
+            if parsed.path == '/hello' and not parsed.fragment:
+                # Needs no token: it proves possession of the token to the phone instead.
+                query = parse_qs(parsed.query, keep_blank_values=True)
+                nonce = query.get('nonce', [''])
+                if set(query) != {'nonce'} or len(nonce) != 1 or not re.fullmatch(r'[A-Za-z0-9_-]{22,64}', nonce[0]):
+                    self.reply(400)
+                    return
+                body = json.dumps({'v': 1, 'device_id': identity, 'proof': hello_proof(token, nonce[0], identity)}, sort_keys=True).encode('utf-8')
+                self.reply(200, body, {'Content-Type': 'application/json'})
+                return
             authorization = self.headers.get('Authorization', '')
             if len(authorization) > 160 or not hmac.compare_digest(authorization.encode(), ('Bearer ' + token).encode()):
                 self.reply(401)
                 return
-            parsed = urlsplit(self.path)
             if parsed.path == '/status' and not parsed.query and not parsed.fragment:
                 self.reply(200, status_body, {'Content-Type': 'application/json'})
                 return
@@ -447,6 +514,74 @@ def capture_loop(source, frames, stopped, fps):
         stopped.wait(max(0.0, interval - (time.monotonic() - began)))
 
 
+PRIVATE_NETWORKS = tuple(ipaddress.ip_network(value) for value in ('10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16'))
+
+
+def private_ipv4(value):
+    try:
+        address = ipaddress.ip_address(value or '')
+    except ValueError:
+        return None
+    return address if address.version == 4 and any(address in network for network in PRIVATE_NETWORKS) else None
+
+
+def interface_address(name, run=subprocess.run):
+    """The interface's current private IPv4 address as the system reports it, or None."""
+    if not re.fullmatch(r'[A-Za-z0-9_.-]{1,15}', name or ''):
+        return None
+    try:
+        result = run(['ip', '-j', '-4', 'addr', 'show', 'dev', name], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, timeout=5)
+        entries = json.loads(result.stdout.decode('utf-8') or '[]') if result.returncode == 0 else []
+    except (OSError, subprocess.SubprocessError, ValueError, UnicodeError):
+        return None
+    for entry in entries if isinstance(entries, list) else []:
+        for info in (entry.get('addr_info') or []) if isinstance(entry, dict) else []:
+            if isinstance(info, dict) and info.get('scope') == 'global':
+                address = private_ipv4(info.get('local'))
+                if address:
+                    return address
+    return None
+
+
+def watch_address(name, bound, stopped, changed, server, resolve=interface_address, interval=5.0):
+    """End the server when the Wi-Fi address changes, so systemd starts it again on the new
+    one. The phone finds it again by its .local name; an old address is only a fallback."""
+    while not stopped.wait(interval):
+        if resolve(name) != bound:
+            changed.set()
+            threading.Thread(target=server.shutdown, daemon=True).start()
+            return
+
+
+def focus_probe(source, seconds, sample_path=None, clock=time.monotonic):
+    """Capture for a few seconds and print the measurements a lens or exposure change should move.
+    Run it with the camera server stopped; it needs the camera to itself."""
+    samples, last = [], b''
+    source.start()
+    try:
+        ends = clock() + seconds
+        while clock() < ends:
+            jpeg = source.capture()
+            reading = {'jpeg_bytes': len(jpeg)}
+            if hasattr(source, 'metadata'):
+                meta = source.metadata() or {}
+                for key in ('FocusFoM', 'ExposureTime', 'AnalogueGain', 'Lux'):
+                    if isinstance(meta.get(key), (int, float)) and not isinstance(meta.get(key), bool):
+                        reading[key] = round(meta[key], 2) if isinstance(meta[key], float) else meta[key]
+            samples.append(reading)
+            print(json.dumps(reading, sort_keys=True))
+            last = jpeg or last
+    finally:
+        source.stop()
+    if sample_path and last:
+        descriptor = os.open(str(sample_path), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(descriptor, 'wb') as output:
+            output.write(last)
+    summary = focus_report(samples)
+    print(json.dumps({'summary': summary}, indent=2, sort_keys=True))
+    return summary
+
+
 def probe(requested):
     board = describe_board()
     available = available_backends()
@@ -471,6 +606,8 @@ def main():
     parser.add_argument('--probe', action='store_true', help='Report the board, OS and installed camera stacks, then exit.')
     parser.add_argument('--generate-token', type=Path, help='Create a new private pairing file and exit; never print the token.')
     parser.add_argument('--bind', help='Explicit private IPv4 address on the Pi Wi-Fi interface.')
+    parser.add_argument('--bind-interface', help='Instead of --bind: use the private IPv4 address this interface (for example wlan0) has now, '
+                        'and exit when it changes so systemd restarts the server on the new address.')
     parser.add_argument('--port', type=int, default=8443)
     parser.add_argument('--cert', type=Path)
     parser.add_argument('--key', type=Path)
@@ -484,9 +621,29 @@ def main():
     parser.add_argument('--settle-ms', type=int, default=300, help='Exposure settling time for the command and legacy backends.')
     parser.add_argument('--tuning', help='libcamera tuning file name, for example imx219_noir.json for a NoIR camera. --probe lists the NoIR files installed.')
     parser.add_argument('--telemetry', type=Path, help='USB serial port of an ESP32 running firmware/esp32-telemetry; serves its newest reading at /telemetry. Needs pyserial.')
+    parser.add_argument('--sharpness', type=float, help='picamera2 only: libcamera sharpening, 0 to 16 (libcamera default 1). Unset leaves the default.')
+    parser.add_argument('--exposure', choices=('normal', 'short'), default='normal',
+                        help='picamera2 only: short asks for shorter exposures to reduce motion blur, at the cost of more noise.')
+    parser.add_argument('--focus-probe', type=float, metavar='SECONDS',
+                        help='With the server stopped: capture for 2 to 120 seconds and print focus, exposure, gain, light and size for each picture.')
+    parser.add_argument('--focus-sample', type=Path, help='With --focus-probe: also save the last picture to this new file for a before/after comparison.')
     args = parser.parse_args()
     if args.probe:
         probe(args.backend)
+        return
+    if args.sharpness is not None and not 0 <= args.sharpness <= 16:
+        parser.error('Use a sharpness from 0 to 16.')
+    controls = picamera2_controls(args.sharpness, args.exposure)
+    if args.focus_probe is not None:
+        if not 2 <= args.focus_probe <= 120 or not (160 <= args.width <= MAX_WIDTH and 120 <= args.height <= MAX_HEIGHT and 20 <= args.quality <= 95):
+            parser.error('Probe for 2 to 120 seconds at a width of 160 to 1280, a height of 120 to 720 and quality 20 to 95.')
+        backend = choose_backend(args.backend, available_backends())
+        tuning = tuning_path(args.tuning) if args.tuning else None
+        if not backend or (args.tuning and not tuning):
+            parser.error('The requested camera stack or tuning file is not installed. Run with --probe to see what this Pi provides.')
+        if controls and backend != 'picamera2':
+            parser.error('--sharpness and --exposure short need picamera2.')
+        focus_probe(open_source(backend, args.width, args.height, args.quality, args.settle_ms, tuning, controls), args.focus_probe, args.focus_sample)
         return
     if args.generate_token:
         descriptor = os.open(str(args.generate_token), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
@@ -495,9 +652,10 @@ def main():
         print('Private pairing file created.')
         return
     try:
-        address = ipaddress.ip_address(args.bind or '')
-        private_networks = [ipaddress.ip_network(value) for value in ('10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16')]
-        if address.version != 4 or not any(address in network for network in private_networks) or not 1 <= args.port <= 65535:
+        if bool(args.bind) == bool(args.bind_interface):
+            raise ValueError()
+        address = private_ipv4(args.bind) if args.bind else interface_address(args.bind_interface)
+        if not address or not 1 <= args.port <= 65535:
             raise ValueError()
         if not args.cert or not args.key or not args.token_file or not args.allow_origin:
             raise ValueError()
@@ -513,7 +671,8 @@ def main():
                 raise ValueError()
             origins.add(origin)
     except (ValueError, OSError, UnicodeError):
-        parser.error('Provide an explicit private bind address, HTTPS certificate/key, private token file (chmod 600), and exact trusted origins.')
+        parser.error('Provide one private bind address (--bind, or --bind-interface with a private address), HTTPS certificate/key, '
+                     'private token file (chmod 600), and exact trusted origins.')
     if not (160 <= args.width <= MAX_WIDTH and 120 <= args.height <= MAX_HEIGHT and 0.2 <= args.fps <= 15 and 20 <= args.quality <= 95 and 1 <= args.settle_ms <= 5000):
         parser.error('Use a width of 160 to 1280, a height of 120 to 720, 0.2 to 15 pictures per second and quality 20 to 95.')
     backend = choose_backend(args.backend, available_backends())
@@ -526,12 +685,16 @@ def main():
             parser.error('Give the name of an installed libcamera tuning file (see --probe); the legacy camera stack has none.')
     if args.telemetry and importlib.util.find_spec('serial') is None:
         parser.error('--telemetry needs pyserial: sudo apt install python3-serial')
+    if controls and backend != 'picamera2':
+        parser.error('--sharpness and --exposure short need picamera2.')
     context = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
     context.minimum_version = ssl.TLSVersion.TLSv1_2
     context.load_cert_chain(str(args.cert), str(args.key))
-    source = open_source(backend, args.width, args.height, args.quality, args.settle_ms, tuning)
+    source = open_source(backend, args.width, args.height, args.quality, args.settle_ms, tuning, controls)
     board = describe_board()
     info = {'model': board['model'], 'os': board['os'], 'backend': source.name, 'width': args.width, 'height': args.height, 'fps': args.fps}
+    if host_label():
+        info['name'] = host_label()
     if tuning:
         info['tuning'] = args.tuning
     telemetry = Telemetry() if args.telemetry else None
@@ -545,6 +708,9 @@ def main():
     worker.start()
     if telemetry:
         threading.Thread(target=telemetry_loop, args=(serial_opener(str(args.telemetry)), telemetry, stopped), daemon=True).start()
+    changed = threading.Event()
+    if args.bind_interface:
+        threading.Thread(target=watch_address, args=(args.bind_interface, address, stopped, changed, server), daemon=True).start()
     print('Paired HTTPS camera listening on the configured local interface using ' + source.name + '.')
     try:
         server.serve_forever(poll_interval=0.25)
@@ -555,6 +721,9 @@ def main():
         server.server_close()
         worker.join(timeout=2)
         source.stop()
+    if changed.is_set():
+        print('The Wi-Fi address changed; exiting so the service restarts on the new address.')
+        raise SystemExit(75)
 
 
 if __name__ == '__main__':

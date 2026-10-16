@@ -473,7 +473,7 @@ test('low-data pacing is bounded and the camera description is reduced to displa
     : reply());
   await h.pi.connect({ origin: ORIGIN, token: TOKEN, interval: 1000 });
   assert.ok([...h.timers.values()].some(timer => timer.ms === 1000));
-  assert.deepEqual({ ...(await h.pi.describe()) }, { model: 'Raspberry Pi Model B Rev 2', os: 'Raspbian GNU/Linux 10', backend: 'picamera', width: 640, height: 480, fps: 2 });
+  assert.deepEqual({ ...(await h.pi.describe()) }, { model: 'Raspberry Pi Model B Rev 2', os: 'Raspbian GNU/Linux 10', backend: 'picamera', width: 640, height: 480, fps: 2, origin: ORIGIN }, 'unknown fields, control characters and secrets are dropped');
   assert.equal(h.calls.at(-1)[1].credentials, 'omit');
   for (const [interval, expected] of [[5, 250], [999999, 5000], [undefined, 250]]) {
     const paced = setup(); await paced.pi.connect({ origin: ORIGIN, token: TOKEN, interval });
@@ -531,7 +531,7 @@ try:
     assert request({'Origin': origin}, '/status')[1]['Connection'] == 'close'
     status, result_headers, body = request(headers, '/status')
     described = json.loads(body.decode('utf-8'))
-    assert status == 200 and described == {'model': 'Fixture board', 'backend': 'fixture', 'width': 640, 'height': 480, 'fps': 4.0}
+    assert status == 200 and described == {'model': 'Fixture board', 'backend': 'fixture', 'width': 640, 'height': 480, 'fps': 4.0, 'device_id': m.device_id(token), 'hello': True}
     assert request(headers, '/status?x=1')[0] == 400
     assert request(headers, '/frame?after=1')[0] == 503
     assert request(headers, '/frame?after=1&other=2')[0] == 400
