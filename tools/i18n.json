@@ -1,5 +1,6 @@
 {
  "strings": {
+  "brand_logo_alt": ["Astha", "আস্থা"],
   "auto_memory_label": ["Automatically remember important objects", "দরকারি জিনিস স্বয়ংক্রিয়ভাবে মনে রাখুন"],
   "auto_memory_help": ["Off by default. While your camera is active, save possible sightings of laptops, phones, glasses, wallets and ID cards with their time and image position. Ask before saving other selected personal objects. No photos or ID text are saved. Online sync requires your existing online consent.", "শুরুতে বন্ধ। ক্যামেরা চালু থাকলে ল্যাপটপ, ফোন, চশমা, মানিব্যাগ ও পরিচয়পত্রের সম্ভাব্য দেখা, সময় ও ছবিতে অবস্থান রাখুন। অন্য বাছাই করা ব্যক্তিগত জিনিস রাখতে আগে জিজ্ঞাসা করা হবে। ছবি বা পরিচয়পত্রের লেখা রাখা হয় না। অনলাইনে সংরক্ষণে আপনার অনলাইন অনুমতি লাগবে।"],
   "identity_intro": ["Hello, I am Astha, your AI vision companion.", "হ্যালো, আমি আস্থা, আপনার এআই দৃষ্টি সহায়ক।"],

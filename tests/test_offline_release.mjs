@@ -186,6 +186,7 @@ test('service-worker install caches bootstrap dependencies and preserves unrelat
   const s = serviceWorker(); let pending;
   s.events.get('install')({ waitUntil: promise => { pending = promise; } }); await pending;
   assert(s.added.includes('./config.js')); assert(s.added.includes('./backend.js'));
+  assert(s.added.includes('./brand/astha-mulberry-apricot-v1.png'), 'the header logo is available in the installed offline shell');
   s.events.get('activate')({ waitUntil: promise => { pending = promise; } }); await pending;
   assert.deepEqual(s.removed, ['astha-shell-old']);
 });

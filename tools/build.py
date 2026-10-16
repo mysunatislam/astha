@@ -644,7 +644,7 @@ shell_hash = hashlib.sha256(html.encode("utf-8"))
 # Bootstrap/config-only changes must invalidate cache-first resources, too. Normalize the
 # stamp itself to avoid a circular hash and keep successive builds byte-for-byte identical.
 shell_hash.update(re.sub(r"const CACHE = 'astha-shell-[^']*';", "const CACHE = 'astha-shell-STAMP';", sw).encode("utf-8"))
-for asset in ("config.js", "native-api.js", "native-device.js", "pi-camera.js", "backend.js", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png"):
+for asset in ("config.js", "native-api.js", "native-device.js", "pi-camera.js", "backend.js", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png", "brand/astha-mulberry-apricot-v1.png"):
     shell_hash.update(asset.encode("utf-8"))
     shell_hash.update((DST.parent / asset).read_bytes())
 stamp = shell_hash.hexdigest()[:10]
