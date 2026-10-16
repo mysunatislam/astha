@@ -104,6 +104,9 @@ const ClientRAG = {
   }
 };
 
+// Tool callbacks share the owning run's source/account/privacy snapshot.
+function agentToolCurrent(ctx) { return !ctx?.current || ctx.current(); }
+
 const AsthaToolRegistry = {
   tools: {},
 
@@ -112,21 +115,25 @@ const AsthaToolRegistry = {
   },
 
   async call(name, args, context) {
+    if (!agentToolCurrent(context)) return { error: 'cancelled' };
     const tool = this.tools[name];
     if (!tool) throw new Error(`Unknown tool: ${name}`);
     console.log(`[Agent Tool] Calling ${name}:`, args);
-    return await tool.execute(args, context);
+    const result = await tool.execute(args, context);
+    return agentToolCurrent(context) ? result : { error: 'cancelled' };
   }
 };
 
 // Register Standard Tools
-AsthaToolRegistry.register('tool_rag_retrieve', 'Retrieves relevant memories and room landmarks', async (args) => {
+AsthaToolRegistry.register('tool_rag_retrieve', 'Retrieves relevant memories and room landmarks', async (args, ctx) => {
+  if (!agentToolCurrent(ctx)) return { error: 'cancelled' };
   const q = args.search_query || '';
   const local = ClientRAG.search(q);
   // Try server RAG if online
   if (typeof apiSend === 'function' && remoteProcessingAllowed() && serverCloud.available) {
     try {
       const srv = await apiSend('POST', '/api/rag/query', { query: q, limit: 5 });
+      if (!agentToolCurrent(ctx)) return { error: 'cancelled' };
       if (srv) {
         const memories = Array.isArray(srv.memories) ? srv.memories.map(m => ({ ...m, location: m.location ?? m.content })) : local.memories;
         const rooms = Array.isArray(srv.rooms) ? srv.rooms : local.rooms;
@@ -148,13 +155,16 @@ AsthaToolRegistry.register('tool_rag_retrieve', 'Retrieves relevant memories and
 });
 
 AsthaToolRegistry.register('tool_vision_detect', 'Scans camera frame for target object or obstacles', async (args, ctx) => {
+  if (!agentToolCurrent(ctx)) return { error: 'cancelled' };
   const target = (args.target_item || '').toLowerCase().trim();
   const minConf = args.min_confidence || 0.45;
   const frame = ctx.frame || captureFrame(640);
   if (!frame) return { found: false, error: 'no_frame' };
 
   await ensureVisionModels();
+  if (!agentToolCurrent(ctx)) return { error: 'cancelled' };
   const cocoObjs = await runCoco(frame);
+  if (!agentToolCurrent(ctx)) return { error: 'cancelled' };
   state.lastCocoPreds = cocoObjs;
 
   // 1. Direct COCO hit
@@ -176,6 +186,7 @@ AsthaToolRegistry.register('tool_vision_detect', 'Scans camera frame for target 
   if (engine.clip && engine.clip.status === 'ready') {
     const centerBbox = centerRect(frame, 0.6);
     const [emb] = await clipEmbedCrops(frame, [centerBbox]);
+    if (!agentToolCurrent(ctx)) return { error: 'cancelled' };
     const ranked = scoreEmbedding(emb).filter(r => r.id !== '_bg');
     const clipHit = ranked.find(r => r.id.toLowerCase().includes(target) || target.includes(r.id.toLowerCase()));
     if (clipHit && clipHit.p >= Math.min(minConf, 0.35)) {
@@ -199,6 +210,7 @@ AsthaToolRegistry.register('tool_vision_detect', 'Scans camera frame for target 
 });
 
 AsthaToolRegistry.register('tool_visual_inspect_crop', 'Zooms into a region to verify details and attributes', async (args, ctx) => {
+  if (!agentToolCurrent(ctx)) return { error: 'cancelled' };
   const frame = ctx.frame || captureFrame(896);
   if (!frame) return { inspected: false, error: 'no_frame' };
   const region = args.region || 'center';
@@ -222,6 +234,7 @@ AsthaToolRegistry.register('tool_visual_inspect_crop', 'Zooms into a region to v
 });
 
 AsthaToolRegistry.register('tool_ocr_read', 'Transcribes text from camera view or crop', async (args, ctx) => {
+  if (!agentToolCurrent(ctx)) return { error: 'cancelled' };
   const frame = ctx.frame || captureFrame(896);
   if (!frame) return { text: '', lines: [] };
 
@@ -229,16 +242,20 @@ AsthaToolRegistry.register('tool_ocr_read', 'Transcribes text from camera view o
   if (cloudReady()) {
     try {
       const res = await cloudReadLines(frame);
+      if (!agentToolCurrent(ctx)) return { error: 'cancelled' };
       if (res && res.lines && res.lines.length) {
         return { text: res.lines.join(' '), lines: res.lines, explain: res.explainEn };
       }
-    } catch (_) {}
+    } catch (_) { if (!agentToolCurrent(ctx)) return { error: 'cancelled' }; }
   }
 
   // Fallback to on-device Tesseract
   try {
+    if (!agentToolCurrent(ctx)) return { error: 'cancelled' };
     const worker = await ensureOcr();
+    if (!agentToolCurrent(ctx)) return { error: 'cancelled' };
     const { data } = await worker.recognize(frame);
+    if (!agentToolCurrent(ctx)) return { error: 'cancelled' };
     const lines = (data.lines || [])
       .filter(l => l.confidence >= 55)
       .map(l => cleanOcrLine(l.text))
@@ -249,7 +266,8 @@ AsthaToolRegistry.register('tool_ocr_read', 'Transcribes text from camera view o
   }
 });
 
-AsthaToolRegistry.register('tool_spatial_guidance', 'Provides directional alignment audio and haptics to user', async (args) => {
+AsthaToolRegistry.register('tool_spatial_guidance', 'Provides directional alignment audio and haptics to user', async (args, ctx) => {
+  if (!agentToolCurrent(ctx)) return { error: 'cancelled' };
   const en = args.instruction_en || 'Please adjust the camera slightly.';
   const bn = args.instruction_bn || 'ক্যামেরাটি কিছুটা নাড়ান।';
   announce(en, bn, 'guidance');
@@ -264,6 +282,7 @@ AsthaToolRegistry.register('tool_memory_save', 'Saves a confirmed item location 
   const loc = args.location;
   // Model-generated arguments cannot authorize persistence; the caller must own approval.
   if (!item || !loc || ctx?.memorySaveApproved !== true) return { saved: false, error: 'explicit_approval_required' };
+  if (!agentToolCurrent(ctx)) return { error: 'cancelled' };
   if (typeof autoRecordMemory === 'function') {
     const entry = await autoRecordMemory({ item, location: loc, source: 'Approved agent note', score: null, approved: true });
     return { saved: !!entry, item, location: loc };
@@ -272,10 +291,13 @@ AsthaToolRegistry.register('tool_memory_save', 'Saves a confirmed item location 
 });
 
 AsthaToolRegistry.register('tool_safety_scan', 'Evaluates walking path for stairs, drops, and obstacles', async (args, ctx) => {
+  if (!agentToolCurrent(ctx)) return { error: 'cancelled' };
   const frame = ctx.frame || captureFrame(640);
   if (!frame) return { safe: null, error: 'no_frame' };
   const cocoObjs = await runCoco(frame);
-  const hazard = EdgeAndStairsDetector.evaluate(frame, cocoObjs);
+  if (!agentToolCurrent(ctx)) return { error: 'cancelled' };
+  const hazard = await EdgeAndStairsDetector.evaluate(frame, cocoObjs);
+  if (!agentToolCurrent(ctx)) return { error: 'cancelled' };
   return {
     safe: null, // A camera scan cannot establish a safe walking path.
     hazard: hazard ? hazard.labelEn : null,
@@ -356,6 +378,16 @@ const AsthaAgent = {
   retries: 0,
   maxRetries: 2,
   observations: [],
+  runGeneration: 0,
+  plannerController: null,
+
+  cancel() {
+    this.runGeneration++;
+    this.plannerController?.abort(); this.plannerController = null;
+    this.currentTask = null; this.activePlan = null; this.observations = [];
+    this.state = 'IDLE'; this.stepIndex = 0; this.retries = 0;
+    this.updateUI();
+  },
 
   updateUI() {
     const card = $('agent-status-card');
@@ -389,7 +421,8 @@ const AsthaAgent = {
     }
   },
 
-  async plan(goal, frame) {
+  async plan(goal, frame, current = () => true) {
+    if (!current()) return null;
     this.state = 'PLANNING';
     this.updateUI();
 
@@ -398,23 +431,33 @@ const AsthaAgent = {
     const formattedRag = ClientRAG.formatContextBlock(ragContext);
 
     // 2. Try Server Planner if available
-    if (typeof apiUrl === 'function' && serverCloud.available) {
+    if (typeof apiUrl === 'function' && serverCloud.available && typeof remoteProcessingAllowed === 'function' && remoteProcessingAllowed()) {
+      const controller = new AbortController();
+      this.plannerController = controller;
+      if (typeof AsthaCancellation !== 'undefined') AsthaCancellation.controllers.add(controller);
       try {
         const frameB64 = frame ? frameToJpeg(frame, 896) : undefined;
         const res = await fetch(apiUrl('/api/agent/plan'), {
           method: 'POST',
           credentials: 'include',
+          signal: controller.signal,
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ goal, image: frameB64 })
         });
+        if (!current()) return null;
         if (res.ok) {
           const data = await res.json();
+          if (!current()) return null;
           if (data.plan && data.plan.steps && data.plan.steps.length) {
             return data.plan;
           }
         }
       } catch (err) {
+        if (!current()) return null;
         console.warn('Server planner fallback to client:', err);
+      } finally {
+        if (this.plannerController === controller) this.plannerController = null;
+        if (typeof AsthaCancellation !== 'undefined') AsthaCancellation.controllers.delete(controller);
       }
     }
 
@@ -463,7 +506,14 @@ const AsthaAgent = {
   },
 
   async run(goal) {
+    if (typeof document !== 'undefined' && document.hidden) return;
     if (withCamera(() => AsthaAgent.run(goal))) return;
+    this.cancel();
+    const mine = this.runGeneration;
+    const ownerCurrent = typeof captureLocalActionGuard === 'function' ? captureLocalActionGuard() : () => true;
+    const current = () => mine === this.runGeneration && ownerCurrent();
+    if (!current()) return;
+    try {
     this.currentTask = { goal, startedAt: Date.now() };
     this.observations = [];
     this.retries = 0;
@@ -473,24 +523,29 @@ const AsthaAgent = {
     playEarcon('tick');
 
     const frame = captureFrame(896);
-    this.activePlan = await this.plan(goal, frame);
+    const plan = await this.plan(goal, frame, current);
+    if (!current() || !plan) return;
+    this.activePlan = plan;
     this.updateUI();
 
     // Execute steps in verification loop
     while (this.stepIndex < this.activePlan.steps.length) {
+      if (!current()) return;
       const step = this.activePlan.steps[this.stepIndex];
       this.state = 'EXECUTING';
       this.updateUI();
 
       const currentFrame = captureFrame(896);
-      const ctx = { frame: currentFrame, goal, observations: this.observations };
+      const ctx = { frame: currentFrame, goal, observations: this.observations, current };
 
       let toolOutput = null;
       try {
         toolOutput = await AsthaToolRegistry.call(step.tool, step.args || {}, ctx);
       } catch (err) {
+        if (!current()) return;
         toolOutput = { error: err.message };
       }
+      if (!current()) return;
 
       this.observations.push({ stepId: step.id, tool: step.tool, output: toolOutput });
 
@@ -513,8 +568,10 @@ const AsthaAgent = {
 
         if (evalResult.correction) {
           await AsthaToolRegistry.call('tool_spatial_guidance', evalResult.correction, ctx);
+          if (!current()) return;
           // Wait 2.2 seconds for user to adjust physical camera position
           await new Promise(r => setTimeout(r, 2200));
+          if (!current()) return;
         }
         // Retry the current step with updated camera frame
         continue;
@@ -525,13 +582,18 @@ const AsthaAgent = {
     }
 
     // Task Completion & Final Response Synthesis
+    if (!current()) return;
     this.state = 'COMPLETED';
     this.updateUI();
 
-    await this.synthesizeFinalAnswer(goal);
+    await this.synthesizeFinalAnswer(goal, current);
+    } finally {
+      if (mine === this.runGeneration && !ownerCurrent()) this.cancel();
+    }
   },
 
-  async synthesizeFinalAnswer(goal) {
+  async synthesizeFinalAnswer(goal, current = () => true) {
+    if (!current()) return;
     const visionObs = this.observations.find(o => o.tool === 'tool_vision_detect' && o.output && o.output.found);
     const ocrObs = this.observations.find(o => o.tool === 'tool_ocr_read' && o.output && o.output.text);
     const ragObs = this.observations.find(o => o.tool === 'tool_rag_retrieve' && o.output && o.output.memories && o.output.memories.length);
@@ -570,7 +632,7 @@ const AsthaAgent = {
     haptic('CONFIRM');
 
     setTimeout(() => {
-      if (this.state === 'COMPLETED') {
+      if (current() && this.state === 'COMPLETED') {
         this.state = 'IDLE';
         this.updateUI();
       }

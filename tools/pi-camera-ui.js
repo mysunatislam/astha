@@ -64,20 +64,25 @@ const AsthaPiCamera = (() => {
       if (typeof PiCamera === 'undefined') throw new Error('transport unavailable');
       await PiCamera.connect({ origin, token, interval,
         onFrame(bitmap) {
-          if (mine !== generation) return;
+          if (mine !== generation || document.hidden) return;
           const preview = element('pi-preview');
           if (!preview) throw new Error('preview unavailable');
           if (preview.width !== bitmap.width || preview.height !== bitmap.height) { preview.width = bitmap.width; preview.height = bitmap.height; }
           preview.getContext('2d').drawImage(bitmap, 0, 0);
+          preview.hidden = false;
           if (!initialized) {
             initialized = true;
             state.sceneKey = null;
             showSource('pi'); preview.hidden = false;
             // The existing detector/CLIP loops consume the same captureFrame path.
             Promise.resolve(ensureVisionModels()).then(ready => {
-              if (mine !== generation || state.source !== 'pi' || !PiCamera.active()) return;
-              if (ready) startLiveLoop(); else setStatus('models');
-            }).catch(() => { if (mine === generation) setStatus('models'); });
+              if (mine !== generation || state.source !== 'pi' || document.hidden || !PiCamera.active()) return;
+              if (ready) { if (!state.busy && !state.liveLoop?.active) startLiveLoop(); }
+              else setStatus('models');
+            }).catch(() => { if (mine === generation && !document.hidden) setStatus('models'); });
+          } else if (state.source === 'pi' && PiCamera.active() && !state.busy && !state.liveLoop?.active && engine.coco.status === 'ready') {
+            // A fresh post-resume frame, rather than visibility alone, restarts recognition.
+            startLiveLoop();
           }
         },
         // The ultrasonic sensor beside the Pi camera. Its reading is dated by its own age.
@@ -100,6 +105,15 @@ const AsthaPiCamera = (() => {
             if (typeof AsthaExperience !== 'undefined') AsthaExperience.invalidate();
             setStatus('reconnecting'); if (!wasLost && status.code !== 'resumed') speakStatus('reconnecting', false); wasLost = true;
           } else if (status.state === 'paused') {
+            if (state.source === 'pi') {
+              stopLiveLoop();
+              if (typeof stopAllSpeech === 'function') stopAllSpeech();
+              if (typeof AsthaSensors !== 'undefined') AsthaSensors.clear();
+              // Invalidate pre-pause vision and pending answers without ending the pairing.
+              showSource('pi');
+              const preview = element('pi-preview');
+              if (preview) { preview.getContext('2d')?.clearRect(0, 0, preview.width, preview.height); preview.hidden = true; }
+            }
             if (typeof AsthaExperience !== 'undefined') AsthaExperience.invalidate();
             setStatus('paused');
           } else if (status.state === 'error') { stop(); setStatus(status.code); speakStatus(status.code, true); }

@@ -12,12 +12,15 @@ function reply({ status = 200, age = '0', sequence = '1', bytes = jpeg, type = '
   return new Response(bytes, { status, headers: { 'Content-Type': type, 'Content-Length': String(bytes.length), 'X-Astha-Frame-Sequence': sequence, 'X-Astha-Frame-Age-Ms': age, ...headers } });
 }
 function setup(fetch = async () => reply(), decode) {
-  const calls = [], listeners = new Map(), timers = new Map(), frames = [];
+  const calls = [], listeners = new Map(), registrations = new Map(), timers = new Map(), frames = [];
   let tick = 0, now = 100;
-  const document = { hidden: false, addEventListener: (key, fn) => listeners.set(key, fn) };
-  const window = { addEventListener: (key, fn) => listeners.set(key, fn), fetch: (...args) => { calls.push(args); return fetch(...args); } };
-  vm.runInNewContext(source, { window, document, URL, Blob, Uint8Array, AbortController, performance: { now: () => now }, setTimeout: (fn, ms) => { timers.set(++tick, { fn, ms }); return tick; }, clearTimeout: id => timers.delete(id), createImageBitmap: decode || (async () => { const bitmap = { width: 640, height: 480, closed: false, close() { this.closed = true; } }; frames.push(bitmap); return bitmap; }) });
-  return { pi: window.PiCamera, calls, timers, listeners, document, frames, advance(ms) { now += ms; }, async run(ms) { const entry = [...timers.entries()].find(([, t]) => t.ms === ms); assert.ok(entry, 'no ' + ms + ' ms timer is pending'); timers.delete(entry[0]); await entry[1].fn(); },
+  const dispatch = (key, reverse = false) => { const callbacks = [...registrations.get(key) || []]; if (reverse) callbacks.reverse(); for (const fn of callbacks) fn(); };
+  const addEventListener = (key, fn) => { if (!registrations.has(key)) registrations.set(key, []); registrations.get(key).push(fn); listeners.set(key, () => dispatch(key)); };
+  const document = { hidden: false, addEventListener };
+  const window = { addEventListener, fetch: (...args) => { calls.push(args); return fetch(...args); } };
+  const context = vm.createContext({ window, document, URL, Blob, Uint8Array, AbortController, performance: { now: () => now }, setTimeout: (fn, ms) => { timers.set(++tick, { fn, ms }); return tick; }, clearTimeout: id => timers.delete(id), createImageBitmap: decode || (async () => { const bitmap = { width: 640, height: 480, closed: false, close() { this.closed = true; } }; frames.push(bitmap); return bitmap; }) });
+  vm.runInContext(source, context);
+  return { pi: window.PiCamera, calls, timers, listeners, document, frames, context, dispatch, advance(ms) { now += ms; }, async run(ms) { const entry = [...timers.entries()].find(([, t]) => t.ms === ms); assert.ok(entry, 'no ' + ms + ' ms timer is pending'); timers.delete(entry[0]); await entry[1].fn(); },
     async poll() { await this.run(250); } };
 }
 test('explicit pairing requires HTTPS and reports ready only after a validated decoded frame', async () => {
@@ -116,6 +119,314 @@ test('leaving the page ends the pairing; going to the background only pauses it'
   assert.deepEqual(status, ['connecting', 'connected', 'paused', 'reconnecting', 'connected']);
   h.listeners.get('pagehide')();
   assert.equal(h.pi.paired(), false); assert.equal(h.pi.active(), false); assert.equal(h.timers.size, 0);
+});
+
+// Use the generated application's actual lifecycle handlers and stopCamera with the
+// real paired transport/UI. Testing transport.pause alone misses app-level cleanup.
+function lifecycleSetup(fetch, { realLoops = false, realAgent = false } = {}) {
+  const h = setup(fetch), elements = new Map(), counts = { listeningStops: 0, speechStops: 0, liveStops: 0, sensorClears: 0,
+    ingests: 0, updates: 0, refinements: 0, overlays: 0, visionClears: 0, previewClears: 0, pendingCancels: 0, speech: 0 };
+  const element = id => {
+    if (!elements.has(id)) elements.set(id, {
+      id, hidden: true, value: id === 'pi-camera-origin' ? ORIGIN : id === 'pi-camera-token' ? TOKEN : '',
+      checked: false, width: 640, height: 480, srcObject: null,
+      setAttribute() {}, addEventListener() {}, focus() {}, insertBefore() {}, classList: { toggle() {} },
+      getContext: () => ({ drawImage() {}, clearRect() { if (id === 'pi-preview') counts.previewClears++; } }),
+    });
+    return elements.get(id);
+  };
+  const pick = index => Object.fromEntries(Object.entries(strings).map(([key, pair]) => [key, pair[index]]));
+  Object.assign(h.document, { getElementById: element, querySelectorAll: () => [] });
+  Object.assign(h.context, {
+    PiCamera: h.pi, I18N: { en: pick(0), bn: pick(1) }, $: element,
+    state: { source: null, sourceEpoch: 0, world: new Map(), announced: new Map(), lastCocoPreds: [], lastClipHits: [] }, cameraRequest: 0, imageUrl: null,
+    localStorage: { getItem: () => null }, VAULT_KEY: 'synthetic-vault', updateVoiceSupport() {},
+    stopListening: () => counts.listeningStops++, stopAllSpeech: () => counts.speechStops++,
+    stopLiveLoop: () => counts.liveStops++, startLiveLoop() {}, ensureVisionModels: async () => true,
+    AsthaSensors: { clear: () => counts.sensorClears++ },
+    AsthaExperience: { invalidate() {}, cancelPending: () => counts.pendingCancels++, admit: () => true },
+    AsthaVisionDetails: { sourceChanged: () => counts.visionClears++ },
+    showHazard() {}, updateSourceStatus() {}, clearOverlay() {}, renderSeen() {}, announce: () => counts.speech++, setCaption() {},
+    engine: { coco: { status: 'ready' }, clip: { status: 'ready' } },
+  });
+  h.context.t = key => h.context.I18N.en[key] || key;
+  const html = fs.readFileSync(new URL('../web/index.html', import.meta.url), 'utf8').replace(/\r\n/g, '\n');
+  const actual = name => {
+    const matches = [...html.matchAll(new RegExp('^(?:async )?function ' + name + '\\(', 'gm'))];
+    assert(matches.length, 'generated app function missing: ' + name);
+    const start = matches.at(-1).index, lineEnd = html.indexOf('\n', start);
+    // stopLiveLoop is intentionally one line; the other application functions end at column zero.
+    return html.slice(start, name === 'stopLiveLoop' ? lineEnd : html.indexOf('\n}', lineEnd) + 2);
+  };
+  let runtime = '';
+  if (realLoops) {
+    const pending = { coco: [], clip: [], edges: [] };
+    Object.assign(h.context, {
+      console, privacyMode: false, privacyTransition: false,
+      captureFrame: () => h.pi.getFrame(),
+      runCoco: () => new Promise(resolve => pending.coco.push(resolve)),
+      runClipZones: () => new Promise(resolve => pending.clip.push(resolve)),
+      ingest: () => counts.ingests++, drawOverlay: () => counts.overlays++, afterLiveUpdate: () => { counts.updates++; counts.speech++; },
+      liveRefineAndMirror: async () => counts.refinements++, trackPersonMotion() {}, ownerAutoCheck() {},
+      EdgeAndStairsDetector: { evaluate: () => new Promise(resolve => pending.edges.push(resolve)) },
+      VoiceEngine: { stop: () => counts.speechStops++, emergencyAlert: () => counts.speech++ },
+      reading: { active: false }, stopReader() {}, OfflineEar: { active: false }, logEvent() {},
+    });
+    const cancellation = /const AsthaCancellation = \{[^]*?\n\};/.exec(html);
+    assert(cancellation, 'generated cancellation coordinator missing');
+    runtime = cancellation[0] + '\n' + ['captureLocalActionGuard', 'startLiveLoop', 'stopLiveLoop', 'cocoTick', 'clipTick', 'stopAllSpeech'].map(actual).join('\n') +
+      '\nglobalThis.cancellation = AsthaCancellation;';
+    h.pending = pending;
+  }
+  if (realAgent) {
+    assert(realLoops, 'agent lifecycle tests use actual app cancellation');
+    Object.assign(h.context, { esc: text => text, withCamera: () => false, playEarcon() {}, haptic() {},
+      serverCloud: { available: true }, apiUrl: path => 'https://api.fixture.invalid' + path,
+      remoteProcessingAllowed: () => !h.context.privacyMode && !h.context.privacyTransition, frameToJpeg: () => 'synthetic-image' });
+    const start = html.indexOf('const AGENT_SYNONYMS = '), end = html.indexOf('window.AsthaAgent = AsthaAgent;', start);
+    assert(start >= 0 && end > start, 'generated agent implementation missing');
+    runtime += '\n' + html.slice(start, end + 'window.AsthaAgent = AsthaAgent;'.length);
+  }
+  vm.runInContext(uiSource + '\n' + actual('showSource') + '\n' + actual('stopCamera') + '\n' + actual('enhancementBoot') + '\n' + runtime +
+    '\nglobalThis.piAdapter = AsthaPiCamera; AsthaPiCamera.boot(); enhancementBoot();', h.context);
+  return Object.assign(h, { elements, counts, element, ui: h.context.piAdapter });
+}
+
+test('generated app preserves Pi pairing across hidden and visible events, including a late aborted frame', async () => {
+  for (const reverse of [false, true]) {
+    let sequence = 0, delayed = false, release;
+    const h = lifecycleSetup(async url => {
+      if (url.endsWith('/status')) return new Response(JSON.stringify({ telemetry: true }), { status: 200 });
+      if (url.endsWith('/telemetry')) return new Response(JSON.stringify({ seq: sequence, distance_cm: 85, distance_status: 'ok', age_ms: 0 }), { status: 200 });
+      const result = reply({ sequence: String(++sequence) });
+      if (delayed) return new Promise(resolve => { release = () => resolve(result); });
+      return result;
+    });
+    await h.ui.connect(); await new Promise(resolve => setImmediate(resolve));
+    assert.equal(h.context.state.source, 'pi'); assert.equal(h.pi.active(), true);
+    assert.equal(h.element('pi-camera-token').value, '');
+    const clearsBefore = h.counts.sensorClears;
+    delayed = true;
+    const inFlight = h.poll();
+    const signal = h.calls.at(-1)[1].signal;
+    h.document.hidden = true; h.dispatch('visibilitychange', reverse);
+    assert.equal(signal.aborted, true); assert.equal(h.pi.paired(), true, 'app cleanup must retain the transport session');
+    assert.equal(h.context.state.source, 'pi'); assert.equal(h.ui.status, 'paused');
+    assert.equal(h.pi.active(), false); assert.equal(h.pi.getFrame(), null); assert.equal(h.frames[0].closed, true);
+    assert(h.counts.listeningStops >= 1); assert(h.counts.sensorClears > clearsBefore, 'pause withholds the old sensor reading');
+    assert.equal([...h.timers.values()].some(timer => [0, 200, 250].includes(timer.ms)), false, 'neither frame nor telemetry polling continues while hidden');
+    release(); await inFlight; await new Promise(resolve => setImmediate(resolve));
+    assert.equal(h.frames.length, 1, 'the late cancelled response cannot decode or reactivate a preview');
+    assert.equal(h.pi.getFrame(), null); assert.equal(h.ui.status, 'paused'); assert.equal(h.timers.size, 0);
+    delayed = false; h.document.hidden = false; h.dispatch('visibilitychange', reverse);
+    await h.run(0); await new Promise(resolve => setImmediate(resolve));
+    assert.equal(h.pi.paired(), true); assert.equal(h.pi.active(), true); assert.equal(h.ui.status, 'connected');
+    assert.equal(h.context.state.source, 'pi'); assert.equal(h.pi.getFrame(), h.frames[1]);
+    assert.equal(h.calls.filter(([url]) => new URL(url).pathname === '/frame').at(-1)[1].headers.Authorization, 'Bearer ' + TOKEN);
+    assert.equal(h.element('pi-camera-token').value, '', 'resume never asks the user to re-enter the code');
+    const telemetry = [...h.timers.entries()].find(([, timer]) => timer.ms === 0);
+    assert(telemetry, 'telemetry resumes with the retained session');
+    h.timers.delete(telemetry[0]); await telemetry[1].fn();
+    assert(h.calls.some(([url]) => new URL(url).pathname === '/telemetry'));
+    h.dispatch('pagehide', reverse);
+    assert.equal(h.pi.paired(), false); assert.equal(h.pi.active(), false); assert.equal(h.pi.getFrame(), null);
+    assert.equal(h.context.state.source, null); assert.equal(h.timers.size, 0);
+    assert(h.counts.sensorClears > clearsBefore); assert(h.counts.speechStops > 0);
+    const requests = h.calls.length;
+    h.document.hidden = false; h.dispatch('visibilitychange', reverse);
+    assert.equal(h.calls.length, requests); assert.equal(h.timers.size, 0, 'pagehide ends pairing instead of resuming it');
+  }
+});
+
+test('generated app still stops phone camera tracks and pending camera startup when hidden', () => {
+  const h = lifecycleSetup(); let stopped = 0;
+  h.context.state.source = 'camera'; h.context.state.cameraPending = true;
+  h.element('cam').srcObject = { getTracks: () => [{ stop: () => stopped++ }, { stop: () => stopped++ }] };
+  h.document.hidden = true; h.dispatch('visibilitychange');
+  assert.equal(stopped, 2); assert.equal(h.element('cam').srcObject, null);
+  assert.equal(h.context.state.source, null); assert.equal(h.context.state.cameraPending, false);
+  assert.equal(h.context.cameraRequest, 1); assert.equal(h.counts.listeningStops, 1);
+  assert.equal(h.pi.paired(), false); assert.equal(h.timers.size, 0);
+});
+
+test('actual recognition loops discard pre-pause COCO and CLIP results and restart only with a fresh visible frame', async () => {
+  for (const completeAfterResume of [false, true]) {
+    let sequence = 0;
+    const h = lifecycleSetup(async () => reply({ sequence: String(++sequence) }), { realLoops: true });
+    const flush = () => new Promise(resolve => setImmediate(resolve));
+    await h.ui.connect(); await flush();
+    const oldLoop = h.context.state.liveLoop, oldEpoch = h.context.state.sourceEpoch;
+    assert(oldLoop?.active); assert.equal(h.pending.coco.length, 1); assert.equal(h.pending.clip.length, 1);
+    h.context.state.world.set('stale', {}); h.context.state.announced.set('stale', true);
+    h.context.state.pendingAction = () => assert.fail('cancelled camera action ran');
+    h.context.state.pendingRead = true; h.context.state.busy = true; h.context.state.busyToken = Symbol();
+    const controller = new AbortController(); h.context.cancellation.controllers.add(controller);
+    const localAction = h.context.captureLocalActionGuard();
+    const countsBefore = { ...h.counts };
+    h.document.hidden = true; h.dispatch('visibilitychange');
+    assert.equal(h.pi.paired(), true); assert.equal(h.context.state.source, 'pi');
+    assert.equal(oldLoop.active, false); assert.equal(h.context.state.liveLoop, null);
+    assert(h.context.state.sourceEpoch > oldEpoch); assert.equal(localAction(), false);
+    assert.equal(h.context.state.world.size, 0); assert.equal(h.context.state.announced.size, 0);
+    assert.equal(h.context.state.pendingAction, null); assert.equal(h.context.state.pendingRead, false);
+    assert.equal(h.context.state.busy, false); assert.equal(h.context.state.busyToken, null);
+    assert(controller.signal.aborted); assert(h.counts.pendingCancels > countsBefore.pendingCancels);
+    assert(h.counts.speechStops > countsBefore.speechStops); assert(h.counts.visionClears > countsBefore.visionClears);
+    assert.equal(h.element('pi-preview').hidden, true); assert(h.counts.previewClears > countsBefore.previewClears);
+    const finishOld = async () => {
+      const spokenBefore = h.counts.speech;
+      h.pending.coco[0]([{ id: 'stale-coco', src: 'coco' }]);
+      h.pending.clip[0]({ hits: [{ id: 'stale-clip', src: 'clip' }], center: [] });
+      await flush();
+      for (const key of ['ingests', 'updates', 'refinements', 'overlays']) assert.equal(h.counts[key], countsBefore[key], key + ' from an obsolete frame');
+      assert.equal(h.counts.speech, spokenBefore, 'speech from an obsolete frame');
+    };
+    if (!completeAfterResume) await finishOld();
+    h.document.hidden = false; h.dispatch('visibilitychange');
+    assert.equal(h.context.state.liveLoop, null, 'becoming visible cannot analyze a pre-pause picture');
+    assert.equal(h.pending.coco.length, 1);
+    await h.run(0); await flush();
+    const nextLoop = h.context.state.liveLoop;
+    assert(nextLoop?.active); assert.notEqual(nextLoop, oldLoop);
+    assert.equal(h.pending.coco.length, 2); assert.equal(h.pending.clip.length, 2);
+    assert.equal(h.element('pi-preview').hidden, false);
+    if (completeAfterResume) await finishOld();
+    assert.equal(h.context.state.liveLoop, nextLoop, 'old completions cannot clear the new loop');
+    h.pending.coco[1]([]); h.pending.clip[1]({ hits: [], center: [] }); await flush();
+    assert.equal(h.counts.ingests, countsBefore.ingests + 2); assert.equal(h.counts.updates, countsBefore.updates + 2);
+    assert.equal(h.counts.refinements, countsBefore.refinements + 1, 'fresh recognition resumes normally');
+    h.dispatch('pagehide');
+  }
+});
+
+test('an edge hazard already evaluating before Pi pause cannot speak after pause or a quick resume', async () => {
+  let sequence = 0;
+  const h = lifecycleSetup(async () => reply({ sequence: String(++sequence) }), { realLoops: true });
+  const flush = () => new Promise(resolve => setImmediate(resolve));
+  await h.ui.connect(); await flush();
+  h.pending.coco[0]([]); await flush();
+  assert.equal(h.pending.edges.length, 1);
+  h.document.hidden = true; h.dispatch('visibilitychange');
+  h.document.hidden = false; h.dispatch('visibilitychange'); await h.run(0); await flush();
+  const spokenBefore = h.counts.speech;
+  h.pending.edges[0]({ en: 'Old edge warning', bn: 'Old warning', type: 'edge' }); await flush();
+  assert.equal(h.counts.speech, spokenBefore, 'a pre-pause hazard must not interrupt the resumed session');
+  h.dispatch('pagehide');
+});
+
+test('model readiness while Pi is paused cannot start recognition until a fresh visible frame arrives', async () => {
+  let sequence = 0, ready;
+  const h = lifecycleSetup(async () => reply({ sequence: String(++sequence) }), { realLoops: true });
+  h.context.engine.coco.status = 'loading';
+  h.context.ensureVisionModels = () => new Promise(resolve => { ready = resolve; });
+  const flush = () => new Promise(resolve => setImmediate(resolve));
+  await h.ui.connect();
+  h.document.hidden = true; h.dispatch('visibilitychange');
+  h.context.engine.coco.status = 'ready'; ready(true); await flush();
+  assert.equal(h.context.state.liveLoop, null); assert.equal(h.pending.coco.length, 0);
+  h.document.hidden = false; h.dispatch('visibilitychange');
+  assert.equal(h.context.state.liveLoop, null);
+  await h.run(0); await flush();
+  assert(h.context.state.liveLoop?.active); assert.equal(h.pending.coco.length, 1);
+  h.dispatch('pagehide');
+});
+
+test('actual delayed agent planning is aborted on Pi pause and cannot finish in the resumed session', async () => {
+  let sequence = 0, finishPlan, planSignal;
+  const h = lifecycleSetup(async () => reply({ sequence: String(++sequence) }), { realLoops: true, realAgent: true });
+  h.context.fetch = (_url, options) => { planSignal = options.signal; return new Promise(resolve => { finishPlan = resolve; }); };
+  const flush = () => new Promise(resolve => setImmediate(resolve));
+  await h.ui.connect(); await flush();
+  const agent = h.context.window.AsthaAgent;
+  const running = agent.run('find my phone'); await flush();
+  assert.equal(agent.state, 'PLANNING'); assert.equal(h.context.cancellation.controllers.size, 1);
+  h.document.hidden = true; h.dispatch('visibilitychange');
+  assert(planSignal.aborted); assert.equal(agent.state, 'IDLE'); assert.equal(agent.currentTask, null);
+  h.document.hidden = false; h.dispatch('visibilitychange'); await h.run(0); await flush();
+  const speechBefore = h.counts.speech;
+  finishPlan(new Response(JSON.stringify({ plan: { steps: [{ tool: 'tool_spatial_guidance', args: { instruction_en: 'Obsolete guidance' } }] } }), { status: 200 }));
+  await running;
+  assert.equal(agent.state, 'IDLE'); assert.equal(agent.observations.length, 0);
+  assert.equal(h.counts.speech, speechBefore); assert.equal(h.context.cancellation.controllers.size, 0);
+  h.dispatch('pagehide');
+});
+
+test('actual old agent inference cannot overwrite or complete a newer run after Pi resumes', async () => {
+  let sequence = 0;
+  const h = lifecycleSetup(async () => reply({ sequence: String(++sequence) }), { realLoops: true, realAgent: true });
+  h.context.fetch = async () => new Response(JSON.stringify({ plan: { steps: [{ id: 'detect', tool: 'tool_vision_detect', args: { target_item: 'phone' } }] } }), { status: 200 });
+  const flush = () => new Promise(resolve => setImmediate(resolve));
+  await h.ui.connect(); await flush();
+  const agent = h.context.window.AsthaAgent;
+  const old = agent.run('find my phone'); await flush();
+  assert.equal(agent.state, 'EXECUTING'); assert.equal(h.pending.coco.length, 2);
+  h.document.hidden = true; h.dispatch('visibilitychange');
+  h.document.hidden = false; h.dispatch('visibilitychange'); await h.run(0); await flush();
+  const newer = agent.run('find my new phone'); await flush();
+  assert.equal(h.pending.coco.length, 4);
+  const speechBefore = h.counts.speech;
+  h.pending.coco[1]([{ id: 'phone', score: 0.99, bbox: [0, 0, 100, 100] }]); await old;
+  assert.equal(agent.state, 'EXECUTING'); assert.equal(agent.currentTask.goal, 'find my new phone');
+  assert.equal(agent.observations.length, 0); assert.equal(h.context.state.lastCocoPreds.length, 0);
+  assert.equal(h.counts.speech, speechBefore, 'the old run produces no completion or corrective guidance');
+  h.pending.coco[3]([{ id: 'phone', score: 0.9, bbox: [100, 100, 100, 100] }]); await newer;
+  assert.equal(agent.state, 'COMPLETED'); assert.equal(agent.observations.length, 1);
+  assert.equal(h.context.state.lastCocoPreds[0].score, 0.9); assert.equal(h.counts.speech, speechBefore + 1);
+  h.dispatch('pagehide');
+});
+
+test('actual agent discards delayed inference when source, account, local owner or privacy changes', async () => {
+  for (const change of [h => h.context.state.sourceEpoch++, h => { h.context.window.ASTHA_ACCOUNT_ID = 'other-account'; },
+    h => { h.context.LocalStore.KEY = 'other-owner'; }, h => { h.context.privacyMode = true; }]) {
+    let sequence = 0;
+    const h = lifecycleSetup(async () => reply({ sequence: String(++sequence) }), { realLoops: true, realAgent: true });
+    h.context.LocalStore = { KEY: 'initial-owner' };
+    h.context.fetch = async () => new Response(JSON.stringify({ plan: { steps: [{ id: 'detect', tool: 'tool_vision_detect', args: { target_item: 'phone' } }] } }), { status: 200 });
+    await h.ui.connect(); await new Promise(resolve => setImmediate(resolve));
+    const agent = h.context.window.AsthaAgent, running = agent.run('find my phone');
+    await new Promise(resolve => setImmediate(resolve));
+    assert.equal(h.pending.coco.length, 2);
+    const speechBefore = h.counts.speech;
+    change(h); h.pending.coco[1]([{ id: 'phone', score: 0.9, bbox: [0, 0, 100, 100] }]); await running;
+    assert.equal(agent.state, 'IDLE'); assert.equal(agent.currentTask, null); assert.equal(agent.observations.length, 0);
+    assert.equal(h.context.state.lastCocoPreds.length, 0); assert.equal(h.counts.speech, speechBefore);
+    h.dispatch('pagehide');
+  }
+});
+
+test('actual agent OCR does not start fallback or recognition after cancellation during cloud or worker setup', async () => {
+  for (const stage of ['cloud', 'worker']) {
+    let sequence = 0, release, current = true, workerLoads = 0, recognitions = 0;
+    const h = lifecycleSetup(async () => reply({ sequence: String(++sequence) }), { realLoops: true, realAgent: true });
+    h.context.cloudReady = () => stage === 'cloud';
+    h.context.cloudReadLines = () => new Promise((_, reject) => { release = () => reject(new Error('cancelled')); });
+    h.context.ensureOcr = () => { workerLoads++; return new Promise(resolve => { release = () => resolve({ recognize: async () => { recognitions++; return { data: { lines: [] } }; } }); }); };
+    const running = h.context.window.AsthaToolRegistry.call('tool_ocr_read', {}, { frame: {}, current: () => current });
+    await new Promise(resolve => setImmediate(resolve));
+    current = false; release();
+    assert.equal((await running).error, 'cancelled'); assert.equal(recognitions, 0);
+    assert.equal(workerLoads, stage === 'cloud' ? 0 : 1);
+  }
+});
+
+test('actual agent planner respects remote consent and completed-task timers cannot clear a newer run', async () => {
+  let sequence = 0, planningRequests = 0;
+  const h = lifecycleSetup(async () => reply({ sequence: String(++sequence) }), { realLoops: true, realAgent: true });
+  h.context.fetch = async () => { planningRequests++; return new Response(JSON.stringify({ plan: { steps: [] } }), { status: 200 }); };
+  h.context.remoteProcessingAllowed = () => false;
+  const agent = h.context.window.AsthaAgent;
+  const fallback = await agent.plan('find my phone', null);
+  assert(fallback.steps.length > 0); assert.equal(planningRequests, 0);
+  h.context.remoteProcessingAllowed = () => true;
+  await h.ui.connect(); await new Promise(resolve => setImmediate(resolve));
+  h.context.fetch = async () => new Response(JSON.stringify({ plan: { steps: [{ id: 'rag', tool: 'tool_rag_retrieve', args: {} }] } }), { status: 200 });
+  h.context.apiSend = async () => ({ memories: [{ item: 'phone' }], rooms: [] });
+  await agent.run('first task'); assert.equal(agent.state, 'COMPLETED');
+  const oldTimer = [...h.timers.entries()].find(([, timer]) => timer.ms === 12000); assert(oldTimer);
+  await agent.run('second task'); assert.equal(agent.state, 'COMPLETED');
+  h.timers.delete(oldTimer[0]); oldTimer[1].fn();
+  assert.equal(agent.state, 'COMPLETED'); assert.equal(agent.currentTask.goal, 'second task');
+  h.dispatch('pagehide');
 });
 test('a dropped link is retried with backoff, old pictures are withheld, and a long outage ends the pairing', async () => {
   let n = 0, down = false;
@@ -375,6 +686,7 @@ function uiSetup(transport) {
   const pick = index => Object.fromEntries(Object.entries(strings).map(([key, pair]) => [key, pair[index]]));
   const context = {
     I18N: { en: pick(0), bn: pick(1) }, uiLang: 'en', state: { source: null, sourceEpoch: 0 }, PiCamera: transport,
+    engine: { coco: { status: 'ready' } },
     document: { hidden: false, getElementById: id => elements.get(id), querySelectorAll: () => [], addEventListener: (key, fn) => listeners.set('document:' + key, fn) },
     addEventListener: (key, fn) => listeners.set('window:' + key, fn),
     stopLiveLoop() {}, stopAllSpeech() {}, ensureVisionModels: async () => true, startLiveLoop: () => starts.push(true),

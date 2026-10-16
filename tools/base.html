@@ -3635,7 +3635,13 @@ function enhancementBoot() {
   });
   document.addEventListener('focusin',e=>{ if(!$('calib-modal').hidden && !$('calib-modal').contains(e.target))$('room-name').focus(); });
   window.addEventListener('pagehide',()=>{ stopAllSpeech(); stopCamera(); if(imageUrl)URL.revokeObjectURL(imageUrl); });
-  document.addEventListener('visibilitychange',()=>{ if(document.hidden){stopListening();stopCamera();} });
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      stopListening();
+      // The paired Pi transport pauses its requests and resumes with a fresh frame.
+      if (state.source !== 'pi') stopCamera();
+    }
+  });
 }
 
 

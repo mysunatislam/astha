@@ -4,11 +4,12 @@ The clip-on prototype is a Raspberry Pi with a NoIR camera module and a power ba
 only captures pictures and serves the newest one over the local Wi-Fi. Recognition runs on
 the phone or the ASTHA server; an original Model B cannot run a modern vision model.
 
-**Status (15 October 2026).** The server has run on a real Pi and served pictures over
-Wi-Fi to a test client on a PC (see [Verified on hardware](#verified-on-hardware)). The
-phone side is still covered only by automated tests: pairing from the app, certificate
-trust on a phone, picture-to-answer delay, battery life and NoIR colour are unverified
-until someone completes the checklist at the end.
+**Status (17 October 2026).** A real Pi camera has been paired with the live ASTHA web app
+in desktop Chrome. The preview received fresh pictures and a captured frame produced a
+visible bilingual answer (see [Verified on hardware](#verified-on-hardware)). Distance
+telemetry connected, but the known-target test produced no valid range measurements.
+Android pairing, certificate trust, speech playback, battery life, NoIR colour and
+detection accuracy remain unverified.
 
 ## 1. Find out what the Pi actually is
 
@@ -151,6 +152,37 @@ anything but the address it is given.
 
 ## Verified on hardware
 
+### Desktop Chrome and live ASTHA, 17 October 2026
+
+- Hardware: Raspberry Pi 4, Debian 13, IMX219 NoIR camera; fresh browser pairing with the
+  live ASTHA web app was confirmed.
+- Live preview: 32 distinct frame sequences in 10.044 seconds, about 3.19 pictures per
+  second. The Pi source stayed active during this foreground sample.
+- Description: an actual Pi-camera frame received a successful bilingual API response
+  and a visible answer in about 5.5 seconds. Audio playback was not verified.
+- Image quality: the picture remained blurry even when held still. Detailed view once
+  labelled a ceiling as a keyboard with a 55% COCO model score. This is a false positive,
+  and the model score is not a verified accuracy figure. Detection and NoIR colour
+  accuracy have not been validated.
+- Ultrasonic: all 31 samples with a flat book that the user placed at a reported 30 cm
+  had `distance_status: out_of_range` and `distance_cm: null`; there were zero valid
+  measurements. The desktop browser feed likewise produced no valid range reading.
+  A connected telemetry feed therefore does not establish a working distance sensor or
+  calibrated accuracy. The firmware's status combines pulse timeout and out-of-range
+  results; it does not expose raw pulse width to distinguish those cases.
+- MPU6050 remained `not_found`. Android hardware behavior, device voice and audio output
+  were not tested in this session.
+
+These observations are limited to the stated desktop tests. An app-level visibility
+handler was found to disconnect the Pi when Chrome became hidden, despite the transport's
+pause/resume support. The follow-up fix preserves Pi pairing while hidden, cancels
+pending recognition and speech, clears stale vision and range readings, and waits for a
+fresh visible frame before restarting recognition. It still stops a phone camera.
+Its regression tests use simulated frames and lifecycle events;
+physical background/resume behavior must be rechecked after deployment.
+
+### Pi camera and ESP32 transport, 15 October 2026
+
 15 October 2026, over a phone hotspot, from a Windows PC acting as the client.
 
 | Item | Result |
@@ -180,8 +212,10 @@ with no gaps; through `/telemetry` over TLS every reading arrived, median age 50
 most 100 ms. The MPU6050 was not detected on GPIO21/22, so motion readings are untested,
 and ultrasonic accuracy at known distances has not been measured.
 
-Not yet verified: the app pairing with the camera or reading `/telemetry`, a phone
-trusting the CA, delay from picture to spoken answer, battery life and NoIR colour.
+The later desktop web-app pairing and telemetry checks are recorded above. Still not
+verified: Android pairing or telemetry, a phone trusting the CA, delay to spoken audio,
+battery life and NoIR colour accuracy. The 17 October known-target test did not establish
+a valid ultrasonic measurement.
 
 ## 5. Hardware checklist
 
@@ -189,8 +223,8 @@ Record the `--probe` output, the phone model and Android version, and the app bu
 
 - [x] `--probe` output saved; the chosen capture method produces a picture. (Pi 4, 15 October 2026)
 - [ ] Certificate route chosen and trusted by the test phone; a wrong certificate is refused.
-- [ ] Correct pairing connects and is spoken; a wrong code is rejected and explained.
-- [ ] Measured pictures per second (done: 4.0 per second at 640×480 to a PC over Wi-Fi) and picture-to-answer delay at the chosen settings (pending).
+- [ ] Correct pairing connects and is spoken; a wrong code is rejected and explained. (Desktop Chrome pairing confirmed 17 October; Android and speech pending.)
+- [ ] Measured pictures per second and picture-to-answer delay on the target phone. (PC transport: 4.0 per second; desktop web preview: 3.19 per second; visible bilingual answer: about 5.5 seconds. Phone and spoken-answer timing pending.)
 - [ ] Wi-Fi with no internet still works for on-device recognition.
 - [ ] Pi unplugged, Wi-Fi dropped for 5 s, 20 s and 60 s: retry, recovery and give-up are spoken.
 - [ ] Phone screen off and on: pictures stop and resume without re-entering the code.
