@@ -1,11 +1,13 @@
 """Build web/index.html from tools/base.html plus the companion modules (vocab, i18n, module, eye, cloud, account, styles).
 Run: python tools/build.py
 Every replacement asserts that its anchor occurs exactly once, so a silent mis-patch is impossible."""
-import json, pathlib, re, sys
+import hashlib, json, pathlib, re, sys
 
 HERE = pathlib.Path(__file__).parent
 SRC = HERE / "base.html"
 DST = HERE.parent / "web" / "index.html"
+BOOTSTRAP = ("config.js", "native-api.js", "native-device.js", "pi-camera.js", "paired-camera-store.js", "backend.js")
+bootstrap_urls = {name: name + "?v=" + hashlib.sha256((DST.parent / name).read_bytes()).hexdigest()[:16] for name in BOOTSTRAP}
 
 html = SRC.read_text(encoding="utf-8")
 vocab = (HERE / "vocab.js").read_text(encoding="utf-8")
@@ -568,7 +570,7 @@ rep('<a class="skip-link" href="#companion-main">Skip to companion</a>\n',
 
 # ---- client scripts: config (deployment overrides) + backend (auth gate wiring) ----
 rep('</script>\n</body>\n</html>',
-    '</script>\n<script src="config.js"></script>\n<script src="native-api.js"></script>\n<script src="native-device.js"></script>\n<script src="pi-camera.js"></script>\n<script src="paired-camera-store.js"></script>\n<script src="backend.js"></script>\n</body>\n</html>')
+    '</script>\n' + ''.join(f'<script src="{bootstrap_urls[name]}"></script>\n' for name in BOOTSTRAP) + '</body>\n</html>')
 
 
 # ---- Offline companion: no narration while a search is guiding; route the new voice abilities ----
@@ -639,14 +641,17 @@ DST.write_text(html, encoding="utf-8", newline="\n")
 print("wrote", DST, len(html.encode("utf-8")), "bytes")
 
 # ---- service worker: a new cache name per build, so stale shells are dropped on activate ----
-import hashlib
 sw_path = DST.parent / "sw.js"
 sw = sw_path.read_text(encoding="utf-8")
+shell_assets = ("manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png", "brand/astha-mulberry-apricot-v1.png", "brand/astha-mulberry-apricot-dark-v1.png")
+shell_urls = ["./", "./index.html"] + ["./" + bootstrap_urls[name] for name in BOOTSTRAP] + ["./" + name for name in shell_assets]
+sw, replacements = re.subn(r"^const SHELL = .*;$", "const SHELL = " + json.dumps(shell_urls) + ";", sw, count=1, flags=re.MULTILINE)
+assert replacements == 1, 'Service-worker shell URL anchor is missing.'
 shell_hash = hashlib.sha256(html.encode("utf-8"))
 # Bootstrap/config-only changes must invalidate cache-first resources, too. Normalize the
 # stamp itself to avoid a circular hash and keep successive builds byte-for-byte identical.
 shell_hash.update(re.sub(r"const CACHE = 'astha-shell-[^']*';", "const CACHE = 'astha-shell-STAMP';", sw).encode("utf-8"))
-for asset in ("config.js", "native-api.js", "native-device.js", "pi-camera.js", "paired-camera-store.js", "backend.js", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png", "brand/astha-mulberry-apricot-v1.png", "brand/astha-mulberry-apricot-dark-v1.png"):
+for asset in BOOTSTRAP + shell_assets:
     shell_hash.update(asset.encode("utf-8"))
     shell_hash.update((DST.parent / asset).read_bytes())
 stamp = shell_hash.hexdigest()[:10]

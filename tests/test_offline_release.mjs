@@ -159,8 +159,10 @@ test('historical download markers do not claim offline readiness after cache evi
 });
 
 const swSource = fs.readFileSync(new URL('../web/sw.js', import.meta.url), 'utf8');
+const shellPaths = JSON.parse(/^const SHELL = (.*);$/m.exec(swSource)[1]);
+const bootstrapPath = name => shellPaths.find(path => path.startsWith('./' + name + '?v='));
 function serviceWorker() {
-  const events = new Map(), entries = new Map(), removed = [], added = [];
+  const events = new Map(), entries = new Map(), removed = [], added = [], addedRequests = [];
   const oldEntries = new Map(), otherEntries = new Map();
   const currentName = /const CACHE = '([^']+)'/.exec(swSource)[1];
   const stores = new Map([[currentName, entries], ['astha-shell-old', oldEntries], ['transformers-cache', otherEntries]]);
@@ -169,7 +171,10 @@ function serviceWorker() {
     if (!stores.has(name)) stores.set(name, new Map());
     const store = stores.get(name);
     return {
-      addAll: async paths => { added.push(...paths); for (const p of paths) store.set(key(p), new Response('cached shell')); },
+      addAll: async paths => { addedRequests.push(...paths); for (const p of paths) {
+        added.push('./' + key(p).slice('https://app.example/astha/'.length));
+        store.set(key(p), new Response('cached shell'));
+      } },
       add: async request => added.push(key(request)), match: async request => store.get(key(request))?.clone(),
       put: async (request, response) => store.set(key(request), response),
     };
@@ -180,12 +185,13 @@ function serviceWorker() {
     fetch: async () => { throw new Error('offline'); }, URL, Request, Response, AbortSignal, Set, Promise,
   };
   vm.createContext(context); vm.runInContext(swSource, context);
-  return { context, events, entries, oldEntries, otherEntries, stores, removed, added };
+  return { context, events, entries, oldEntries, otherEntries, stores, removed, added, addedRequests };
 }
 test('service-worker install caches bootstrap dependencies and preserves unrelated caches', async () => {
   const s = serviceWorker(); let pending;
   s.events.get('install')({ waitUntil: promise => { pending = promise; } }); await pending;
-  assert(s.added.includes('./config.js')); assert(s.added.includes('./backend.js'));
+  assert(s.added.includes(bootstrapPath('config.js'))); assert(s.added.includes(bootstrapPath('backend.js')));
+  assert(s.addedRequests.every(request => request.cache === 'reload'), 'installation bypasses an older release HTTP cache, including HTML');
   assert(s.added.includes('./brand/astha-mulberry-apricot-v1.png'), 'the header logo is available in the installed offline shell');
   assert(s.added.includes('./brand/astha-mulberry-apricot-dark-v1.png'), 'and its dark-theme variant');
   s.events.get('activate')({ waitUntil: promise => { pending = promise; } }); await pending;
@@ -257,7 +263,8 @@ test('offline navigation falls back to the shell; server errors are never cached
 test('an installed shell and its bootstrap scripts stay on one version during an upgrade', async () => {
   const s = serviceWorker(); let requests = 0;
   s.entries.set('https://app.example/astha/', new Response('HTML-v1'));
-  s.entries.set('https://app.example/astha/backend.js', new Response('backend-v1'));
+  const backendURL = new URL(bootstrapPath('backend.js'), 'https://app.example/astha/').href;
+  s.entries.set(backendURL, new Response('backend-v1'));
   s.context.fetch = async request => { requests++; return new Response(request.url.endsWith('backend.js') ? 'backend-v2' : 'HTML-v2'); };
   async function resource(url, mode) {
     let pending;
@@ -265,6 +272,27 @@ test('an installed shell and its bootstrap scripts stay on one version during an
     return (await pending).text();
   }
   assert.equal(await resource('https://app.example/astha/', 'navigate'), 'HTML-v1');
-  assert.equal(await resource('https://app.example/astha/backend.js', 'cors'), 'backend-v1');
+  assert.equal(await resource(backendURL, 'cors'), 'backend-v1');
   assert.equal(requests, 0);
+});
+
+test('every exact versioned HTML bootstrap request is available offline; other versions and private queries bypass the worker', async () => {
+  const s = serviceWorker(); let pending, fetched = 0;
+  s.events.get('install')({ waitUntil: promise => { pending = promise; } }); await pending;
+  s.context.fetch = async () => { fetched++; throw new Error('offline'); };
+  const html = fs.readFileSync(new URL('../web/index.html', import.meta.url), 'utf8');
+  const scripts = [...html.matchAll(/<script src="([^"<>]+\.js\?v=[0-9a-f]{16})"><\/script>/g)].map(match => match[1]);
+  assert.equal(scripts.length, 6);
+  for (const script of scripts) {
+    const url = new URL(script, 'https://app.example/astha/').href;
+    let response;
+    s.events.get('fetch')({ request: { url, method: 'GET', mode: 'cors' }, respondWith: promise => { response = promise; } });
+    assert.equal(await (await response).text(), 'cached shell', script);
+    let intercepted = false;
+    for (const unapproved of [url.replace(/v=[^&]+/, 'v=unapproved'), url + '&private=excluded']) {
+      s.events.get('fetch')({ request: { url: unapproved, method: 'GET', mode: 'cors' }, respondWith() { intercepted = true; } });
+      assert.equal(intercepted, false, unapproved);
+    }
+  }
+  assert.equal(fetched, 0);
 });

@@ -19,6 +19,7 @@ import { createRequestObservability } from './observability.js';
 import { db, storageReady } from './db.js';
 import { getAllowedOrigins, getTrustProxyHops, getPublicOrigin, isAllowedOrigin, originGuard, createAuthRateLimiter, validateAuthBody } from './security.js';
 import { isBody, isText, isFrame } from './validate.js';
+import { staticCacheOptions } from './static-cache.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const WEB_DIR = path.join(__dirname, '..', 'web');
@@ -163,9 +164,10 @@ app.use('/api', authMiddleware, createSpeechRouter(synthesize));
 app.use('/api', (req, res) => res.status(404).json({ error: 'not_found' }));
 
 // ---- Static PWA ----
-app.use(express.static(WEB_DIR, { maxAge: IS_PROD ? '1d' : 0 }));
+app.use(express.static(WEB_DIR, staticCacheOptions(IS_PROD)));
 app.get('*', (req, res, next) => {
   if (req.path.startsWith('/api')) return next();
+  res.set('Cache-Control', 'no-cache');
   res.sendFile(path.join(WEB_DIR, 'index.html'));
 });
 

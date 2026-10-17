@@ -1,6 +1,6 @@
 // Cache only approved static resources. API responses and private audio are never cached.
-const CACHE = 'astha-shell-628aa90c3b';
-const SHELL = ['./', './index.html', './config.js', './native-api.js', './native-device.js', './pi-camera.js', './paired-camera-store.js', './backend.js', './manifest.webmanifest', './icons/icon-192.png', './icons/icon-512.png', './brand/astha-mulberry-apricot-v1.png', './brand/astha-mulberry-apricot-dark-v1.png'];
+const CACHE = 'astha-shell-ac5175ae93';
+const SHELL = ["./", "./index.html", "./config.js?v=30c48482c4ec5d17", "./native-api.js?v=50bbaa237bb28bf0", "./native-device.js?v=69e88412ed8019df", "./pi-camera.js?v=b47ab8360de716b3", "./paired-camera-store.js?v=4c7c67c7dd3f3620", "./backend.js?v=2919aa118e6906cf", "./manifest.webmanifest", "./icons/icon-192.png", "./icons/icon-512.png", "./brand/astha-mulberry-apricot-v1.png", "./brand/astha-mulberry-apricot-dark-v1.png"];
 const RUNTIMES = [
   'https://cdn.jsdelivr.net/npm/onnxruntime-web@1.21.0/dist/ort.webgpu.min.js',
   'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.20.0/dist/tf.min.js',
@@ -18,7 +18,9 @@ function fetchDeadline() {
 self.addEventListener('install', event => {
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE);
-    await cache.addAll(SHELL);
+    // An older deployment may have given HTML/bootstrap files a fresh HTTP cache entry.
+    // A new installed shell must fetch its own release, not import that stale entry.
+    await cache.addAll(SHELL.map(path => new Request(new URL(path, self.location.href), { cache: 'reload' })));
     // Optional vision runtimes enter the cache on first use. Opening Home must not
     // download every AI library or delay shell activation while waiting for a CDN.
     // Preserve already downloaded, still-approved runtimes across a shell update
