@@ -53,6 +53,7 @@ const AsthaExperience = (() => {
   const hazardPriority = type => CRITICAL_HAZARDS.has(String(type)) ? 'critical' : 'medium';
   // 'critical', 'medium' or null. A nearby person, table or chair never outranks an answer.
   function acceptHazard(type) {
+    if (type === 'body_collision' && !monitoring()) return null;
     const priority = hazardPriority(type);
     return admit(priority, 'hazard:' + type) ? priority : null;
   }
@@ -125,6 +126,10 @@ const AsthaExperience = (() => {
     // A message being answered owns the next request, as the guide does.
     if (typeof AsthaMessages !== 'undefined' && AsthaMessages.route(query)) return true;
     if (typeof AsthaObservationMemory !== 'undefined' && AsthaObservationMemory.route(query)) return true;
+    // "Which AI are you using?" and "are you online?" are answered from what actually happened.
+    if (typeof AsthaAiStatus !== 'undefined' && AsthaAiStatus.route(query)) return true;
+    // "Connect to my camera", "is my ClipCam connected", "forget this camera" and their Bangla forms.
+    if (typeof AsthaCameraKit !== 'undefined' && AsthaCameraKit.route(query)) return true;
     // A complete greeting or identity question is local; quoted words and reading tasks
     // keep their normal route. A guided setup or message reply still owns its next answer.
     const greeting = q.normalize('NFC').replace(/[.!?।\s]+$/, '');
@@ -491,7 +496,9 @@ const AsthaExperience = (() => {
     }
     document.addEventListener('visibilitychange', () => { if (document.hidden) { visualGeneration++; contextGeneration++; clearTimeout(boardTimer); boardTimer = null; } else if (mode === 'reading' && !boardTimer) boardTimer = setTimeout(checkBoard, 5000); });
     fillForm(preferences);
-    showPage('home', { focus: false, speakTitle: false });
+    // A presentation shortcut may open the existing view; camera access still requires
+    // an explicitly remembered kit or the normal camera permission control.
+    showPage(typeof location !== 'undefined' && location.hash === '#detailed-view' ? 'tools' : 'home', { focus: false, speakTitle: false });
     // Consent lasts one session. Someone who chose Online last time is asked again at the
     // start, so the Bangla voice does not stay unavailable until they find the switch.
     if (typeof Subscription !== 'undefined' && Subscription.getMode() === 'gemini' && !remoteProcessingAllowed() &&

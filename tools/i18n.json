@@ -1,5 +1,6 @@
 {
  "strings": {
+  "brand_logo_alt": ["Astha", "আস্থা"],
   "auto_memory_label": ["Automatically remember important objects", "দরকারি জিনিস স্বয়ংক্রিয়ভাবে মনে রাখুন"],
   "auto_memory_help": ["Off by default. While your camera is active, save possible sightings of laptops, phones, glasses, wallets and ID cards with their time and image position. Ask before saving other selected personal objects. No photos or ID text are saved. Online sync requires your existing online consent.", "শুরুতে বন্ধ। ক্যামেরা চালু থাকলে ল্যাপটপ, ফোন, চশমা, মানিব্যাগ ও পরিচয়পত্রের সম্ভাব্য দেখা, সময় ও ছবিতে অবস্থান রাখুন। অন্য বাছাই করা ব্যক্তিগত জিনিস রাখতে আগে জিজ্ঞাসা করা হবে। ছবি বা পরিচয়পত্রের লেখা রাখা হয় না। অনলাইনে সংরক্ষণে আপনার অনলাইন অনুমতি লাগবে।"],
   "identity_intro": ["Hello, I am Astha, your AI vision companion.", "হ্যালো, আমি আস্থা, আপনার এআই দৃষ্টি সহায়ক।"],
@@ -24,7 +25,17 @@
   "vision_checking": ["Checking this frame with the local object detector.", "স্থানীয় বস্তু শনাক্তকারী দিয়ে এই ছবিটি দেখা হচ্ছে।"],
   "vision_live_results": ["Showing recent camera detections. Boxes can lag behind movement and objects can be missed.", "ক্যামেরায় সদ্য শনাক্ত হওয়া বস্তু দেখানো হচ্ছে। নড়াচড়ার পরে বক্স পিছিয়ে থাকতে পারে, আর বস্তু বাদ পড়তে পারে।"],
   "vision_image_results": ["Showing detections in the selected image, not live surroundings.", "নির্বাচিত ছবির শনাক্তকরণ দেখানো হচ্ছে, সরাসরি চারপাশের দৃশ্য নয়।"],
-  "vision_none": ["This frame produced no object boxes. Objects or hazards can still be present.", "এই ছবিতে বস্তু ঘিরে কোনো বক্স পাওয়া যায়নি। তবুও বস্তু বা বিপদ থাকতে পারে।"],
+  "vision_no_boxes": ["This frame produced no object boxes. Objects or hazards can still be present.", "এই ছবিতে বস্তু ঘিরে কোনো বক্স পাওয়া যায়নি। তবুও বস্তু বা বিপদ থাকতে পারে।"],
+  "vision_description_title": ["Picture description", "ছবির বর্ণনা"],
+  "vision_description_help": ["A description is of one captured picture, not continuous video understanding. Ask again when the view changes.", "বর্ণনাটি একটি তোলা ছবির, একটানা ভিডিওর নয়। দৃশ্য বদলালে আবার জিজ্ঞাসা করুন।"],
+  "vision_describe": ["Describe this view in detail", "এই দৃশ্য বিস্তারিত বলুন"],
+  "vision_description_empty": ["No description for this view yet. Choose Describe this view in detail.", "এই দৃশ্যের বর্ণনা এখনও নেই। এই দৃশ্য বিস্তারিত বলুন বেছে নিন।"],
+  "vision_description_meta": ["Captured at {time} · {source} · {provider}. This describes that picture; the scene may have changed.", "{time}-এ তোলা · {source} · {provider}। বর্ণনাটি সেই ছবির; দৃশ্য বদলে যেতে পারে।"],
+  "vision_description_pi": ["Paired ClipCam", "সংযুক্ত ক্লিপক্যাম"],
+  "vision_description_camera": ["Device camera", "ডিভাইসের ক্যামেরা"],
+  "vision_description_image": ["Selected image", "নির্বাচিত ছবি"],
+  "vision_description_online": ["Online AI", "অনলাইন এআই"],
+  "vision_description_local": ["On-device detector", "ডিভাইসের শনাক্তকারী"],
   "vision_clip_only": ["Showing CLIP zone matches only. The object detector has not completed a check.", "শুধু CLIP এলাকার মিল দেখানো হচ্ছে। বস্তু শনাক্তকারী পরীক্ষা শেষ করেনি।"],
   "vision_stale": ["Previous results are stale. Run another check or reconnect the camera.", "আগের ফল পুরোনো হয়ে গেছে। আবার শনাক্ত করুন অথবা ক্যামেরা পুনরায় যুক্ত করুন।"],
   "vision_waiting": ["Source selected. Run one check, or wait for camera recognition.", "দৃশ্য বেছে নেওয়া হয়েছে। একবার শনাক্ত করুন, অথবা ক্যামেরায় শনাক্তকরণের অপেক্ষা করুন।"],
@@ -42,6 +53,39 @@
   "vision_count": ["Object boxes: {boxes}; CLIP zones: {zones}.", "বস্তুর বক্স: {boxes}; CLIP এলাকা: {zones}।"],
   "vision_box_label": ["{label} · model {score}%", "{label} · মডেল {score}%"],
   "vision_clip_label": ["{label} · CLIP ranking {score}", "{label} · CLIP ক্রমস্কোর {score}"],
+  "ai_status_title": ["Which AI is working", "কোন এআই কাজ করছে"],
+  "ai_status_help": ["Boxes on the picture always come from the detector on this device. Spoken descriptions come from the online service only when it is allowed and answers; otherwise this device answers. No picture, request text or key is kept here.", "ছবির বক্সগুলো সবসময় এই ডিভাইসের শনাক্তকারী থেকে আসে। কথায় বর্ণনা অনলাইন পরিষেবা থেকে আসে শুধু যখন অনুমতি আছে এবং সেটি উত্তর দেয়; নইলে এই ডিভাইস উত্তর দেয়। এখানে কোনো ছবি, অনুরোধের লেখা বা কি রাখা হয় না।"],
+  "ai_row_camera": ["Pictures", "ছবি"],
+  "ai_row_boxes": ["Boxes and labels", "বক্স ও লেবেল"],
+  "ai_row_online": ["Spoken descriptions", "কথায় বর্ণনা"],
+  "ai_row_last": ["Last online request", "শেষ অনলাইন অনুরোধ"],
+  "ai_camera_pi_live": ["ASTHA ClipCam, live.", "আস্থা ক্লিপক্যাম, এখনকার ছবি।"],
+  "ai_camera_pi_waiting": ["ASTHA ClipCam, but no fresh picture right now.", "আস্থা ক্লিপক্যাম, তবে এখন নতুন ছবি নেই।"],
+  "ai_camera_phone": ["Phone camera, live.", "ফোনের ক্যামেরা, এখনকার ছবি।"],
+  "ai_camera_photo": ["A selected photo, not live.", "বাছাই করা ছবি, এখনকার নয়।"],
+  "ai_camera_demo": ["A demo photo, not your surroundings.", "ডেমো ছবি, আপনার চারপাশ নয়।"],
+  "ai_camera_none": ["No camera on.", "কোনো ক্যামেরা চালু নেই।"],
+  "ai_boxes_running": ["On-device detector, running now. These boxes are not online AI results.", "এই ডিভাইসের শনাক্তকারী, এখন চলছে। এই বক্সগুলো অনলাইন এআইয়ের ফল নয়।"],
+  "ai_boxes_ready": ["On-device detector, loaded but not running.", "এই ডিভাইসের শনাক্তকারী, লোড হয়েছে কিন্তু চলছে না।"],
+  "ai_boxes_off": ["On-device detector not loaded.", "এই ডিভাইসের শনাক্তকারী লোড হয়নি।"],
+  "ai_online_allowed": ["Online: {provider} through the ASTHA server, allowed for this session.", "অনলাইন: আস্থা সার্ভারের মাধ্যমে {provider}, এই সেশনে অনুমতি আছে।"],
+  "ai_online_consent": ["Online is chosen but needs your permission; this device answers until then.", "অনলাইন বাছাই করা, কিন্তু আপনার অনুমতি লাগবে; ততক্ষণ এই ডিভাইস উত্তর দেবে।"],
+  "ai_online_offline_mode": ["On-device mode: nothing is sent online.", "ডিভাইস মোড: কিছুই অনলাইনে পাঠানো হয় না।"],
+  "ai_online_unavailable": ["The online service is not reachable; this device answers instead.", "অনলাইন পরিষেবা পাওয়া যাচ্ছে না; এর বদলে এই ডিভাইস উত্তর দেয়।"],
+  "ai_online_unchecked": ["Online service not checked yet.", "অনলাইন পরিষেবা এখনো যাচাই হয়নি।"],
+  "ai_provider_maira": ["Maira AI", "মায়রা এআই"],
+  "ai_provider_gemini": ["Gemini", "জেমিনি"],
+  "ai_provider_cloud": ["the online model", "অনলাইন মডেল"],
+  "ai_last_none": ["None yet in this session.", "এই সেশনে এখনো নেই।"],
+  "ai_last_running": ["An online request is in progress.", "একটি অনলাইন অনুরোধ চলছে।"],
+  "ai_last_online": ["Online answer at {time}, in {seconds} seconds.", "{time}-এ অনলাইন উত্তর, {seconds} সেকেন্ডে।"],
+  "ai_last_failed": ["The online request at {time} failed: {reason}.", "{time}-এর অনলাইন অনুরোধ ব্যর্থ: {reason}।"],
+  "ai_last_fallback": ["This device answered at {time}, because the online request failed.", "অনলাইন অনুরোধ ব্যর্থ হওয়ায় {time}-এ এই ডিভাইস উত্তর দিয়েছে।"],
+  "ai_last_cancelled": ["The online request at {time} was cancelled.", "{time}-এর অনলাইন অনুরোধ বাতিল হয়েছে।"],
+  "ai_reason_busy": ["the service was busy", "পরিষেবা ব্যস্ত ছিল"],
+  "ai_reason_unavailable": ["the service was unavailable", "পরিষেবা পাওয়া যায়নি"],
+  "ai_reason_error": ["an unexpected reply", "অপ্রত্যাশিত উত্তর"],
+  "ai_voice_boxes": ["The boxes on the picture come from this device, not from online AI.", "ছবির বক্সগুলো এই ডিভাইস থেকে আসে, অনলাইন এআই থেকে নয়।"],
   "debug_title": ["Vision diagnostics", "দৃষ্টি শনাক্তকরণের পরীক্ষা"],
   "debug_help": ["The preview and boxes above use actual model results. Scores are model scores, not verified accuracy. Timing is collected only while this panel is open and stays on this device.", "উপরের ছবি ও বক্সে মডেলের আসল ফল দেখানো হয়। স্কোর হলো মডেলের স্কোর, যাচাইকৃত নির্ভুলতা নয়। শুধু এই অংশ খোলা থাকলে সময় মাপা হয় এবং তথ্য এই ডিভাইসেই থাকে।"],
   "debug_perception": ["Object detection", "বস্তু শনাক্তকরণ"],
@@ -990,8 +1034,8 @@
    "ওয়াই-ফাই ক্যামেরা জুড়ুন"
   ],
   "pi_help": [
-   "Keep the camera and this phone on the same Wi-Fi. Enter the camera's secure address and its private pairing code. The code is kept only until you disconnect or close Astha.",
-   "ক্যামেরা ও এই ফোন একই ওয়াই-ফাইয়ে রাখুন। ক্যামেরার সুরক্ষিত ঠিকানা ও ব্যক্তিগত পেয়ারিং কোড দিন। সংযোগ বন্ধ বা আস্থা বন্ধ না করা পর্যন্তই কোডটি রাখা হয়।"
+   "Keep the camera and this phone on the same Wi-Fi. Enter the camera's secure address and its private pairing code. Tick Remember to pair only once; otherwise the code is kept only until you disconnect or close Astha.",
+   "ক্যামেরা ও এই ফোন একই ওয়াই-ফাইয়ে রাখুন। ক্যামেরার সুরক্ষিত ঠিকানা ও ব্যক্তিগত পেয়ারিং কোড দিন। একবারই জুড়তে ‘মনে রাখুন’ বাছাই করুন; না হলে সংযোগ বন্ধ বা আস্থা বন্ধ না করা পর্যন্তই কোডটি রাখা হয়।"
   ],
   "pi_address": [
    "Camera HTTPS address",
@@ -1080,6 +1124,150 @@
   "pi_source": [
    "Paired Wi-Fi camera · Current view",
    "যুক্ত ওয়াই-ফাই ক্যামেরা · বর্তমান দৃশ্য"
+  ],
+  "pi_remember": [
+   "Remember this ClipCam on this device and reconnect by itself",
+   "এই ডিভাইসে ক্লিপক্যামটি মনে রাখুন এবং নিজে থেকেই যুক্ত হোক"
+  ],
+  "kit_title": [
+   "Your ASTHA ClipCam",
+   "আপনার আস্থা ক্লিপক্যাম"
+  ],
+  "kit_none": [
+   "No ASTHA ClipCam is remembered on this device. Pair it once on the Devices page.",
+   "এই ডিভাইসে কোনো আস্থা ক্লিপক্যাম মনে রাখা নেই। ডিভাইস পাতায় একবার জুড়ে নিন।"
+  ],
+  "kit_saved": [
+   "Your ASTHA ClipCam is remembered but not connected. Say: connect to my camera.",
+   "আপনার আস্থা ক্লিপক্যাম মনে রাখা আছে, তবে এখন যুক্ত নয়। বলুন: ক্যামেরা সংযোগ করো।"
+  ],
+  "kit_looking": [
+   "Looking for your ASTHA ClipCam.",
+   "আপনার আস্থা ক্লিপক্যাম খোঁজা হচ্ছে।"
+  ],
+  "kit_connected": [
+   "Your ASTHA ClipCam is connected.",
+   "আপনার আস্থা ক্লিপক্যাম যুক্ত হয়েছে।"
+  ],
+  "kit_interrupted": [
+   "ClipCam connection interrupted. Reconnecting automatically.",
+   "ক্লিপক্যামের সংযোগ বিঘ্নিত হয়েছে। নিজে থেকেই আবার যুক্ত করার চেষ্টা চলছে।"
+  ],
+  "kit_waiting": [
+   "ClipCam not found yet. The phone camera is still available. Astha will keep looking while it is open.",
+   "ক্লিপক্যাম এখনো পাওয়া যায়নি। ফোনের ক্যামেরা ব্যবহার করা যাবে। আস্থা খোলা থাকলে খোঁজা চলবে।"
+  ],
+  "kit_camera_unavailable": [
+   "Your ClipCam answered, but its camera is not sending fresh pictures. Check the camera cable. Astha will keep trying.",
+   "ক্লিপক্যাম সাড়া দিয়েছে, কিন্তু এর ক্যামেরা নতুন ছবি পাঠাচ্ছে না। ক্যামেরার তার দেখুন। আস্থা চেষ্টা চালিয়ে যাবে।"
+  ],
+  "kit_paused": [
+   "ClipCam paused while Astha is in the background. No pictures are taken.",
+   "আস্থা পেছনে থাকায় ক্লিপক্যাম থামানো আছে। কোনো ছবি নেওয়া হচ্ছে না।"
+  ],
+  "kit_rejected": [
+   "Your ClipCam no longer accepts the saved pairing, so Astha forgot it. Pair it again on the Devices page.",
+   "আপনার ক্লিপক্যাম সংরক্ষিত পেয়ারিং আর গ্রহণ করছে না, তাই আস্থা এটি ভুলে গেছে। ডিভাইস পাতায় আবার জুড়ে নিন।"
+  ],
+  "kit_mismatch": [
+   "The device at your ClipCam's address could not prove it is your paired ClipCam, so Astha did not send it the pairing code. If you changed the ClipCam's code, pair it again on the Devices page.",
+   "আপনার ক্লিপক্যামের ঠিকানায় যে ডিভাইস সাড়া দিয়েছে, সেটি আপনার জোড়া ক্লিপক্যাম বলে প্রমাণ দিতে পারেনি, তাই আস্থা তাকে পেয়ারিং কোড পাঠায়নি। ক্লিপক্যামের কোড বদলে থাকলে ডিভাইস পাতায় আবার জুড়ে নিন।"
+  ],
+  "kit_other_source": [
+   "The phone camera or a photo is in use. Say: connect to my camera, to switch to the ClipCam.",
+   "ফোনের ক্যামেরা বা ছবি ব্যবহার হচ্ছে। ক্লিপক্যামে যেতে বলুন: ক্যামেরা সংযোগ করো।"
+  ],
+  "kit_storage_failed": [
+   "This device could not keep the ClipCam pairing safely. You can still connect with the code each time.",
+   "এই ডিভাইস ক্লিপক্যামের পেয়ারিং নিরাপদে রাখতে পারেনি। প্রতিবার কোড দিয়ে যুক্ত করতে পারবেন।"
+  ],
+  "kit_detail": [
+   "Address: {address}. Camera: {model}.",
+   "ঠিকানা: {address}। ক্যামেরা: {model}।"
+  ],
+  "kit_model_unknown": [
+   "not reported yet",
+   "এখনো জানানো হয়নি"
+  ],
+  "kit_storage_android": [
+   "The pairing code is sealed by this phone's Android Keystore and never leaves the phone.",
+   "পেয়ারিং কোডটি এই ফোনের অ্যান্ড্রয়েড কিস্টোরে সুরক্ষিত, এবং ফোনের বাইরে যায় না।"
+  ],
+  "kit_storage_browser": [
+   "The pairing code is kept encrypted in this browser only. Browser storage is not hardware-protected; the Android app protects it more strongly.",
+   "পেয়ারিং কোডটি শুধু এই ব্রাউজারে এনক্রিপ্ট করে রাখা। ব্রাউজারের সংরক্ষণ হার্ডওয়্যার-সুরক্ষিত নয়; অ্যান্ড্রয়েড অ্যাপ একে আরও শক্তভাবে সুরক্ষিত রাখে।"
+  ],
+  "kit_storage_none": [
+   "This browser cannot remember a ClipCam securely. The code is kept only until you disconnect.",
+   "এই ব্রাউজার ক্লিপক্যাম নিরাপদে মনে রাখতে পারে না। সংযোগ বন্ধ না করা পর্যন্তই কোড রাখা হয়।"
+  ],
+  "kit_auto": [
+   "Reconnect automatically while Astha is open",
+   "আস্থা খোলা থাকলে নিজে থেকেই আবার যুক্ত হবে"
+  ],
+  "kit_connect": [
+   "Connect my ClipCam",
+   "আমার ক্লিপক্যাম যুক্ত করুন"
+  ],
+  "kit_disconnect": [
+   "Disconnect",
+   "সংযোগ বিচ্ছিন্ন করুন"
+  ],
+  "kit_forget": [
+   "Forget this ClipCam",
+   "এই ক্লিপক্যাম ভুলে যান"
+  ],
+  "kit_code_required": [
+   "Needed the first time only, when Remember is ticked.",
+   "‘মনে রাখুন’ বাছাই করা থাকলে শুধু প্রথমবার লাগবে।"
+  ],
+  "kit_code_optional": [
+   "Your ClipCam is remembered. To change its address, enter only the new address and leave the code empty.",
+   "আপনার ক্লিপক্যাম মনে রাখা আছে। ঠিকানা বদলাতে শুধু নতুন ঠিকানা দিন, কোড খালি রাখুন।"
+  ],
+  "kit_remembered": [
+   "ClipCam remembered on this device. Next time, Astha connects to it by itself.",
+   "এই ডিভাইসে ক্লিপক্যাম মনে রাখা হয়েছে। পরেরবার আস্থা নিজে থেকেই যুক্ত হবে।"
+  ],
+  "kit_status_live": [
+   "Your ASTHA ClipCam is connected and the picture is live.",
+   "আপনার আস্থা ক্লিপক্যাম যুক্ত আছে, ছবি এখনকার।"
+  ],
+  "kit_status_no_fresh": [
+   "Your ClipCam is connected, but no fresh picture has arrived in the last few seconds.",
+   "ক্লিপক্যাম যুক্ত আছে, কিন্তু গত কয়েক সেকেন্ডে নতুন ছবি আসেনি।"
+  ],
+  "kit_lost_keep_looking": [
+   "The ClipCam connection was lost. The phone camera is still available. Astha will keep looking while it is open.",
+   "ক্লিপক্যামের সংযোগ চলে গেছে। ফোনের ক্যামেরা ব্যবহার করা যাবে। আস্থা খোলা থাকলে খোঁজা চলবে।"
+  ],
+  "kit_disconnected": [
+   "ClipCam disconnected. It stays remembered. Say: connect to my camera, to use it again.",
+   "ক্লিপক্যাম বিচ্ছিন্ন করা হয়েছে, তবে মনে রাখা আছে। আবার ব্যবহার করতে বলুন: ক্যামেরা সংযোগ করো।"
+  ],
+  "kit_forgotten": [
+   "ClipCam forgotten. Its pairing code was removed from this device.",
+   "ক্লিপক্যাম ভুলে যাওয়া হয়েছে। এর পেয়ারিং কোড এই ডিভাইস থেকে মুছে ফেলা হয়েছে।"
+  ],
+  "kit_auto_on": [
+   "Automatic reconnection is on.",
+   "নিজে থেকে আবার যুক্ত হওয়া চালু।"
+  ],
+  "kit_auto_off": [
+   "Automatic reconnection is off. Say: connect to my camera, when you want it.",
+   "নিজে থেকে আবার যুক্ত হওয়া বন্ধ। প্রয়োজন হলে বলুন: ক্যামেরা সংযোগ করো।"
+  ],
+  "kit_forget_confirm": [
+   "Forget your ClipCam? You would need its pairing code again. Say yes to forget it, or no to keep it.",
+   "ক্লিপক্যাম ভুলে যাব? আবার পেয়ারিং কোড লাগবে। ভুলে যেতে বলুন হ্যাঁ, রাখতে বলুন না।"
+  ],
+  "kit_forget_cancelled": [
+   "Your ClipCam is still remembered.",
+   "আপনার ক্লিপক্যাম মনে রাখা আছে।"
+  ],
+  "kit_forget_dialog": [
+   "Forget this ClipCam? Its pairing code will be removed from this device, and you will need it to pair again.",
+   "এই ক্লিপক্যাম ভুলে যাবেন? এর পেয়ারিং কোড এই ডিভাইস থেকে মুছে যাবে, আবার জুড়তে কোডটি লাগবে।"
   ],
   "braille_practice_off": [
    "Start keyboard practice",

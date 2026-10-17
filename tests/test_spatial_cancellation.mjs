@@ -19,7 +19,7 @@ const settle = () => new Promise(resolve => setImmediate(resolve));
 const map = { w: 3, h: 1, near: [0.8, 0.5, 0.3] };
 
 function harness() {
-  const calls = { models: 0, detect: 0, depth: 0, perception: 0, captions: [], speech: [], announcements: [], errors: [], memory: [] }, nodes = new Map();
+  const calls = { models: 0, detect: 0, depth: 0, perception: 0, perceptionOptions: [], captions: [], speech: [], announcements: [], errors: [], memory: [] }, nodes = new Map();
   const context = vm.createContext({
     state: { source: 'pi', sourceEpoch: 1, spatial: { previous: true }, memory: [], scene: { previous: true }, busy: false },
     privacyMode: false, privacyTransition: false, document: { hidden: false }, LocalStore: { KEY: 'synthetic-spatial-owner' },
@@ -30,7 +30,7 @@ function harness() {
     setCaption: (...args) => calls.captions.push(args), speak: (...args) => calls.speech.push(args), announce: (...args) => calls.announcements.push(args),
     stopReader() {}, stopListening() {}, VoiceEngine: { stop() {} }, OfflineEar: { active: false },
     captureFrame: () => ({ width: 640, height: 480 }),
-    perceptionHook: () => { calls.perception++; context.state.scene = { current: true }; },
+    perceptionHook: (_objects, _frame, options) => { calls.perception++; calls.perceptionOptions.push(options); context.state.scene = { current: true }; },
     addLocalMemory: value => calls.memory.push(value),
     AsthaSensors: { measured: () => null }, measuredPhrase: metres => 'measured at ' + metres + ' metres',
     objLabelWithArticle: object => 'a ' + object.id, objLabelBn: object => object.id,
@@ -88,4 +88,32 @@ test('ordinary depth failure and not-yet-loaded depth keep their existing feedba
   const loading = harness(); loading.context.DepthEngine.status = 'idle';
   await loading.run('answerSpatial()'); assert.match(loading.calls.announcements[0][0], /depth model.*loading/);
   assert.equal(loading.calls.detect, 0); assert.equal(loading.calls.depth, 0);
+});
+
+test('a changed sensor echo is current forward range, never a scale anchor for the earlier picture', async () => {
+  const h = harness(), wait = deferred(); let reading = { measured: true, metres: .4, at: 1000 };
+  h.context.AsthaSensors.measured = () => reading;
+  h.context.depthResult = () => wait.promise;
+  const pending = h.run('answerSpatial()'); await settle();
+  reading = { measured: true, metres: 1.6, at: 1200 };
+  wait.resolve(map); await pending;
+  assert.equal(h.calls.perceptionOptions[0].sensorReading, null);
+  assert.equal(h.calls.perceptionOptions[0].depthMap, map);
+  assert.equal(h.context.state.spatial.scaled, false);
+  assert.match(h.calls.speech[0][0], /Straight ahead: measured at 1\.6 metres\./);
+  assert.doesNotMatch(h.calls.speech[0][0], /measured at 0\.4/);
+});
+
+test('depth unavailable still gives the independent fresh Pi range and never claims to be loading when disabled', async () => {
+  for (const status of ['idle', 'error', 'ready']) {
+    const h = harness();
+    h.context.AsthaSensors.measured = () => ({ measured: true, metres: .85, at: 1000 });
+    h.context.DepthEngine.status = status;
+    h.context.DepthEngine.wanted = () => false;
+    h.context.depthResult = async () => null;
+    await h.run('answerSpatial()');
+    assert.match(h.calls.announcements[0][0], /Straight ahead: measured at 0\.85 metres\./);
+    assert.doesNotMatch(h.calls.announcements[0][0], /loading|nothing seen|clear|safe/i);
+    assert.match(h.calls.announcements[0][1], /সোজা সামনে/);
+  }
 });

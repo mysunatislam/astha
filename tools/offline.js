@@ -905,8 +905,8 @@ function offlineRoute(query, q) {
   if (guide) { Seeker.start(nounAfter(q, guide[0]), 'guide'); return true; }
   const guideBn = q.match(/([ঀ-৿\s]+?)(?:-?এর| এর)?\s*(কাছে নিয়ে (?:চলো|যাও)|পথ দেখাও|দিকে নিয়ে (?:চলো|যাও))/);
   if (guideBn) { Seeker.start(guideBn[1].replace(/আমাকে|আমায়/g, '').trim(), 'guide'); return true; }
-  if (/how far|কত ?দূরে|koto dure/.test(q)) { answerHowFar(query); return true; }
   if (/\b(which way (should|can|do) i (go|walk|turn)|where can i (walk|go)|what('s| is) on (each|either|both) sides?|how far .* on (each|either|both) sides?|spatial (view|layout|map))\b|কোন দিকে (ফাঁকা|যাব|জায়গা)|চারদিকে কত দূরে|দুই পাশে কী|দুপাশে কী/.test(q)) { answerSpatial(); return true; }
+  if (/how far|কত ?দূরে|koto dure/.test(q)) { answerHowFar(query); return true; }
   if (/(which|what) room|what kind of (room|place)|what place is this|কোন ঘর|কোন রুম|kon ghor/.test(q)) { answerWhichRoom(); return true; }
   if (/describe (it |everything )?in detail|in detail|full description|বিস্তারিত/.test(q)) { describeScene(undefined, true); return true; }
   if (/what('s| is) (happening|going on)|whats (happening|going on)|what is around me|summari[sz]e|give me a summary|কী হচ্ছে|কি হচ্ছে|সারাংশ|ki hocche|ki hochche/.test(q)) { describeScene(); return true; }

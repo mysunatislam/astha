@@ -119,7 +119,7 @@ test('CLIP zones stay separate from detector boxes and never become percent conf
 
 test('actual empty detector output, loading and failures never fabricate object rows', async () => {
   const h = harness(); h.select('photo'); h.context.predictions = async () => []; await h.detect();
-  assert.equal(h.elements.get('vision-state').dataset.state, 'vision_none'); assert.equal(h.rows().length, 0);
+  assert.equal(h.elements.get('vision-state').dataset.state, 'vision_no_boxes'); assert.equal(h.rows().length, 0);
   assert.ok(h.elements.get('vision-results').dataset.frame);
   h.context.engine.coco.status = 'loading'; h.details.modelChanged(); assert.equal(h.elements.get('vision-state').dataset.state, 'vision_loading');
   h.context.engine.coco.status = 'error'; h.details.modelChanged(); assert.equal(h.elements.get('vision-state').dataset.state, 'vision_failed');
@@ -198,6 +198,48 @@ test('result rendering stays bounded and uses text cells rather than model suppl
   const h = harness(); h.select('photo'); const { frame, objects } = await h.detect();
   h.context.drawOverlay(frame, objects, Array.from({ length: 40 }, (_, i) => ({ id: 'zone-' + i, score: .2, pos: 'right', zone: { x: 0, y: 0, s: 100 } })));
   assert.equal(h.rows().length, 20); assert.ok(h.elements.get('vision-result-rows').children.every(row => row.children.length === 4));
+});
+
+test('a real captured-picture description survives status text and is explicitly timestamped and bilingual', () => {
+  const h = harness(); h.select('photo');
+  const frame = h.context.captureFrame();
+  assert.equal(h.details.describeResult(frame, { en: '<b>A chair beside a desk.</b>', bn: 'টেবিলের পাশে চেয়ার।' }, 'online'), true);
+  h.advance(20000); h.context.setCaption('Connection', 'Reconnected', 'system'); h.details.render();
+  assert.equal(h.elements.get('vision-description-text').textContent, '<b>A chair beside a desk.</b>', 'model text stays literal, separate from system captions');
+  assert.match(h.elements.get('vision-description-meta').textContent, /Captured at.*Selected image.*Online AI/);
+  h.context.uiLang = 'bn'; h.details.render(true);
+  assert.equal(h.elements.get('vision-description-text').textContent, 'টেবিলের পাশে চেয়ার।');
+  assert.match(h.elements.get('vision-description-meta').textContent, /তোলা/);
+});
+
+test('description ownership rejects late results and clears prior text after Stop, source, profile, privacy or background changes', () => {
+  for (const change of [h => h.run('AsthaCancellation.cancel()'), h => h.select('photo'),
+    h => { h.context.ASTHA_ACCOUNT_ID = 'replacement'; }, h => { h.context.LocalStore.KEY = 'other'; },
+    h => { h.context.privacyMode = true; }, h => { h.context.document.hidden = true; }]) {
+    const h = harness(); h.select('photo'); const frame = h.context.captureFrame();
+    assert(h.details.describeResult(frame, { en: 'Prior picture', bn: 'আগের ছবি' }, 'local'));
+    change(h); h.details.render();
+    assert.notEqual(h.elements.get('vision-description-text').textContent, 'Prior picture');
+    assert.equal(h.details.describeResult(frame, { en: 'Late picture', bn: 'দেরির ছবি' }, 'online'), false);
+  }
+});
+
+test('a delayed older picture description cannot replace a newer completed picture answer', () => {
+  const h = harness(); h.select('photo'); const earlier = h.context.captureFrame();
+  h.advance(8000); const newer = h.context.captureFrame();
+  assert(h.details.describeResult(newer, { en: 'Newer picture', bn: 'নতুন ছবি' }, 'online'));
+  assert.equal(h.details.describeResult(earlier, { en: 'Older picture', bn: 'আগের ছবি' }, 'online'), false);
+  assert.equal(h.elements.get('vision-description-text').textContent, 'Newer picture');
+});
+
+test('Detailed view describe button explicitly uses the established detailed action without a second camera or periodic request', async () => {
+  const h = harness(), requested = [];
+  h.context.describeScene = (...args) => requested.push(args); h.details.boot(); h.select('photo');
+  h.elements.get('vision-describe').events.click();
+  assert.deepEqual(requested, [[undefined, true]]);
+  assert.equal(h.calls.camera, 0); assert.equal(h.calls.network, 0);
+  assert.equal(strings.vision_none[0], 'I am blind and use speech or touch');
+  assert.match(strings.vision_no_boxes[0], /no object boxes/, 'detector empty state does not reuse the blindness setup label');
 });
 
 function identityHarness({ messageOwns = false } = {}) {

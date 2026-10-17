@@ -1377,7 +1377,7 @@ function motionPhrase(m, bn) {
 function narrateMotion(now) {
   const moving = worldSorted().filter(o => o.motion && o.src === 'coco' && o.score >= 0.55 && REAL_MOBILE_AGENTS.has(o.id));
   if (!moving.length) return false;
-  const urgent = moving.find(o => o.motion.dir === 'toward' && (o.motion.fast || (VOCAB_BY_ID[o.id] || {}).hz));
+  const urgent = moving.find(o => o.id !== 'person' && o.motion.dir === 'toward' && (o.motion.fast || (VOCAB_BY_ID[o.id] || {}).hz));
   const due = o => { const s = motion.said.get(o.id); return !s || s.dir !== o.motion.dir || now - s.t > 8000; };
   const pick = urgent || moving.find(due);
   if (!pick) return false;
@@ -2383,8 +2383,12 @@ async function trackItemPlacementOnFurniture(frame, cocoObjs) {
 const ApproachVelocityTracker = {
   history: [],
   lastAlertAt: new Map(),
+  sourceEpoch: null,
 
   evaluate(frameWidth, frameHeight, cocoObjs) {
+    if (this.sourceEpoch !== state.sourceEpoch) { this.history = []; this.sourceEpoch = state.sourceEpoch; }
+    const personMonitoring = typeof AsthaExperience !== 'undefined' && (AsthaExperience.mode === 'road' || state.shield);
+    if (!personMonitoring) this.history = this.history.filter(track => !track.isPerson);
     if (!cocoObjs || !cocoObjs.length) {
       const now = Date.now();
       this.history = this.history.filter(h => now - h.time < 1200);
@@ -2402,6 +2406,8 @@ const ApproachVelocityTracker = {
       const isPerson = obj.id === 'person';
       if (!isVehicle && !isPerson) continue;
       if (obj.score < 0.38) continue;
+      if (isPerson && (!personMonitoring || obj.score < 0.55 || obj.hazardMuted ||
+          obj.flags && (obj.flags.onScreen || obj.flags.toy || obj.flags.picture || obj.flags.doubtful))) continue;
 
       const [x, y, w, h] = obj.bbox;
       const area = w * h;
@@ -2465,19 +2471,21 @@ const ApproachVelocityTracker = {
             }
           }
 
-          // 2. BODY / PERSON APPROACHING WITH HIGH VELOCITY
+          // A large person box alone says nothing about approach or intent. Require
+          // repeated expansion at a consistent position while monitoring was requested.
           if (isPerson) {
-            const isRapidPersonApproach = (areaGrowthRatio >= 1.28 && expansionRatePerSec >= 0.48 && normArea >= 0.10 && cx >= 0.15 && cx <= 0.85);
-            const isImminentPersonCollision = (normArea >= 0.40 && cx >= 0.20 && cx <= 0.80);
+            const recent = this.history.filter(track => track.isPerson && now - track.time <= 1200 && Math.hypot(cx - track.cx, cy - track.cy) <= 0.10);
+            const sustained = new Set(recent.map(track => track.time)).size >= 2 && recent.some(track => now - track.time >= 450);
+            const isRapidPersonApproach = sustained && areaGrowthRatio >= 1.28 && expansionRatePerSec >= 0.48 && normArea >= 0.10 && cx >= 0.15 && cx <= 0.85;
 
-            if (isRapidPersonApproach || isImminentPersonCollision) {
+            if (isRapidPersonApproach) {
               const alertKey = `person_${Math.round(cx * 4)}`;
               if (now - (this.lastAlertAt.get(alertKey) || 0) > 2200) {
                 this.lastAlertAt.set(alertKey, now);
                 criticalHazard = {
                   type: 'body_collision',
-                  en: `Watch out! Person approaching rapidly ${dirEn}!`,
-                  bn: `সাবধান! ${dirBn} দ্রুত মানুষ এগিয়ে আসছে!`,
+                  en: `A person appears to be getting closer ${dirEn}. Check the space ahead.`,
+                  bn: `${dirBn} একজন মানুষ কাছে আসছেন বলে মনে হচ্ছে। সামনের জায়গা দেখে নিন।`,
                   pos: cx < 0.35 ? 'left' : cx > 0.65 ? 'right' : 'center',
                   haptic: 'RAPID'
                 };
@@ -2658,6 +2666,7 @@ async function togglePrivateMode() {
     stopAllSpeech();
     privacyMode = entering;
     if (privacyMode) {
+      if (typeof AsthaCameraKit !== 'undefined') AsthaCameraKit.privacyEntered();
       if (typeof AsthaExperience !== 'undefined') AsthaExperience.invalidatePreferences();
       remoteProcessingConsent = false;
       SiriVoice.enabled = false; SiriVoice.stop(true);

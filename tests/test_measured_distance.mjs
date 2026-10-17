@@ -91,7 +91,11 @@ test('"how far" with the Pi sensor answers from the measurement, naming the obje
   api.AsthaSensors.report('front', 0.85, 'ultrasonic');
   api.answerHowFar('how far is it');
   assert.deepEqual(plain(spoken.at(-1)), ['Something straight ahead is measured at 85 centimetres.', 'সোজা সামনে কিছু একটা আছে, সেন্সরে মাপা ৮৫ সেন্টিমিটার দূরে।']);
-  context.state.scene = { ahead: { metres: 0.85, object: { id: 'chair' } }, at: Date.now() };
+  const chair = object('chair', box(0.5, 0.55, 0.3, 0.4));
+  api.annotateGeometry(chair, FRAME, null);
+  const associated = api.applyMeasuredDistance([chair], FRAME, api.AsthaSensors.measured('front'));
+  assert.equal(associated.object, chair, 'the actual sensor association owns the current sample');
+  context.state.scene = { ahead: associated, at: Date.now() };
   api.answerHowFar('how far is it');
   assert.equal(spoken.at(-1)[0], 'The chair straight ahead is measured at 85 centimetres.');
   context.state.scene.at = Date.now() - 5000;

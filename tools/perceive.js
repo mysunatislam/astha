@@ -96,7 +96,9 @@ const DepthEngine = {
   // Runs the model on a small copy of the frame and stores a nearness map (0 = farthest, 1 = nearest).
   async run(frame, current = captureLocalActionGuard()) {
     if (!current()) return null;
-    if (this.status !== 'ready' || this.busy || !frame) return this.fresh(Infinity);
+    // A caller asking for this picture must never receive the previous picture's map.
+    // Live perception may explicitly consult fresh(); a one-shot measurement cannot.
+    if (this.status !== 'ready' || this.busy || !frame) return null;
     this.busy = true; const t0 = Date.now();
     try {
       const s = this.size / Math.max(frame.width, frame.height);
@@ -302,12 +304,12 @@ function applyRules(objs, graph, frame) {
 // Called from the live loop for every detector frame and from the one-shot describers.
 function perceptionHook(objs, frame, opts = {}) {
   if (!frame || !objs) return;
-  const depth = DepthEngine.fresh(opts.depthMaxAge || Math.max(3500, DepthEngine.lastMs * 3));
+  const depth = Object.hasOwn(opts, 'depthMap') ? opts.depthMap : DepthEngine.fresh(opts.depthMaxAge || Math.max(3500, DepthEngine.lastMs * 3));
   for (const o of objs) annotateGeometry(o, frame, depth);
   const graph = buildSceneGraph(objs, frame);
   applyRules(objs, graph, frame);
   // Only pictures from the paired Pi camera share the sensor's point of view.
-  const reading = state.source === 'pi' && typeof AsthaSensors !== 'undefined' ? AsthaSensors.measured('front') : null;
+  const reading = Object.hasOwn(opts, 'sensorReading') ? opts.sensorReading : state.source === 'pi' && typeof AsthaSensors !== 'undefined' ? AsthaSensors.measured('front') : null;
   const ahead = applyMeasuredDistance(objs, frame, reading);
   state.scene = Object.assign(graph, { frameW: frame.width, frameH: frame.height, hasDepth: !!depth, ahead, at: Date.now() });
   if (opts.noDepthKick) return;
@@ -397,6 +399,8 @@ function objLabelWithArticle(o) {
 
 // ---- Hazard decision, now aware of toys, screens and distance ----
 function isHazard(o) {
+  // A detected person, including a nearby one, is an observation rather than a hazard class.
+  if (o.id === 'person') return false;
   const f = o.flags || {};
   if (f.onScreen || f.toy || f.picture || f.doubtful || o.hazardMuted) return false;
   if (o.id === 'stairs' || o.id === 'drop_off') {
@@ -451,7 +455,7 @@ function sceneSummary(opts = {}) {
   if (!all.length) return { en: t('nothing_seen'), bn: tBn('nothing_seen') };
   if (graph.room && ROOM_WORDS[graph.room]) { en.push(`You seem to be ${ROOM_WORDS[graph.room][0]}.`); bn.push(`আপনি সম্ভবত ${ROOM_WORDS[graph.room][1]} আছেন।`); }
   // Hazards and approaching things first.
-  const hz = all.filter(o => isHazard(o) || (o.motion && o.motion.dir === 'toward' && (o.id === 'person' || VEHICLE_IDS.has(o.id))));
+  const hz = all.filter(o => isHazard(o) || (o.motion && o.motion.dir === 'toward' && VEHICLE_IDS.has(o.id)));
   hz.slice(0, 2).forEach(o => {
     const d = distPhrase(o, false), dB = distPhrase(o, true);
     const mv = o.motion && o.motion.dir === 'toward' ? ', ' + motionPhrase(o.motion, false) : '';
@@ -486,26 +490,35 @@ function sceneSummary(opts = {}) {
 // ---- "Describe" now goes through the summary above ----
 function describeScene(skipCloud, forceDetailed) {
   if (withCamera(describeScene)) return;
-  if (typeof cloudReady === 'function' && cloudReady() && !skipCloud) return cloudDescribe();
+  if (typeof cloudReady === 'function' && cloudReady() && !skipCloud) return cloudDescribe(forceDetailed === true);
   const current = captureLocalActionGuard();
   if (!current()) return;
   return withBusy(t('analyzing_title'), async () => {
     try {
     if (!(await ensureVisionModels()) || !current()) return;
     const frame = captureFrame(640); if (!frame) return;
+    const readingAtCapture = state.source === 'pi' && typeof AsthaSensors !== 'undefined' ? AsthaSensors.measured('front') : null;
     const [cocoObjs, clip] = await Promise.all([runCoco(frame), runClipZones(frame)]);
     if (!current()) return;
-    if (DepthEngine.status === 'ready') { try { await DepthEngine.run(frame, current); } catch (e) {} }
+    let depthMap = null;
+    if (DepthEngine.status === 'ready') { try { depthMap = await DepthEngine.run(frame, current); } catch (e) {} }
     else if (DepthEngine.status === 'idle' && DepthEngine.wanted()) DepthEngine.load().catch(() => {});
     if (!current()) return;
     if (typeof trackMotion === 'function' && state.source === 'camera') trackMotion(cocoObjs, frame);
-    perceptionHook(cocoObjs, frame, { noDepthKick: true, depthMaxAge: 60000 });
+    const reading = state.source === 'pi' && typeof AsthaSensors !== 'undefined' ? AsthaSensors.measured('front') : null;
+    // An echo taken after inference is not a measurement of an object in the old picture.
+    const matchingReading = reading && readingAtCapture && reading.at === readingAtCapture.at ? reading : null;
+    perceptionHook(cocoObjs, frame, { noDepthKick: true, depthMap, sensorReading: matchingReading });
     state.lastCocoPreds = cocoObjs; state.lastClipHits = clip.hits.map(h => Object.assign(h, { at: Date.now() }));
     state.world.clear(); ingest(cocoObjs.concat(clip.hits), state.source === 'camera' ? 3500 : 1e9); drawOverlay(frame, cocoObjs, clip.hits);
     const objs = worldSorted();
     const now = Date.now(); objs.forEach(o => state.announced.set(o.id, now));
-    if (!objs.length) { setCaption(t('describe_title'), t('nothing_seen'), 'vision', null, tBn('nothing_seen')); speak(t('nothing_seen'), tBn('nothing_seen')); return; }
+    if (!objs.length) {
+      if (typeof AsthaVisionDetails !== 'undefined') AsthaVisionDetails.describeResult(frame, { en: t('nothing_seen'), bn: tBn('nothing_seen') }, 'local');
+      setCaption(t('describe_title'), t('nothing_seen'), 'vision', null, tBn('nothing_seen')); speak(t('nothing_seen'), tBn('nothing_seen')); return;
+    }
     const s = sceneSummary({ detailed: forceDetailed || ($('description-style') && $('description-style').value !== 'short') });
+    if (typeof AsthaVisionDetails !== 'undefined') AsthaVisionDetails.describeResult(frame, s, 'local');
     setCaption(t('describe_title'), s.en, 'vision', null, s.bn);
     playEarcon('confirm'); speak(s.en, s.bn); haptic('CONFIRM');
     if (typeof heartPointAt === 'function') heartPointAt(objs[0]);
@@ -526,7 +539,7 @@ function answerHowFar(query) {
   if (ahead) {
     // The newest scene says what the echo came from; the number is the reading of this moment.
     const scene = state.scene || {};
-    const hit = scene.ahead && scene.ahead.object && Date.now() - (scene.at || 0) <= 2000 ? scene.ahead.object : null;
+    const hit = scene.ahead && scene.ahead.object && Date.now() - (scene.at || 0) <= 2000 && currentMeasuredDistance(scene.ahead.object) ? scene.ahead.object : null;
     if (hit) return announce(`The ${objLabel(hit)} straight ahead is ${measuredPhrase(ahead.metres, false)}.`, `সোজা সামনের ${objLabelBn(hit)} ${measuredPhrase(ahead.metres, true)}।`, 'vision');
     return announce(`Something straight ahead is ${measuredPhrase(ahead.metres, false)}.`, `সোজা সামনে কিছু একটা আছে, ${measuredPhrase(ahead.metres, true)}।`, 'vision');
   }

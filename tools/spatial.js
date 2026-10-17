@@ -2,9 +2,10 @@
    Spatial layout: a rough map of how far things are to the left,
    straight ahead and to the right, from one picture.
    The depth model only knows which parts of a picture are nearer. Its
-   output behaves like k / distance + c, so two known distances in the
-   same picture fix both numbers: the Pi's ultrasonic reading (measured)
-   and the size-based distances of recognised objects (estimates). With
+   rough fit assumes k / distance + c; it is not validated metric depth.
+   Two independent distances in the same picture can fit both numbers:
+   the Pi's ultrasonic reading and object-size estimates. Physical sensor
+   alignment, size priors and camera focal length still need calibration. With
    fewer than two, or with known distances that disagree, ASTHA says
    only which side is nearer. Nothing here calls a way clear or safe.
    ===================================================================== */
@@ -49,7 +50,10 @@ const AsthaSpatial = (() => {
     const c0 = Math.floor(x0 * map.w), c1 = Math.min(map.w, Math.ceil(x1 * map.w));
     const r0 = Math.floor(y0 * map.h), r1 = Math.min(map.h, Math.ceil(y1 * map.h));
     const values = [];
-    for (let r = r0; r < r1; r++) for (let c = c0; c < c1; c++) values.push(map.near[r * map.w + c]);
+    for (let r = r0; r < r1; r++) for (let c = c0; c < c1; c++) {
+      const value = map.near[r * map.w + c];
+      if (Number.isFinite(value) && value >= 0 && value <= 1) values.push(value);
+    }
     if (!values.length) return null;
     values.sort((a, b) => a - b);
     return values[Math.min(values.length - 1, Math.floor(values.length * 0.9))];
@@ -73,16 +77,24 @@ const AsthaSpatial = (() => {
     return anchors;
   }
   // objs: the detections of this picture after perceptionHook; map: DepthEngine output for it.
-  function layout(objs, frame, map, reading) {
+  function layout(objs, frame, map, reading, currentReading = reading) {
     if (!map || !frame) return null;
     const fit = fitScale(anchorsFrom(objs, frame, map, reading));
     const sectors = SECTORS.map(s => {
       const near = regionNearness(map, s.x0, s.x1, BAND.y0, BAND.y1);
       let metres = fit && near != null ? metresAt(fit, near) : null, measured = false;
-      if (s.key === 'ahead' && reading && reading.measured) { metres = reading.metres; measured = true; }
-      // Name the nearest recognised thing in this direction, if any.
+      if (s.key === 'ahead' && currentReading && currentReading.measured && Number.isFinite(currentReading.metres)) { metres = currentReading.metres; measured = true; }
+      // A region percentile does not identify which detected object supplied its depth.
+      // Name only the app's current sensor-associated object; image distances stay unnamed.
       const named = (objs || []).filter(o => o.bbox && !(o.flags && (o.flags.onScreen || o.flags.picture)))
-        .filter(o => { const cx = (o.bbox[0] + o.bbox[2] / 2) / frame.width; return cx >= s.x0 && cx < s.x1; })
+        .filter(o => {
+          if (!measured) return false;
+          const cx = (o.bbox[0] + o.bbox[2] / 2) / frame.width;
+          if (!(cx >= s.x0 && cx < s.x1) || o.bbox[1] / frame.height >= BAND.y1 || (o.bbox[1] + o.bbox[3]) / frame.height <= BAND.y0) return false;
+          // A nearby unrecognised surface must not give a farther recognised thing its number.
+          return o.distMeasured && typeof currentMeasuredDistance === 'function' && currentMeasuredDistance(o) &&
+            Math.abs(o.distM - currentReading.metres) <= 0.011;
+        })
         .sort((a, b) => (a.distM ?? 99) - (b.distM ?? 99))[0] || null;
       return { key: s.key, near, metres, measured, object: named };
     });
@@ -104,10 +116,16 @@ const AsthaSpatial = (() => {
       const ahead = result.sectors.find(s => s.key === 'ahead');
       if (ahead.measured) { en.push(`Straight ahead: ${measuredPhrase(ahead.metres, false)}.`); bn.push(`সোজা সামনে: ${measuredPhrase(ahead.metres, true)}।`); }
       if (known.length >= 2) {
-        const nearest = known.slice().sort((a, b) => b.near - a.near)[0];
+        const ordered = known.slice().sort((a, b) => b.near - a.near);
+        const nearest = ordered[0];
         const name = SECTORS.find(s => s.key === nearest.key);
-        en.push(`From the picture alone, the nearest things are ${name.en.toLowerCase()}; I cannot judge the other distances in metres.`);
-        bn.push(`শুধু ছবি দেখে, সবচেয়ে কাছের জিনিস ${name.bn}; অন্য দূরত্ব মিটারে বলতে পারছি না।`);
+        if (nearest.near - ordered[1].near >= 0.05) {
+          en.push(`From the picture alone, the nearest things are ${name.en.toLowerCase()}; I cannot judge the other distances in metres.`);
+          bn.push(`শুধু ছবি দেখে, সবচেয়ে কাছের জিনিস ${name.bn}; অন্য দূরত্ব মিটারে বলতে পারছি না।`);
+        } else {
+          en.push('I cannot tell which side is nearer from this picture; I cannot judge the other distances in metres.');
+          bn.push('এই ছবি দেখে কোন দিক বেশি কাছে বুঝতে পারছি না; অন্য দূরত্ব মিটারে বলতে পারছি না।');
+        }
       }
       if (!en.length) return null;
     } else {
@@ -117,7 +135,7 @@ const AsthaSpatial = (() => {
         const what = thing ? `, ${objLabelWithArticle(thing)}` : '', whatBn = thing ? `, ${objLabelBn(thing)}` : '';
         if (s.measured) { en.push(`${name.en}: ${measuredPhrase(s.metres, false)}${what}.`); bn.push(`${name.bn}: ${measuredPhrase(s.metres, true)}${whatBn}।`); }
         else if (Number.isFinite(s.metres) && s.metres <= RANGE_M) { en.push(`${name.en}: something ${estimatePhrase(s.metres, false)} away${what}.`); bn.push(`${name.bn}: ${estimatePhrase(s.metres, true)} দূরে কিছু আছে${whatBn}।`); }
-        else { en.push(`${name.en}: nothing seen within ${RANGE_M} metres.`); bn.push(`${name.bn}: ${digits(RANGE_M)} মিটারের মধ্যে কিছু দেখছি না।`); }
+        else { en.push(`${name.en}: I cannot judge the distance from this picture.`); bn.push(`${name.bn}: এই ছবি দেখে দূরত্ব বুঝতে পারছি না।`); }
       }
       en.push('Distances are estimates from the picture' + (result.sectors.some(s => s.measured) ? ', except the measured one.' : '.'));
       bn.push('দূরত্বগুলো ছবি দেখে আন্দাজ' + (result.sectors.some(s => s.measured) ? ', শুধু মাপা দূরত্বটি ছাড়া।' : '।'));
@@ -132,6 +150,11 @@ const AsthaSpatial = (() => {
 function answerSpatial() {
   if (withCamera(answerSpatial)) return;
   const stillWanted = captureLocalActionGuard();
+  const unavailable = (en, bn) => {
+    const reading = state.source === 'pi' && typeof AsthaSensors !== 'undefined' ? AsthaSensors.measured('front') : null;
+    return announce(reading ? `Straight ahead: ${measuredPhrase(reading.metres, false)}. ${en}` : en,
+      reading ? `সোজা সামনে: ${measuredPhrase(reading.metres, true)}। ${bn}` : bn, 'vision');
+  };
   return withBusy(t('analyzing_title'), async () => {
     try {
       if (!stillWanted()) return;
@@ -139,18 +162,23 @@ function answerSpatial() {
       if (!stillWanted() || !ready) return;
       if (DepthEngine.status !== 'ready') {
         if (DepthEngine.status === 'idle' && DepthEngine.wanted()) DepthEngine.load().catch(() => {});
-        return announce('I need the depth model for this. It is loading; ask again in a moment.', 'এর জন্য গভীরতার মডেল লাগবে। লোড হচ্ছে; একটু পরে আবার জিজ্ঞাসা করুন।', 'vision');
+        if (DepthEngine.status === 'error' || !DepthEngine.wanted()) return unavailable('The depth model is unavailable. I cannot judge the side distances.', 'গভীরতার মডেল পাওয়া যাচ্ছে না। পাশের দূরত্ব বুঝতে পারছি না।');
+        return unavailable('I need the depth model for this. It is loading; ask again in a moment.', 'এর জন্য গভীরতার মডেল লাগবে। লোড হচ্ছে; একটু পরে আবার জিজ্ঞাসা করুন।');
       }
       const frame = captureFrame(640); if (!frame) return;
+      const readingAtCapture = state.source === 'pi' && typeof AsthaSensors !== 'undefined' ? AsthaSensors.measured('front') : null;
       const objs = await runCoco(frame);
       if (!stillWanted()) return;
       let map = null;
-      try { map = await DepthEngine.run(frame); } catch (e) { if (e.cancelled || !stillWanted()) return; }
+      try { map = await DepthEngine.run(frame, stillWanted); } catch (e) { if (e.cancelled || !stillWanted()) return; }
       if (!stillWanted()) return;
-      if (!map) return announce('I could not judge depth in this picture.', 'এই ছবিতে গভীরতা বুঝতে পারলাম না।', 'vision');
-      perceptionHook(objs, frame, { noDepthKick: true, depthMaxAge: 60000 });
+      if (!map) return unavailable('I could not judge depth in this picture.', 'এই ছবিতে গভীরতা বুঝতে পারলাম না।');
       const reading = state.source === 'pi' && typeof AsthaSensors !== 'undefined' ? AsthaSensors.measured('front') : null;
-      const result = AsthaSpatial.layout(objs, frame, map, reading);
+      // A new echo after model inference is current forward range, but not evidence about the
+      // earlier captured picture. Only an unchanged, still-fresh sample can anchor that picture.
+      const matchingReading = reading && readingAtCapture && reading.at === readingAtCapture.at ? reading : null;
+      perceptionHook(objs, frame, { noDepthKick: true, depthMap: map, sensorReading: matchingReading });
+      const result = AsthaSpatial.layout(objs, frame, map, matchingReading, reading);
       state.spatial = result;
       const words = AsthaSpatial.sentences(result);
       if (!words) return announce('I cannot judge distances in this picture. Turn slowly so I can see more.', 'এই ছবিতে দূরত্ব বুঝতে পারছি না। ধীরে ঘুরুন যাতে আরও দেখতে পাই।', 'vision');

@@ -47,7 +47,11 @@ server refuses to start rather than guess.
   older than 1.5 s are refused, encoded pictures are capped at 2 MiB, and nothing is
   written to disk.
 - `GET /status` returns the board, OS, capture method and resolution for the phone's
-  status line. It carries no credentials.
+  status line, plus the host name and a stable `device_id` derived from the token. It
+  carries no credentials.
+- `GET /hello?nonce=...` needs no token: it returns an HMAC of the phone's random challenge
+  keyed by the token, so the phone can check the camera holds the pairing before sending it.
+  See [one-time pairing and reconnection](clipcam-connectivity.md).
 - `GET /telemetry` (only with `--telemetry <serial port>`) returns the newest reading from
   an ESP32 running [`firmware/esp32-telemetry`](../firmware/esp32-telemetry/README.md):
   ultrasonic distance and, when the MPU6050 is found, acceleration and rotation, with its
@@ -120,7 +124,9 @@ Behaviour the tests cover:
   and is explained aloud. The phone camera remains available.
 - In the background no pictures are requested. The pairing is kept in memory so that
   returning to ASTHA does not make a blind user type the code again. Closing the app ends
-  the pairing.
+  the live link; with **Remember this ClipCam** ticked, the code is sealed on the device
+  and ASTHA reconnects by itself on its next start, after a Pi reboot or a Wi-Fi drop
+  ([details](clipcam-connectivity.md)).
 - Only the newest picture is held. Analysis samples it when it needs one, so a slow model
   never works through a queue of old pictures.
 
@@ -149,7 +155,11 @@ WantedBy=multi-user.target
 ```
 
 The address must be stable (a DHCP reservation), because the server refuses to bind
-anything but the address it is given.
+anything but the address it is given. Alternatively, replace `--bind 192.168.1.50` with
+`--bind-interface wlan0` and use `Restart=always`: the server binds the interface's current
+private address and exits when it changes, so systemd restarts it on the new one. Issue the
+certificate for the Pi's `.local` name so it stays valid when the address changes. This is
+an optional upgrade; the demo Pi does not need it.
 
 ## Verified on hardware
 

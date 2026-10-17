@@ -17,7 +17,7 @@ function load() {
     VOCAB_BY_ID: {}, brandMeta: () => null, article: noun => /^[aeiou]/.test(noun) ? 'an' : 'a', withArticle: (noun, pl) => pl ? noun : (/^[aeiou]/.test(noun) ? 'an ' : 'a ') + noun,
   });
   vm.runInContext(read('tools/sensors.js') + '\n' + read('tools/perceive.js') + '\n' + read('tools/spatial.js') +
-    '\nglobalThis.api = { AsthaSpatial, measuredPhrase };', context);
+    '\nglobalThis.api = { AsthaSpatial, measuredPhrase, AsthaSensors, applyMeasuredDistance };', context);
   return context.api;
 }
 // The depth model's output behaves like k / metres + c.
@@ -58,7 +58,7 @@ test('the layout gives each direction a distance, with the measured one taken as
   assert.equal(result.scaled, true); assert.equal(result.anchors, 2);
   const byKey = Object.fromEntries(result.sectors.map(s => [s.key, s]));
   assert.ok(Math.abs(byKey.left.metres - 1) < 0.05 && Math.abs(byKey.ahead.metres - 2) < 0.05 && Math.abs(byKey.right.metres - 6) < 0.1);
-  assert.equal(byKey.left.object.id, 'chair'); assert.equal(byKey.ahead.measured, false);
+  assert.equal(byKey.left.object, null, 'a regional depth does not identify its object'); assert.equal(byKey.ahead.measured, false);
   const measured = AsthaSpatial.layout(objs, FRAME, depth, { metres: 1.9, measured: true });
   const ahead = measured.sectors.find(s => s.key === 'ahead');
   assert.equal(ahead.measured, true); assert.equal(ahead.metres, 1.9);
@@ -72,20 +72,75 @@ test('the layout gives each direction a distance, with the measured one taken as
   assert.equal(AsthaSpatial.layout(objs, FRAME, null, null), null, 'no depth map, no layout');
 });
 
-test('what is said: measured is measured, estimates are "about", far is "nothing seen", and never "clear" or "safe"', () => {
+test('what is said: measured is measured, estimates are "about", and unverified range remains unknown', () => {
   const { AsthaSpatial } = load();
   const depth = map(1, 2, 6);
   const words = AsthaSpatial.sentences(AsthaSpatial.layout([thing('chair', 0.15, 1), thing('person', 0.5, 2)], FRAME, depth, { metres: 1.9, measured: true }));
-  assert.match(words.en, /^To your left: something about 1 metre away, a chair\. Straight ahead: measured at 1\.9 metres, a person\. To your right: nothing seen within 4 metres\./);
+  assert.match(words.en, /^To your left: something about 1 metre away\. Straight ahead: measured at 1\.9 metres\. To your right: I cannot judge the distance from this picture\./);
   assert.match(words.en, /estimates from the picture, except the measured one\. Use your cane to confirm\.$/);
-  assert.match(words.bn, /বাঁয়ে: প্রায় ১ মিটার দূরে কিছু আছে, চেয়ার।/);
-  assert.match(words.bn, /সোজা সামনে: সেন্সরে মাপা ১\.৯ মিটার দূরে, মানুষ।/);
+  assert.match(words.bn, /বাঁয়ে: প্রায় ১ মিটার দূরে কিছু আছে।/);
+  assert.match(words.bn, /সোজা সামনে: সেন্সরে মাপা ১\.৯ মিটার দূরে।/);
+  assert.match(words.bn, /ডানে: এই ছবি দেখে দূরত্ব বুঝতে পারছি না।/);
   assert.match(words.bn, /লাঠি দিয়ে নিশ্চিত হয়ে নিন।$/);
   for (const text of [words.en]) assert.doesNotMatch(text, /\b(clear|safe|free|open)\b/i);
   // Half-metre steps for estimates: no false precision.
   const odd = AsthaSpatial.sentences(AsthaSpatial.layout([thing('chair', 0.15, 1.3), thing('person', 0.5, 2.6)], FRAME, map(1.3, 2.6, 3.2), null));
   assert.match(odd.en, /about 1\.5 metres/); assert.match(odd.en, /about 2\.5 metres/); assert.match(odd.en, /about 3 metres/);
   assert.doesNotMatch(odd.en, /measured/);
+});
+
+test('unknown and tied depth never imply empty space or choose an arbitrary nearest side', () => {
+  const { AsthaSpatial } = load();
+  const tied = map(2, 2, 2);
+  const words = AsthaSpatial.sentences(AsthaSpatial.layout([], FRAME, tied, null));
+  assert.match(words.en, /cannot tell which side is nearer/);
+  assert.doesNotMatch(words.en, /nearest things are to your left|nothing seen|clear|safe/i);
+  const invalid = { ...tied, near: new Float32Array(tied.w * tied.h).fill(NaN) };
+  assert.equal(AsthaSpatial.regionNearness(invalid, 0, 1, 0, 1), null);
+  const unknown = AsthaSpatial.sentences({ scaled: true, sectors: AsthaSpatial.SECTORS.map(s => ({ key: s.key, near: null, metres: null })) });
+  assert.match(unknown.en, /To your left: I cannot judge the distance from this picture/);
+  assert.doesNotMatch(unknown.en, /nothing seen|within 4|clear|safe/i);
+  assert.doesNotMatch(unknown.bn, /কিছু দেখছি না|ফাঁকা|নিরাপদ/);
+});
+
+test('an unassigned forward echo cannot label an object outside its beam as measured', () => {
+  const { AsthaSpatial } = load();
+  const depth = map(1, .85, 3);
+  // A chair is above the beam at 2 m; an unrecognised surface in the centre is at .85 m.
+  for (let r = 0; r < depth.h * .3; r++) for (let c = Math.ceil(depth.w * .35); c < depth.w * .65; c++) depth.near[r * depth.w + c] = nearFor(2);
+  const chair = thing('chair', .5, 2, { bbox: [280, 20, 80, 80] });
+  const objects = [thing('table', .15, 1), chair, thing('couch', .85, 3)];
+  const result = AsthaSpatial.layout(objects, FRAME, depth, { metres: .85, measured: true });
+  assert.equal(result.scaled, true);
+  assert.equal(result.sectors.find(s => s.key === 'ahead').object, null);
+  const words = AsthaSpatial.sentences(result);
+  assert.match(words.en, /Straight ahead: measured at 85 centimetres\./);
+  assert.doesNotMatch(words.en, /85 centimetres, a chair/);
+});
+
+test('the current sensor-associated match can still name its detected object', () => {
+  const { AsthaSpatial, AsthaSensors, applyMeasuredDistance } = load();
+  const person = thing('person', .5, 2), objects = [thing('chair', .15, 1), person];
+  AsthaSensors.report('front', 1.9, 'ultrasonic');
+  const reading = AsthaSensors.measured();
+  assert.equal(applyMeasuredDistance(objects, FRAME, reading).object, person);
+  const words = AsthaSpatial.sentences(AsthaSpatial.layout(objects, FRAME, map(1, 2, 6), reading));
+  assert.match(words.en, /Straight ahead: measured at 1\.9 metres, a person\./);
+  assert.match(words.bn, /সোজা সামনে: সেন্সরে মাপা ১\.৯ মিটার দূরে, মানুষ।/);
+  AsthaSensors.report('front', .4, 'ultrasonic', reading.at + 1);
+  const changed = AsthaSpatial.layout(objects, FRAME, map(1, 2, 6), null, { measured: true, metres: .4 });
+  assert.equal(changed.sectors.find(s => s.key === 'ahead').object, null);
+});
+
+test('regional image estimates never assign the regional surface distance to a detected object', () => {
+  const { AsthaSpatial } = load();
+  const result = AsthaSpatial.layout([thing('chair', .15, 1), thing('person', .5, 2)], FRAME, map(1, 2, 6), null);
+  assert.equal(result.scaled, true);
+  assert(result.sectors.every(s => s.object === null));
+  const words = AsthaSpatial.sentences(result);
+  assert.match(words.en, /To your left: something about 1 metre away\./);
+  assert.doesNotMatch(words.en, /chair|person/);
+  assert.doesNotMatch(words.bn, /চেয়ার|মানুষ/);
 });
 
 test('without a scale only the nearer side is said, never a number from the picture', () => {
@@ -108,4 +163,22 @@ test('spatial questions reach the layout in both languages without taking over o
     assert.ok(pattern.test(yes), yes);
   for (const no of ['which way is the door', "what's the layout of my room", 'map the room', 'describe my surroundings', 'how far is the chair'])
     assert.ok(!pattern.test(no), no);
+});
+
+test('actual offline and online routing prioritize both-side distance questions over a single distance', () => {
+  const source = read('tools/offline.js');
+  const start = source.indexOf('function offlineRoute('), end = source.indexOf('\ntry {', start);
+  assert(start >= 0 && end > start);
+  for (const online of [false, true]) {
+    const calls = [];
+    const context = vm.createContext({ cloudReady: () => online, Seeker: { active: false }, state: { source: 'pi' },
+      AsthaSensors: { measured: () => ({ metres: .85, measured: true }) }, answerSpatial: () => calls.push('spatial'), answerHowFar: () => calls.push('single') });
+    vm.runInContext(source.slice(start, end), context);
+    for (const question of ['how far are things on both sides', 'চারদিকে কত দূরে']) {
+      assert.equal(context.offlineRoute(question, question), true);
+      assert.equal(calls.at(-1), 'spatial', online + ': ' + question);
+    }
+    assert.equal(context.offlineRoute('how far is it', 'how far is it'), true);
+    assert.equal(calls.at(-1), 'single');
+  }
 });

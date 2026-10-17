@@ -137,12 +137,15 @@ async function gemini(task, frame, opts = {}) {
   if (opts.signal?.aborted) controller.abort();
   cancellation?.controllers.add(controller);
   const timing = typeof AsthaDiagnostics === 'undefined' ? null : AsthaDiagnostics.start('reasoning', { sourceEpoch: epoch || 0 });
-  let outcome = 'error';
+  let outcome = 'error', sent = false, failure = null;
   try {
     const work = (async () => {
       stillAllowed();
       if (!serverCloud.available) { const error = new Error('no cloud reasoning available'); error.noCloud = true; throw error; }
       cloud.lastCallAt = Date.now();
+      // Recorded only once a request really leaves for the server, so the Detailed view never
+      // credits online AI with an answer this device produced.
+      sent = true; if (typeof AsthaAiStatus !== 'undefined') AsthaAiStatus.onlineStarted();
       const image = frame ? frameToJpeg(frame, opts.maxW || 800) : undefined;
       const res = await fetch(apiUrl('/api/vision'), {
         method: 'POST', credentials: 'include', headers: { 'Content-Type': 'application/json' },
@@ -169,11 +172,16 @@ async function gemini(task, frame, opts = {}) {
     outcome = 'success';
     return result;
   } catch (error) {
+    failure = error;
     if (error.cancelled || controller.signal.aborted || cancellation?.generation !== generation) outcome = 'cancel';
     stillAllowed();
     throw error;
   } finally {
     if (typeof AsthaDiagnostics !== 'undefined') AsthaDiagnostics.finish(timing, outcome);
+    if (typeof AsthaAiStatus !== 'undefined') {
+      if (sent) AsthaAiStatus.onlineFinished(outcome, failure);
+      else if (failure && outcome !== 'cancel') AsthaAiStatus.onlineSkipped(failure);
+    }
     cancellation?.controllers.delete(controller);
     opts.signal?.removeEventListener('abort', fromCaller);
     controller.signal.removeEventListener('abort', onAbort);
@@ -192,18 +200,21 @@ function scheduleCloudFallback(run) {
   setTimeout(() => {
     if (cancellation?.generation !== generation || requester !== window.ASTHA_ACCOUNT_ID ||
         source !== state.source || epoch !== state.sourceEpoch || document.hidden) return;
+    if (typeof AsthaAiStatus !== 'undefined') AsthaAiStatus.fallbackUsed();
     run();
   }, 20);
 }
 
 // ---- Server-backed actions with on-device fallback ----
-async function cloudDescribe() {
+async function cloudDescribe(detailed = false) {
   return withBusy(t('analyzing_title'), async () => {
     const frame = captureFrame(896); if (!frame) return;
     heartSet({ x: 0.5, y: 0.5, mode: 'seek', label: 'Looking…' });
     try {
-      const r = await gemini(CLOUD_PROMPTS.describe, frame, { observeMemory: true });
-      if (r.mirror === true) { await cloudCompliment(frame, r); return; }
+      const prompt = detailed ? CLOUD_PROMPTS.describe.replace('in at most two short sentences per language', 'in four to six concise sentences per language, as explicitly requested, covering the visible objects and their positions') : CLOUD_PROMPTS.describe;
+      const r = await gemini(prompt, frame, { observeMemory: true, ...(detailed ? { maxTokens: 1500 } : {}) });
+      if (typeof AsthaVisionDetails !== 'undefined') AsthaVisionDetails.describeResult(frame, { en: r.en || t('nothing_seen'), bn: r.bn || tBn('nothing_seen') }, 'online');
+      if (r.mirror === true && !detailed) { await cloudCompliment(frame, r); return; }
       announce(r.en || t('nothing_seen'), r.bn || tBn('nothing_seen'), 'vision'); playEarcon(r.hazard ? 'hazard' : 'confirm'); haptic(r.hazard ? 'RAPID' : 'CONFIRM');
       heartFlash({ x: 0.5, y: 0.5, mode: 'lock', label: (r.objects || [])[0] || '' });
       logEvent('Cloud described: ' + ((r.objects || []).slice(0, 4).join(', ') || 'scene'));
@@ -213,7 +224,7 @@ async function cloudDescribe() {
     } catch (e) {
       if (e.cancelled) return;
       if (cloudFail(e)) announce('The cloud is busy for a moment; describing on-device.', 'ক্লাউড একটু ব্যস্ত; ডিভাইসেই বর্ণনা করছি।', 'system');
-      scheduleCloudFallback(() => describeScene(true));
+      scheduleCloudFallback(() => describeScene(true, detailed));
     }
   });
 }
