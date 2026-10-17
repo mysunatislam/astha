@@ -31,6 +31,7 @@ from urllib.parse import parse_qs, urlsplit
 
 MAX_BYTES = 2 * 1024 * 1024
 MAX_AGE_MS = 1500
+CAPTURE_STALL_SECONDS = 30.0
 MAX_SEQUENCE = 9007199254740991
 # The phone rejects anything larger, so a bigger capture would only waste the link.
 MAX_WIDTH, MAX_HEIGHT = 1280, 720
@@ -45,8 +46,9 @@ TUNING_DIRS = ('/usr/share/libcamera/ipa/rpi/vc4', '/usr/share/libcamera/ipa/rpi
 
 
 class Frames:
-    def __init__(self):
+    def __init__(self, clock=time.monotonic):
         self.condition = threading.Condition()
+        self.clock = clock
         self.jpeg = None
         self.at = 0
         self.sequence = 0
@@ -56,14 +58,14 @@ class Frames:
             return
         with self.condition:
             self.jpeg = jpeg
-            self.at = time.monotonic()
+            self.at = self.clock()
             self.sequence += 1
             self.condition.notify_all()
 
     def get(self, after=0):
         with self.condition:
             self.condition.wait_for(lambda: self.sequence > after, timeout=1)
-            age = int((time.monotonic() - self.at) * 1000)
+            age = int((self.clock() - self.at) * 1000)
             if not self.jpeg or self.sequence <= after or age > MAX_AGE_MS:
                 return None
             return self.jpeg, self.sequence, max(0, age)
@@ -514,6 +516,28 @@ def capture_loop(source, frames, stopped, fps):
         stopped.wait(max(0.0, interval - (time.monotonic() - began)))
 
 
+def watch_capture(frames, stopped, exit_process=os._exit, clock=time.monotonic,
+                  timeout=CAPTURE_STALL_SECONDS, interval=1.0):
+    """Restart through the service manager if no accepted picture arrives for 30 seconds.
+
+    A capture call, and even camera.stop(), can block inside a camera driver. This
+    independent daemon therefore exits the process directly instead of waiting for
+    that driver to clean up. HTTP traffic and sensor readings do not reset the clock.
+    """
+    began = clock()
+    while not stopped.wait(interval):
+        with frames.condition:
+            last = max(began, frames.at) if frames.sequence else began
+        if clock() - last >= timeout:
+            if stopped.is_set():
+                return
+            try:
+                print('Camera capture stopped producing accepted pictures; exiting so the service can restart.', flush=True)
+            finally:
+                exit_process(75)
+            return
+
+
 PRIVATE_NETWORKS = tuple(ipaddress.ip_network(value) for value in ('10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16'))
 
 
@@ -706,6 +730,7 @@ def main():
     server.socket = context.wrap_socket(server.socket, server_side=True, do_handshake_on_connect=False)
     worker = threading.Thread(target=capture_loop, args=(source, frames, stopped, args.fps), daemon=True)
     worker.start()
+    threading.Thread(target=watch_capture, args=(frames, stopped), daemon=True).start()
     if telemetry:
         threading.Thread(target=telemetry_loop, args=(serial_opener(str(args.telemetry)), telemetry, stopped), daemon=True).start()
     changed = threading.Event()

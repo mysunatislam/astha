@@ -154,6 +154,12 @@ RestartSec=3
 WantedBy=multi-user.target
 ```
 
+If capture produces no accepted JPEG for 30 seconds, the server exits with code 75
+so this restart policy can recover a stuck capture call. Stale pictures are still
+refused after 1.5 seconds; the recovery grace also allows the slower capture backends
+time to start. The watchdog does not establish the cause of a camera fault or repair
+disconnected hardware. Run under a service manager for automatic restart.
+
 The address must be stable (a DHCP reservation), because the server refuses to bind
 anything but the address it is given. Alternatively, replace `--bind 192.168.1.50` with
 `--bind-interface wlan0` and use `Restart=always`: the server binds the interface's current
