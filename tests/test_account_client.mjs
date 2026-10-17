@@ -41,7 +41,7 @@ function controls({ accountId = 'accountA', registered = true, reply = () => jso
     fetch: async (path, options) => { calls.fetch.push([options.method, path, JSON.parse(options.body)]); return reply(path, options); },
     location: { reload: () => calls.reloads++ }, navigator: {}, document: {}, URL: {},
   });
-  context.window = { ASTHA_ACCOUNT_ID: accountId, ASTHA_ACCOUNT_REGISTERED: accountId ? registered : null,
+  context.window = { ASTHA_LOCAL_ACCOUNT_ID: accountId || 'local-guest', ASTHA_ACCOUNT_ID: accountId, ASTHA_ACCOUNT_REGISTERED: accountId ? registered : null,
     ASTHA_CLEAR_ACCOUNT: options => { calls.cleared.push(options); context.window.ASTHA_ACCOUNT_ID = null; } };
   vm.runInContext(accountSource, context);
   return { context, calls, storage, $, run: code => vm.runInContext(code, context) };
@@ -128,6 +128,45 @@ test('blocked browser storage is reported instead of claimed as cleared', async 
   await s.run('openDeleteAccount()'); s.$('delete-account-pin').value = '4826';
   await s.run('confirmDeleteAccount()');
   assert.match(s.calls.spoken.at(-1)[0], /Some copies on this phone could not be cleared/);
+});
+
+test('account deletion cancels pending kit work and awaits erasing only its captured profile before local purge', async () => {
+  const s = controls(), order = [];
+  let release;
+  const gate = new Promise(resolve => { release = resolve; });
+  s.context.AsthaCameraKit = { accountCleared: () => order.push('cancel-kit') };
+  s.context.window.AsthaPairingStore = { forget: async (profile, current) => {
+    order.push('forget:' + profile); assert.equal(current(), true); await gate; order.push('erased');
+  } };
+  await s.run('openDeleteAccount()'); s.$('delete-account-pin').value = '4826';
+  const pending = s.run('confirmDeleteAccount()');
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(order, ['cancel-kit', 'forget:accountA']);
+  assert(s.storage.has('astha.local.v2.accountA'), 'ordinary data is not purged before the vault responds');
+  release(); await pending;
+  assert.deepEqual(order, ['cancel-kit', 'forget:accountA', 'erased']);
+  assert(!s.storage.has('astha.local.v2.accountA'));
+  assert.match(s.calls.spoken.at(-1)[0], /everything saved with it are deleted/);
+});
+
+test('a pairing erase failure is reported and a changed profile is never purged or signed out', async () => {
+  const failed = controls();
+  failed.context.AsthaCameraKit = { accountCleared() {} };
+  failed.context.window.AsthaPairingStore = { forget: async () => { throw new Error('vault blocked'); } };
+  await failed.run('openDeleteAccount()'); failed.$('delete-account-pin').value = '4826';
+  await failed.run('confirmDeleteAccount()');
+  assert.match(failed.calls.spoken.at(-1)[0], /Some copies on this phone could not be cleared/);
+
+  const switched = controls(); let erased;
+  switched.context.window.AsthaPairingStore = { forget: async profile => {
+    erased = profile; switched.context.window.ASTHA_LOCAL_ACCOUNT_ID = 'accountB'; switched.context.window.ASTHA_ACCOUNT_ID = 'accountB';
+  } };
+  await switched.run('openDeleteAccount()'); switched.$('delete-account-pin').value = '4826';
+  await switched.run('confirmDeleteAccount()');
+  assert.equal(erased, 'accountA');
+  assert(switched.storage.has('astha.local.v2.accountB')); assert(switched.storage.has('astha.owner.v2.accountB.face'));
+  assert.deepEqual(switched.calls.cleared, []); assert.equal(switched.calls.timers.length, 0);
+  assert.match(switched.calls.spoken.at(-1)[0], /Some copies on this phone could not be cleared/);
 });
 
 test('forgetting face and voice clears the phone, the live state and any account copy', async () => {

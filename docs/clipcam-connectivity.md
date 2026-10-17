@@ -60,10 +60,12 @@ Battery level: the Pi does not report one, so ASTHA has no battery state to anno
 
 ### Older camera script
 
-The Pi running for the demo uses the script from before this change. That is fine: it
-answers `/hello` with 401, so ASTHA recognises it through its TLS certificate alone (signed
-by the kit's private CA for `hemovasc-pi.local` and its IP). Updating the script later adds
-the identity proof; no re-pairing is needed for that.
+An older camera script can be reused only at the original address explicitly paired over
+trusted TLS. It must not receive the saved code at a new or fallback address without
+identity proof. A previously proven kit cannot downgrade to that legacy behavior.
+During the setup review on 17 October the demo Pi was upgraded to the current script;
+its HTTPS challenge-response proof and fresh frames were verified. The existing token
+and certificate were retained. See [the review](setup-review-2026-10-17.md).
 
 ## 3. Where the pairing code is kept
 

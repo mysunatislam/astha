@@ -96,7 +96,9 @@ const DepthEngine = {
   // Runs the model on a small copy of the frame and stores a nearness map (0 = farthest, 1 = nearest).
   async run(frame, current = captureLocalActionGuard()) {
     if (!current()) return null;
-    if (this.status !== 'ready' || this.busy || !frame) return this.fresh(Infinity);
+    // A caller asking for this picture must never receive the previous picture's map.
+    // Live perception may explicitly consult fresh(); a one-shot measurement cannot.
+    if (this.status !== 'ready' || this.busy || !frame) return null;
     this.busy = true; const t0 = Date.now();
     try {
       const s = this.size / Math.max(frame.width, frame.height);
@@ -302,12 +304,12 @@ function applyRules(objs, graph, frame) {
 // Called from the live loop for every detector frame and from the one-shot describers.
 function perceptionHook(objs, frame, opts = {}) {
   if (!frame || !objs) return;
-  const depth = DepthEngine.fresh(opts.depthMaxAge || Math.max(3500, DepthEngine.lastMs * 3));
+  const depth = Object.hasOwn(opts, 'depthMap') ? opts.depthMap : DepthEngine.fresh(opts.depthMaxAge || Math.max(3500, DepthEngine.lastMs * 3));
   for (const o of objs) annotateGeometry(o, frame, depth);
   const graph = buildSceneGraph(objs, frame);
   applyRules(objs, graph, frame);
   // Only pictures from the paired Pi camera share the sensor's point of view.
-  const reading = state.source === 'pi' && typeof AsthaSensors !== 'undefined' ? AsthaSensors.measured('front') : null;
+  const reading = Object.hasOwn(opts, 'sensorReading') ? opts.sensorReading : state.source === 'pi' && typeof AsthaSensors !== 'undefined' ? AsthaSensors.measured('front') : null;
   const ahead = applyMeasuredDistance(objs, frame, reading);
   state.scene = Object.assign(graph, { frameW: frame.width, frameH: frame.height, hasDepth: !!depth, ahead, at: Date.now() });
   if (opts.noDepthKick) return;
@@ -495,13 +497,18 @@ function describeScene(skipCloud, forceDetailed) {
     try {
     if (!(await ensureVisionModels()) || !current()) return;
     const frame = captureFrame(640); if (!frame) return;
+    const readingAtCapture = state.source === 'pi' && typeof AsthaSensors !== 'undefined' ? AsthaSensors.measured('front') : null;
     const [cocoObjs, clip] = await Promise.all([runCoco(frame), runClipZones(frame)]);
     if (!current()) return;
-    if (DepthEngine.status === 'ready') { try { await DepthEngine.run(frame, current); } catch (e) {} }
+    let depthMap = null;
+    if (DepthEngine.status === 'ready') { try { depthMap = await DepthEngine.run(frame, current); } catch (e) {} }
     else if (DepthEngine.status === 'idle' && DepthEngine.wanted()) DepthEngine.load().catch(() => {});
     if (!current()) return;
     if (typeof trackMotion === 'function' && state.source === 'camera') trackMotion(cocoObjs, frame);
-    perceptionHook(cocoObjs, frame, { noDepthKick: true, depthMaxAge: 60000 });
+    const reading = state.source === 'pi' && typeof AsthaSensors !== 'undefined' ? AsthaSensors.measured('front') : null;
+    // An echo taken after inference is not a measurement of an object in the old picture.
+    const matchingReading = reading && readingAtCapture && reading.at === readingAtCapture.at ? reading : null;
+    perceptionHook(cocoObjs, frame, { noDepthKick: true, depthMap, sensorReading: matchingReading });
     state.lastCocoPreds = cocoObjs; state.lastClipHits = clip.hits.map(h => Object.assign(h, { at: Date.now() }));
     state.world.clear(); ingest(cocoObjs.concat(clip.hits), state.source === 'camera' ? 3500 : 1e9); drawOverlay(frame, cocoObjs, clip.hits);
     const objs = worldSorted();
@@ -528,7 +535,7 @@ function answerHowFar(query) {
   if (ahead) {
     // The newest scene says what the echo came from; the number is the reading of this moment.
     const scene = state.scene || {};
-    const hit = scene.ahead && scene.ahead.object && Date.now() - (scene.at || 0) <= 2000 ? scene.ahead.object : null;
+    const hit = scene.ahead && scene.ahead.object && Date.now() - (scene.at || 0) <= 2000 && currentMeasuredDistance(scene.ahead.object) ? scene.ahead.object : null;
     if (hit) return announce(`The ${objLabel(hit)} straight ahead is ${measuredPhrase(ahead.metres, false)}.`, `সোজা সামনের ${objLabelBn(hit)} ${measuredPhrase(ahead.metres, true)}।`, 'vision');
     return announce(`Something straight ahead is ${measuredPhrase(ahead.metres, false)}.`, `সোজা সামনে কিছু একটা আছে, ${measuredPhrase(ahead.metres, true)}।`, 'vision');
   }

@@ -47,6 +47,14 @@ final class CameraPairingVault {
         boolean autoConnect = true;
     }
 
+    // Only encrypted bytes cross the bridge in a rollback receipt. Comparing the complete
+    // new ciphertext makes compensation conditional: it cannot undo a later successful save.
+    static final class WriteReceipt {
+        final String before;
+        final String after;
+        WriteReceipt(String before, String after) { this.before = before; this.after = after; }
+    }
+
     static final int MAX_FALLBACKS = 4;
     private static final Pattern PROFILE = Pattern.compile("[A-Za-z0-9_-]{1,128}");
     private static final Pattern ORIGIN = Pattern.compile("https://[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?(?::[1-9][0-9]{0,4})?");
@@ -174,12 +182,15 @@ final class CameraPairingVault {
         return bytes;
     }
 
-    void save(String profile, Record input) throws Failure {
+    synchronized WriteReceipt saveReversible(String profile, Record input) throws Failure {
         String id = profile(profile);
         Record record = checked(input);
         byte[] plain = encode(record).getBytes(StandardCharsets.US_ASCII);
         try {
-            storage.put(PREFIX + id, hex(crypto.seal(plain, associated(id))));
+            String before = storage.get(PREFIX + id);
+            String after = hex(crypto.seal(plain, associated(id)));
+            storage.put(PREFIX + id, after);
+            return new WriteReceipt(before, after);
         } catch (GeneralSecurityException | RuntimeException refused) {
             throw new Failure("storage_failed");
         } finally {
@@ -187,8 +198,25 @@ final class CameraPairingVault {
         }
     }
 
+    synchronized void save(String profile, Record input) throws Failure {
+        saveReversible(profile, input);
+    }
+
+    synchronized boolean rollback(String profile, WriteReceipt receipt) throws Failure {
+        String id = profile(profile);
+        if (receipt == null || receipt.after == null) throw new Failure("invalid_record");
+        unhex(receipt.after);
+        if (receipt.before != null) unhex(receipt.before);
+        try {
+            if (!receipt.after.equals(storage.get(PREFIX + id))) return false;
+            if (receipt.before == null) storage.remove(PREFIX + id);
+            else storage.put(PREFIX + id, receipt.before);
+            return true;
+        } catch (RuntimeException refused) { throw new Failure("storage_failed"); }
+    }
+
     /** The record, or null when none is remembered. A record that cannot be opened is removed. */
-    Record load(String profile) throws Failure {
+    synchronized Record load(String profile) throws Failure {
         String id = profile(profile);
         String stored = storage.get(PREFIX + id);
         if (stored == null) return null;
@@ -199,14 +227,17 @@ final class CameraPairingVault {
         } catch (GeneralSecurityException | Failure | RuntimeException unreadable) {
             // A lost Keystore key (for example after a device reset) or a damaged record
             // cannot be repaired; forgetting it lets the user pair again cleanly.
-            storage.remove(PREFIX + id);
+            try { storage.remove(PREFIX + id); }
+            catch (RuntimeException refused) { throw new Failure("storage_failed"); }
             throw new Failure("decrypt_failed");
         } finally {
             if (plain != null) java.util.Arrays.fill(plain, (byte) 0);
         }
     }
 
-    void forget(String profile) throws Failure {
-        storage.remove(PREFIX + profile(profile));
+    synchronized void forget(String profile) throws Failure {
+        String id = profile(profile);
+        try { storage.remove(PREFIX + id); }
+        catch (RuntimeException refused) { throw new Failure("storage_failed"); }
     }
 }

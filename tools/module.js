@@ -2666,6 +2666,7 @@ async function togglePrivateMode() {
     stopAllSpeech();
     privacyMode = entering;
     if (privacyMode) {
+      if (typeof AsthaCameraKit !== 'undefined') AsthaCameraKit.privacyEntered();
       if (typeof AsthaExperience !== 'undefined') AsthaExperience.invalidatePreferences();
       remoteProcessingConsent = false;
       SiriVoice.enabled = false; SiriVoice.stop(true);

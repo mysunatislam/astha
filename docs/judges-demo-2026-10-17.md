@@ -2,7 +2,7 @@
 
 Branch `release/judges-demo-2026-10-17` = person-hazard fix + current-evidence obstacle rules
 + "Which AI is working" panel + recoloured logo (light and dark) + "Remember this ASTHA
-kit". 581/581 automated checks pass. These features were verified in automated tests and
+kit". The setup-review report records the current automated checks. These features were verified in automated tests and
 headless Chrome only; they have not yet been verified on the Pi or a phone (see
 [clipcam-connectivity.md](clipcam-connectivity.md#8-acceptance-tests-simulated-and-hardware)).
 
@@ -10,8 +10,9 @@ headless Chrome only; they have not yet been verified on the Pi or a phone (see
 
 1. Same network for laptop, phone and Pi (the hotspot used in testing). Do not change the
    Pi's network or wiring.
-2. Pi: camera server running with telemetry, as in the last successful test. No update is
-   needed for this build.
+2. Pi: camera server running with telemetry. For identity proof and recovery after an
+   address change, install the current camera script and a boot service using
+   `--bind-interface wlan0`. Check that service is enabled and serving fresh frames.
 3. Laptop: open the web preview in Chrome. If this build is deployed, pair once in Devices
    with **Remember** ticked. Then close and reopen the tab: ASTHA should say "Your ASTHA
    ClipCam is connected" without asking for the code. If it does not, re-pair once and
@@ -34,9 +35,10 @@ headless Chrome only; they have not yet been verified on the Pi or a phone (see
 5. Memory: with automatic memory switched on, show the laptop/phone, then ask "where did I
    last see my phone?" ASTHA gives the time and image position and says it cannot confirm
    where the phone is now.
-6. Reconnection: unplug the Pi's power (or turn off the hotspot) for ten seconds and restore
-   it. ASTHA says the link dropped, keeps the phone camera available, and reconnects by
-   itself without the code. A Pi reboot takes about a minute, so let ASTHA keep looking.
+6. Reconnection: only after checking the camera service starts at boot, demonstrate a
+   controlled service restart. ASTHA should report the interruption and reconnect without
+   the code. Do not unplug the Pi to demonstrate unverified boot behavior. A network change
+   also requires both devices to join the same reachable network.
 7. Android: show the app as a separate interface (voice, phone camera, settings). Do not
    claim ClipCam pairing on Android: it has not been tested on a phone, and only the debug
    build trusts the Pi's private certificate.

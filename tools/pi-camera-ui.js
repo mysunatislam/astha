@@ -208,6 +208,9 @@ const AsthaPiCamera = (() => {
     const kit = typeof AsthaCameraKit !== 'undefined' ? AsthaCameraKit : null;
     try {
       if (!token && kit?.remembered()) { await kit.useAddress(origin); return; }
+      // A new pairing owns the operation before opening the link, including any delayed
+      // credential save from an earlier attempt in this same profile.
+      if (kit?.manualStart) await kit.manualStart();
       await open({ origin, token });
       if (remember && kit) await kit.remember({ origin, token });
     } catch {} finally { token = ''; }

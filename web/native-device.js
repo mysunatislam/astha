@@ -78,6 +78,10 @@
       async summary(profile) { return found(await screen('cameraPairingSummary', { profile: String(profile || '') })); },
       async update(profile, changes) { return found(await screen('cameraPairingUpdate', { ...pairingFields(changes), profile: String(profile || '') })); },
       async forget(profile) { await screen('cameraPairingForget', { profile: String(profile || '') }); return true; },
+      async rollback(profile, receipt) {
+        await screen('cameraPairingRollback', { profile: String(profile || ''), before: receipt?.before ?? null, after: receipt?.after });
+        return true;
+      },
     }),
     screen: Object.freeze({
       async status() {

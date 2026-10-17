@@ -358,7 +358,8 @@ function kitSetup({ store = memoryStore(), net = network(), source = null, accou
     setTimeout: (fn, ms = 0) => { timers.set(++timerId, { fn, at: now + ms }); return timerId; }, clearTimeout: id => timers.delete(id),
     createImageBitmap: async () => ({ width: 640, height: 480, close() {} }),
     document: { hidden: false, getElementById: element, querySelectorAll: () => [], addEventListener: on(documentListeners) },
-    I18N: { en: pick(0), bn: pick(1) }, uiLang: 'en', state: { source, sourceEpoch: 0, cameraPending: false },
+    I18N: { en: pick(0), bn: pick(1) }, uiLang: 'en', privacyMode: false, privacyTransition: false,
+    state: { source, sourceEpoch: 0, cameraPending: false },
     engine: { coco: { status: 'ready' } }, fetch: net.fetch,
     announce: en => spoken.push(en), setCaption: (...args) => captions.push(args.join(' ')),
     stopLiveLoop() {}, stopAllSpeech() {}, startLiveLoop() {}, ensureVisionModels: async () => true,
@@ -550,6 +551,138 @@ test('the user stays in control: disconnect holds, a chosen phone camera is neve
   const phone = kitSetup({ store: remembered(memoryStore()), net, source: 'camera' });
   await phone.advance(0);
   assert.equal(phone.kit.phase, 'other'); assert.equal(phone.context.state.source, 'camera'); assert.deepEqual(phone.spoken, []);
+});
+
+test('explicit disconnect stays off after reopening, and explicit reconnect restores the saved choice', async () => {
+  const net = network(); net.hosts.set(HOST, net.device());
+  const store = remembered(memoryStore());
+  const first = kitSetup({ store, net }); await first.advance(0);
+  await first.kit.disconnect();
+  assert.equal(store.records.get('user-1').autoConnect, false);
+  await first.fire('pagehide');
+  const asked = net.log.length;
+  const reopened = kitSetup({ store, net }); await reopened.advance(0);
+  await reopened.fire('online'); await reopened.advance(60000);
+  assert.equal(net.log.length, asked, 'reopening or network events cannot undo Disconnect');
+  await reopened.kit.connect(); await reopened.advance(0);
+  assert.equal(reopened.kit.phase, 'connected');
+  assert.equal(store.records.get('user-1').autoConnect, true, 'an explicit successful reconnect opts back in');
+});
+
+test('without an explicit local profile no shared device pairing is read or written', async () => {
+  for (const account of [null, '', '../bad']) {
+    const store = remembered(memoryStore(), {}, 'device');
+    const net = network(); net.hosts.set(HOST, net.device());
+    const h = kitSetup({ store, net, account });
+    h.context.ASTHA_ACCOUNT_ID = 'user-1';
+    await h.advance(0); await h.kit.connect();
+    assert.equal(h.kit.remembered(), false); assert.equal(h.requests(), 0);
+    assert.equal(await h.kit.remember({ origin: HOST, token: TOKEN }), false);
+    assert.deepEqual([...store.records.keys()], ['device']);
+  }
+});
+
+test('late pairing verification or storage cannot restore a kit after disconnect, forget, account, hiding or privacy entry', async () => {
+  for (const boundary of ['disconnect', 'forget', 'account', 'hidden', 'privacy']) {
+    for (const stage of ['verify', 'save']) {
+      let release, entered;
+      const gate = new Promise(resolve => { release = resolve; });
+      const started = new Promise(resolve => { entered = resolve; });
+      const store = memoryStore(), net = network(); net.hosts.set(HOST, net.device());
+      if (stage === 'verify') {
+        const fetch = net.fetch;
+        net.fetch = async (url, options) => {
+          if (new URL(url).pathname === '/hello') { entered(); await gate; }
+          return fetch(url, options);
+        };
+      } else {
+        const save = store.save;
+        store.save = async (profile, value, current) => {
+          entered(); await gate;
+          if (!current()) throw Object.assign(new Error('cancelled'), { code: 'cancelled' });
+          return save(profile, value);
+        };
+      }
+      const h = kitSetup({ store, net }); await h.advance(0);
+      h.element('pi-camera-origin').value = HOST; h.element('pi-camera-token').value = TOKEN;
+      const pending = h.ui.connect(); await started;
+      if (boundary === 'disconnect') await h.kit.disconnect();
+      if (boundary === 'forget') await h.kit.forget();
+      if (boundary === 'account') { h.kit.accountCleared(); h.context.ASTHA_LOCAL_ACCOUNT_ID = 'user-2'; }
+      if (boundary === 'hidden') await h.hide(true);
+      if (boundary === 'privacy') { h.context.privacyMode = true; h.kit.privacyEntered(); }
+      const said = h.spoken.length;
+      release(); await pending; await h.advance(0);
+      assert.equal(store.records.size, 0, `${boundary} at ${stage} cannot be undone by an earlier save`);
+      assert.equal(h.kit.remembered(), false, `${boundary} at ${stage} leaves no stale summary`);
+      assert.equal(h.spoken.slice(said).includes(en('kit_remembered')), false);
+    }
+  }
+});
+
+test('privacy entry pauses the kit without saving; leaving privacy needs an explicit reconnect', async () => {
+  const net = network(); net.hosts.set(HOST, net.device());
+  const store = remembered(memoryStore());
+  const h = kitSetup({ store, net }); await h.advance(0);
+  assert.equal(h.kit.phase, 'connected');
+  const savedBefore = JSON.stringify([...store.records]);
+  h.context.privacyMode = true; h.kit.privacyEntered();
+  assert.equal(h.pi.paired(), false);
+  const requests = h.requests();
+  assert.equal(await h.kit.connect(), false);
+  assert.equal(await h.kit.remember({ origin: HOST, token: OTHER }), false);
+  assert.equal(await h.kit.setAuto(true), false);
+  assert.equal(JSON.stringify([...store.records]), savedBefore, 'privacy entry saves no new data');
+  await h.kit.setAuto(false);
+  assert.equal(store.records.get('user-1').autoConnect, false, 'explicitly disabling reconnection persists while private');
+  await h.kit.disconnect(); await h.fire('online'); await h.advance(60000);
+  assert.equal(h.requests(), requests, 'no automatic or saved-key connection while private');
+  const savedAfter = store.records.get('user-1');
+  assert.equal(savedAfter.token, TOKEN, 'disabling access does not replace the saved credential');
+  assert.equal(savedAfter.autoConnect, false, 'private Disconnect remains disabled after reopening');
+  h.context.privacyMode = false;
+  await h.fire('online'); await h.hide(true); await h.hide(false); await h.advance(60000);
+  assert.equal(h.requests(), requests, 'turning privacy off does not resume a prior automatic request');
+  assert.equal(await h.kit.connect(), true); await h.advance(0);
+  assert.equal(h.kit.phase, 'connected');
+  h.context.privacyMode = true; h.kit.privacyEntered();
+  assert.equal(await h.kit.forget(), true, 'explicit deletion remains available while private');
+  assert.equal(store.records.size, 0);
+});
+
+test('a legacy kit can reuse its explicitly paired TLS address but never sends its code to an unproven new address', async () => {
+  const net = network(); net.hosts.set(HOST, net.device({ hello: false })); net.hosts.set(NEW_IP, net.device({ hello: false }));
+  const store = remembered(memoryStore(), { device: {} });
+  const h = kitSetup({ store, net }); await h.advance(0);
+  assert.equal(h.kit.phase, 'connected', 'existing trusted demo address remains usable');
+  assert.equal(net.sentCodeTo(HOST), true);
+  await h.kit.disconnect();
+  assert.equal(await h.kit.useAddress(NEW_IP), false);
+  assert.equal(net.sentCodeTo(NEW_IP), false, 'a TLS-valid new host still needs the pairing proof');
+  assert.equal(store.records.get('user-1').origin, HOST);
+  assert.equal(h.kit.phase, 'mismatch');
+});
+
+test('a replacement manual pairing invalidates an earlier delayed credential save', async () => {
+  let release, entered, first = true;
+  const gate = new Promise(resolve => { release = resolve; });
+  const started = new Promise(resolve => { entered = resolve; });
+  const store = memoryStore(), net = network(), device = net.device(); net.hosts.set(HOST, device);
+  const fetch = net.fetch;
+  net.fetch = async (url, options) => {
+    if (new URL(url).pathname === '/hello' && first) { first = false; entered(); await gate; }
+    return fetch(url, options);
+  };
+  const h = kitSetup({ store, net }); await h.advance(0);
+  h.element('pi-camera-origin').value = HOST; h.element('pi-camera-token').value = TOKEN;
+  const old = h.ui.connect(); await started;
+  device.token = OTHER;
+  h.element('pi-camera-token').value = OTHER;
+  await h.ui.connect(); await h.advance(0);
+  assert.equal(store.records.get('user-1').token, OTHER);
+  release(); await old; await h.advance(0);
+  assert.equal(store.records.get('user-1').token, OTHER, 'the earlier pairing cannot replace the new code');
+  assert.equal(h.spoken.filter(text => text === en('kit_remembered')).length, 1);
 });
 
 test('voice commands work in English and Bangla, and ordinary camera requests are left alone', async () => {

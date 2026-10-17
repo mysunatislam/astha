@@ -183,6 +183,22 @@
       return { ...summary, token: reply.token };
     } catch { throw failure('invalid_record'); }
   }
+  // A native bridge call may commit before JavaScript learns that the user disconnected,
+  // hid the page or changed profile. Compensate before releasing the mutation barrier.
+  // The vault compares encrypted write receipts, so another caller's newer save survives.
+  async function nativeWrite(sealed, profile, work, current) {
+    const reply = await work();
+    try { guard(current); return nativeSummary(reply, false); }
+    catch (error) {
+      const receipt = reply?.rollback;
+      if (!receipt || typeof receipt.after !== 'string' || !/^(?:[0-9a-f]{2}){1,4096}$/.test(receipt.after) ||
+          receipt.before !== null && (typeof receipt.before !== 'string' || !/^(?:[0-9a-f]{2}){1,4096}$/.test(receipt.before)) ||
+          typeof sealed.rollback !== 'function') throw failure('storage_failed');
+      try { await sealed.rollback(profile, { before: receipt.before, after: receipt.after }); }
+      catch { throw failure('storage_failed'); }
+      throw error;
+    }
+  }
   async function save(profile, value, current = () => true) {
     try {
       profileId(profile); guard(current);
@@ -191,8 +207,7 @@
       if (!validToken(token)) throw failure('invalid_pairing');
       const sealed = native();
       if (sealed) return await mutate(current, async () => {
-        const reply = await sealed.save(profile, { origin, token, device, fallbacks, autoConnect: true });
-        guard(current); return nativeSummary(reply, false);
+        return nativeWrite(sealed, profile, () => sealed.save(profile, { origin, token, device, fallbacks, autoConnect: true }), current);
       });
       capabilities();
       return await mutate(current, async () => {
@@ -256,7 +271,7 @@
         const old = nativeSummary(await sealed.summary(profile), false);
         if (!old) return null;
         guard(current);
-        return nativeSummary(await sealed.update(profile, next(old)), false);
+        return nativeWrite(sealed, profile, () => sealed.update(profile, next(old)), current);
       });
       return await mutate(current, async () => {
         const db = await open(current);

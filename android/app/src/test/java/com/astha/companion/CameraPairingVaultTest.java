@@ -21,7 +21,7 @@ public class CameraPairingVaultTest {
     private static final String TOKEN = "kkkkkkkkkkSecret_Pairing-Code" + "zzzzzzzzzzzzzzzzzzzz";
     private static final String HOST = "https://hemovasc-pi.local:8443";
 
-    static final class MemoryStorage implements CameraPairingVault.Storage {
+    static class MemoryStorage implements CameraPairingVault.Storage {
         final Map<String, String> values = new HashMap<>();
         @Override public String get(String key) { return values.get(key); }
         @Override public void put(String key, String value) { values.put(key, value); }
@@ -147,5 +147,46 @@ public class CameraPairingVaultTest {
         vault.forget("p");
         assertNull(vault.load("p"));
         assertTrue(storage.values.isEmpty());
+    }
+
+    @Test public void cancelledWritesRestoreOnlyTheirOwnPriorRecord() throws Exception {
+        MemoryStorage storage = new MemoryStorage();
+        CameraPairingVault vault = new CameraPairingVault(storage, new SoftwareCrypto());
+        CameraPairingVault.WriteReceipt first = vault.saveReversible("p", record());
+        assertTrue(vault.rollback("p", first));
+        assertNull(vault.load("p"));
+        vault.save("p", record());
+        String original = storage.values.get("kit.p");
+        CameraPairingVault.Record paused = record(); paused.autoConnect = false;
+        CameraPairingVault.WriteReceipt cancelled = vault.saveReversible("p", paused);
+        assertTrue(vault.rollback("p", cancelled));
+        assertEquals(original, storage.values.get("kit.p"));
+        assertTrue(vault.load("p").autoConnect);
+
+        CameraPairingVault.WriteReceipt older = vault.saveReversible("p", record());
+        vault.save("p", paused);
+        String newer = storage.values.get("kit.p");
+        assertFalse("another caller's newer write must survive", vault.rollback("p", older));
+        assertEquals(newer, storage.values.get("kit.p"));
+        assertFalse(vault.load("p").autoConnect);
+        assertFalse(first.after.contains(TOKEN)); assertNull(first.before);
+    }
+
+    @Test public void refusedRemovalAndRollbackAreFailuresRatherThanSuccess() throws Exception {
+        final boolean[] refuse = {false};
+        MemoryStorage storage = new MemoryStorage() {
+            @Override public void remove(String key) {
+                if (refuse[0]) throw new IllegalStateException("synthetic disk refusal");
+                super.remove(key);
+            }
+        };
+        CameraPairingVault vault = new CameraPairingVault(storage, new SoftwareCrypto());
+        CameraPairingVault.WriteReceipt receipt = vault.saveReversible("p", record());
+        refuse[0] = true;
+        try { vault.forget("p"); fail(); }
+        catch (CameraPairingVault.Failure expected) { assertEquals("storage_failed", expected.code); }
+        try { vault.rollback("p", receipt); fail(); }
+        catch (CameraPairingVault.Failure expected) { assertEquals("storage_failed", expected.code); }
+        assertNotNull(storage.values.get("kit.p"));
     }
 }

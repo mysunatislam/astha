@@ -125,6 +125,8 @@ async function openDeleteAccount(keepOpen) {
 async function confirmDeleteAccount() {
   const pending = deleteAccountState;
   if (!pending || deleteAccountBusy) return;
+  // Capture the explicit profile before any network or vault operation can change it.
+  const localProfile = window.ASTHA_LOCAL_ACCOUNT_ID;
   const passcode = $('delete-account-pin').value.trim();
   if (pending.registered && passcode.length < 4) {
     $('delete-account-pin').focus();
@@ -150,14 +152,29 @@ async function confirmDeleteAccount() {
       if (reply.status === 429) return dataStatus('Too many attempts. Nothing was deleted. Please try again later.', 'অনেকবার চেষ্টা করা হয়েছে। কিছুই মোছা হয়নি। পরে আবার চেষ্টা করুন।');
       if (!reply.ok) return dataStatus('Your account could not be deleted. Nothing was removed. Please try again.', 'অ্যাকাউন্ট মোছা যায়নি। কিছুই সরানো হয়নি। আবার চেষ্টা করুন।');
     }
-    const cleared = purgeLocalAccountData();
+    let cameraCleared = true;
+    if (typeof AsthaCameraKit !== 'undefined') AsthaCameraKit.accountCleared();
+    if (window.AsthaPairingStore) {
+      if (typeof localProfile !== 'string' || !/^[A-Za-z0-9_-]{1,128}$/.test(localProfile)) cameraCleared = false;
+      else {
+        // accountCleared cancels a pending save first; the store serialises this deletion
+        // after its compensation. The captured profile remains authorised for deletion
+        // even if the current account changes while IndexedDB or Keystore is responding.
+        try { await window.AsthaPairingStore.forget(localProfile, () => true); }
+        catch { cameraCleared = false; }
+      }
+    }
+    const sameProfile = localProfile === window.ASTHA_LOCAL_ACCOUNT_ID;
+    const cleared = (sameProfile ? purgeLocalAccountData() : false) && cameraCleared;
     $('delete-account-panel').hidden = true; deleteAccountState = null;
     if (pending.connected) {
       dataStatus(cleared ? 'Your account and everything saved with it are deleted.' : 'Your account is deleted. Some copies on this phone could not be cleared; clear this site in browser settings.',
         cleared ? 'আপনার অ্যাকাউন্ট ও এর সঙ্গে সংরক্ষিত সবকিছু মুছে ফেলা হয়েছে।' : 'আপনার অ্যাকাউন্ট মুছে ফেলা হয়েছে। এই ফোনের কিছু কপি মোছা যায়নি; ব্রাউজারের সেটিংস থেকে এই সাইটের তথ্য মুছুন।');
       // The session no longer exists. Leave time for the confirmation to be heard, then restart clean.
-      if (typeof window.ASTHA_CLEAR_ACCOUNT === 'function') window.ASTHA_CLEAR_ACCOUNT({ logout: true });
-      setTimeout(() => location.reload(), 3500);
+      if (sameProfile) {
+        if (typeof window.ASTHA_CLEAR_ACCOUNT === 'function') window.ASTHA_CLEAR_ACCOUNT({ logout: true });
+        setTimeout(() => location.reload(), 3500);
+      }
     } else {
       dataStatus(cleared ? 'The notes and templates saved on this phone are deleted.' : 'Browser storage could not be cleared. Try again in browser settings.',
         cleared ? 'এই ফোনে সংরক্ষিত নোট ও নমুনা মুছে ফেলা হয়েছে।' : 'ব্রাউজারের সংরক্ষণ মোছা যায়নি। ব্রাউজারের সেটিংস থেকে আবার চেষ্টা করুন।');

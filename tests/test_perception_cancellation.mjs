@@ -28,7 +28,7 @@ const actual = [
   fn(moduleSource, 'refineWorld'),
   section(moduleSource, 'const liveRefineCache =', '\n// ---- Voice choice'),
   section(moduleSource, 'const MIRROR_SET =', '\n// ---- Astha\'s heart'),
-  fn(moduleSource, 'howDoILook'), fn(perceive, 'describeScene'), fn(offline, 'stopAllSpeech'),
+  fn(moduleSource, 'howDoILook'), fn(perceive, 'describeScene'), fn(perceive, 'answerHowFar'), fn(perceive, 'currentMeasuredDistance'), fn(offline, 'stopAllSpeech'),
 ].join('\n');
 const deferred = () => { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; };
 const settle = () => new Promise(resolve => setImmediate(resolve));
@@ -38,7 +38,7 @@ const tensor = { predicted_depth: { dims: [1, 2, 2], data: new Float32Array([0, 
 const clothing = { colors: { top: 'blue' } };
 
 function harness() {
-  const nodes = new Map(), calls = { stages: [], captions: [], speech: [], announcements: [], effects: [], errors: [] };
+  const nodes = new Map(), calls = { stages: [], captions: [], speech: [], announcements: [], effects: [], errors: [], perceptionOptions: [] };
   const element = id => {
     if (!nodes.has(id)) nodes.set(id, { textContent: '', value: 'short', attributes: {}, setAttribute(k, v) { this.attributes[k] = v; } });
     return nodes.get(id);
@@ -56,7 +56,7 @@ function harness() {
     setCaption: (...args) => calls.captions.push(args), speak: (...args) => calls.speech.push(args),
     announce: (...args) => calls.announcements.push(args), cloudFail: error => calls.errors.push(String(error)),
     captureFrame: () => { calls.effects.push('capture'); return frame; },
-    trackMotion: () => calls.effects.push('motion'), perceptionHook: () => calls.effects.push('perception'),
+    trackMotion: () => calls.effects.push('motion'), perceptionHook: (_objects, _frame, options) => { calls.effects.push('perception'); calls.perceptionOptions.push(options); },
     ingest: objects => { for (const object of objects) context.state.world.set(object.id, object); calls.effects.push('ingest'); },
     drawOverlay: () => calls.effects.push('overlay'), worldSorted: () => [...context.state.world.values()],
     sceneSummary: () => ({ en: 'Synthetic person ahead.', bn: 'সামনে পরীক্ষার মানুষ।' }),
@@ -67,6 +67,8 @@ function harness() {
     centerRect: () => ({}), bodyRect: () => ({}),
     clothingSentence: () => ({ isGarment: true, garment: { en: 'shirt', bn: 'শার্ট' } }),
     colorName: value => value, colorNameBn: () => 'নীল', CLOUD_PROMPTS: { mirror: 'mirror' },
+    AsthaSensors: { measured: () => null }, measuredPhrase: metres => 'measured at ' + metres + ' metres',
+    objLabel: object => object.id, objLabelBn: object => object.id,
   });
   context.window = context; context.ASTHA_ACCOUNT_ID = 'synthetic-owner-a';
   const defaults = { models: true, detect: detection, clip: () => ({ hits: [] }), depth: tensor,
@@ -142,6 +144,36 @@ test('normal offline description and appearance retain scene, refinement and bil
   assert.match(look.calls.announcements[0][1], /শার্ট/); assert.equal(look.context.state.busy, false);
 });
 
+test('offline descriptions associate sensor distance only with the unchanged sample from their captured picture', async () => {
+  for (const changed of [false, true]) {
+    const h = harness(), wait = deferred(); h.context.state.source = 'pi';
+    const original = { measured: true, metres: 1.2, at: 1000 };
+    let reading = original; h.context.AsthaSensors.measured = () => reading;
+    h.results.detect = () => wait.promise;
+    const pending = h.run('describeScene(true)'); await settle();
+    if (changed) reading = { measured: true, metres: .4, at: 1100 };
+    wait.resolve(detection()); await pending;
+    assert.equal(h.calls.perceptionOptions.length, 1);
+    assert.equal(h.calls.perceptionOptions[0].sensorReading, changed ? null : original,
+      'a newer echo must not label an object in an older picture');
+  }
+});
+
+test('a new forward echo cannot name the object associated with a previous sensor sample', () => {
+  const h = harness(); h.context.state.source = 'pi';
+  const object = { id: 'chair', distMeasured: true, distM: 1.2, distMeasuredAt: 1000, distMeasuredEpoch: 1 };
+  h.context.state.scene = { at: Date.now(), ahead: { object } };
+  let reading = { measured: true, metres: 1.2, at: 1000 };
+  h.context.AsthaSensors.measured = () => reading;
+  h.run("answerHowFar('how far is it')");
+  assert.match(h.calls.announcements.at(-1)[0], /^The chair straight ahead is measured at 1\.2 metres/);
+  reading = { measured: true, metres: .4, at: 1100 };
+  h.run("answerHowFar('how far is it')");
+  assert.match(h.calls.announcements.at(-1)[0], /^Something straight ahead is measured at 0\.4 metres/);
+  assert.doesNotMatch(h.calls.announcements.at(-1)[0], /chair/);
+  assert.doesNotMatch(h.calls.announcements.at(-1)[1], /chair/);
+});
+
 test('appearance Stop at model, detector, refinement and clothing boundaries suppresses late effects', async () => {
   for (const phase of ['models', 'detect', 'refinePrompt', 'refineEmbed', 'clothing']) for (const reject of [false, true]) {
     const h = harness(), wait = deferred(); h.results[phase] = () => wait.promise;
@@ -194,6 +226,15 @@ test('a previously valid depth cache is unavailable after Stop, source, account 
     h.run('DepthEngine.busy = true');
     assert.equal(await h.run('DepthEngine.run({width:640,height:480})'), null);
   }
+});
+
+test('asking for a new picture while depth is busy never returns the previous picture', async () => {
+  const h = harness(); await h.run('DepthEngine.run({width:640,height:480})');
+  assert(h.run('DepthEngine.fresh()'), 'live perception can explicitly consult a recent cache');
+  h.run('DepthEngine.busy = true; DepthEngine.last.at = Date.now() - 600000;');
+  assert.equal(await h.run('DepthEngine.run({width:640,height:480})'), null);
+  h.run('DepthEngine.last.at = Date.now();');
+  assert.equal(await h.run('DepthEngine.run({width:640,height:480})'), null, 'even a recent different picture is not the requested one');
 });
 
 test('live refinement cannot publish stale votes/mirror effects or unlock a newer busy operation', async () => {

@@ -166,32 +166,45 @@ access; those are the owner's to complete at submission.
 ## Spatial layout: what is on each side
 
 "What's on each side?", "which way should I go?", "where can I walk?", "দুই পাশে কী আছে?" or
-"কোন দিকে ফাঁকা?" takes one fresh picture and says how far the nearest thing is to the left,
-straight ahead and to the right. It runs on the phone in both online and offline modes,
-because the online assistant has neither the depth model nor the Pi's distance sensor.
+"কোন দিকে ফাঁকা?" requests a rough description of the left, centre and right of one picture.
+It runs locally in both online and offline modes, because the cloud assistant cannot read
+the local depth model or Pi sensor. This is experimental relative-depth scaling, not
+validated metric reconstruction, a walkable-space detector or navigation.
 
 How the distances are made:
 
-1. The on-device depth model (Depth Anything V2) only knows which parts of the picture are
-   nearer. Its output behaves like *k ÷ distance + c*.
-2. Two or more known distances in the same picture fix *k* and *c*: the Pi's ultrasonic
-   reading (measured, counted four times) and the size-based distance of each recognised
-   object (estimates). The fit is refused when the known distances are all alike, when
-   nearer things would come out farther, or when they disagree by more than about 50 %.
+1. The on-device model (Depth Anything V2) produces relative depth. The app assumes an
+   approximate *k ÷ distance + c* relationship; this has not been calibrated on this kit.
+2. Two or more distinct anchors fit *k* and *c*. Object-size anchors use class averages and
+   an assumed camera focal length, so they are estimates rather than known true distances.
+   A fresh Pi sensor sample gets four times the weight only if the same sample is still
+   current after inference. At the sensor's normal 10 Hz rate this will often be unavailable;
+   a later echo is never used to scale an earlier picture. The fit is refused for alike or
+   inverted anchors, or when the overall logarithmic fitting error is too large. Two size
+   guesses can fit exactly despite both being wrong; a successful fit is not calibration.
 3. For each direction, the nearest part of a band around eye level (30–70 % of the
-   picture's height) is converted to metres. Straight ahead uses the sensor's reading
-   whenever there is one.
+   picture's height, ignoring the nearest tenth of pixels as noise) supplies the regional
+   estimate. A busy or failed depth run cannot return a previous picture's map for this
+   calculation. Straight ahead can independently report the current fresh sensor range,
+   even if the model is unavailable. That later range is kept separate from the fit.
 
-What is said, for example: "To your left: something about 1 metre away, a chair. Straight
-ahead: measured at 1.9 metres, a person. To your right: nothing seen within 4 metres.
+What is said, for example: "To your left: something about 1 metre away. Straight ahead:
+measured at 1.9 metres. To your right: I cannot judge the distance from this picture.
 Distances are estimates from the picture, except the measured one. Use your cane to
-confirm." Estimates are rounded to half metres and always say "about". Without a usable
-fit ASTHA says only which side is nearer, and no picture-based number. It never calls a
-direction clear, free or safe; a test fails if those words appear.
+confirm." Estimates use coarse rounding and always say "about". A regional depth does not
+identify an object, so image-estimated distances do not append object names. A measured
+range can name only the app's current matched detection, which is still a heuristic
+requiring physical sensor/camera alignment validation. Without a usable fit, only a
+distinctly nearer side is described; tied or missing evidence stays unknown. Beyond the
+reporting range, invalid depth and missing scale never imply that nearby space is empty.
+Neither language calls a direction clear or safe.
 
 Limits: one picture, no memory of what was behind the camera, and no tilt sensor (the
 MPU6050 was deferred), so a camera pointing down can put the floor into the band and make a
 direction look nearer than it is. The directions are relative to where the camera points.
+Known-distance accuracy, rigid sensor/camera alignment, focal-length calibration and real
+phone latency remain unverified. Automated tests use synthetic maps and sensor samples;
+they establish evidence handling and wording, not physical depth accuracy.
 
 ## Checks run in a desktop browser
 

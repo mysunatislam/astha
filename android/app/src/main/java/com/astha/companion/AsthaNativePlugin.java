@@ -634,7 +634,9 @@ public class AsthaNativePlugin extends Plugin {
                 @Override public void put(String key, String value) {
                     if (!stored.edit().putString(key, value).commit()) throw new IllegalStateException("not_saved");
                 }
-                @Override public void remove(String key) { stored.edit().remove(key).commit(); }
+                @Override public void remove(String key) {
+                    if (!stored.edit().remove(key).commit()) throw new IllegalStateException("not_removed");
+                }
             }, new KeystorePairingCrypto());
         }
         return pairingVault;
@@ -685,12 +687,21 @@ public class AsthaNativePlugin extends Plugin {
         return result;
     }
 
+    private static JSObject pairingWriteResult(CameraPairingVault.Record record, CameraPairingVault.WriteReceipt receipt) {
+        JSObject result = pairingResult(record, false);
+        JSObject rollback = new JSObject();
+        rollback.put("before", receipt.before == null ? org.json.JSONObject.NULL : receipt.before);
+        rollback.put("after", receipt.after);
+        result.put("rollback", rollback);
+        return result;
+    }
+
     @PluginMethod
     public void cameraPairingSave(PluginCall call) {
         try {
             CameraPairingVault.Record record = CameraPairingVault.checked(pairingFields(call, null));
-            pairingVault().save(call.getString("profile"), record);
-            call.resolve(pairingResult(record, false));
+            CameraPairingVault.WriteReceipt receipt = pairingVault().saveReversible(call.getString("profile"), record);
+            call.resolve(pairingWriteResult(record, receipt));
         } catch (CameraPairingVault.Failure failure) {
             call.reject("The camera pairing was not saved.", failure.code);
         }
@@ -724,8 +735,8 @@ public class AsthaNativePlugin extends Plugin {
                 return;
             }
             record = CameraPairingVault.checked(pairingFields(call, record));
-            pairingVault().save(profile, record);
-            call.resolve(pairingResult(record, false));
+            CameraPairingVault.WriteReceipt receipt = pairingVault().saveReversible(profile, record);
+            call.resolve(pairingWriteResult(record, receipt));
         } catch (CameraPairingVault.Failure failure) {
             call.reject("The camera pairing was not updated.", failure.code);
         }
@@ -738,6 +749,18 @@ public class AsthaNativePlugin extends Plugin {
             call.resolve();
         } catch (CameraPairingVault.Failure failure) {
             call.reject("The camera pairing could not be removed.", failure.code);
+        }
+    }
+
+    @PluginMethod
+    public void cameraPairingRollback(PluginCall call) {
+        try {
+            String before = call.getString("before");
+            CameraPairingVault.WriteReceipt receipt = new CameraPairingVault.WriteReceipt(before, call.getString("after"));
+            pairingVault().rollback(call.getString("profile"), receipt);
+            call.resolve();
+        } catch (CameraPairingVault.Failure failure) {
+            call.reject("The cancelled camera pairing could not be cleared.", failure.code);
         }
     }
 
