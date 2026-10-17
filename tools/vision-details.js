@@ -4,7 +4,7 @@ const AsthaVisionDetails = (() => {
   const LIVE_MAX_AGE = 3500, MAX_ROWS = 20;
   const frames = new WeakMap();
   let revision = 0, sequence = 0, latest = null, active = null, newest = 0;
-  let reason = '', visible = false, booted = false, timer = null, signature = '';
+  let reason = '', visible = false, booted = false, timer = null, signature = '', description = null;
   const clock = () => performance.now();
   const live = source => source === 'camera' || source === 'pi';
   const element = id => $(id);
@@ -23,7 +23,7 @@ const AsthaVisionDetails = (() => {
   }
   function capture(frame) {
     if (!frame || typeof frame !== 'object') return;
-    frames.set(frame, { sequence: ++sequence, revision, source: state.source, at: clock(), current: captureLocalActionGuard(), detected: false });
+    frames.set(frame, { sequence: ++sequence, revision, source: state.source, at: clock(), capturedAt: Date.now(), current: captureLocalActionGuard(), detected: false });
   }
   function begin(frame) {
     const meta = frames.get(frame);
@@ -79,8 +79,32 @@ const AsthaVisionDetails = (() => {
     render(); return true;
   }
   function clear() {
-    revision++; latest = null; active = null; reason = ''; signature = '';
+    revision++; latest = null; active = null; description = null; reason = ''; signature = '';
     clearBoxes(); render();
+  }
+  // Keep only an explicitly produced description in memory, separate from status captions.
+  // Cloud latency does not turn it into a live observation: display its capture time.
+  function describeResult(frame, words, provider) {
+    const meta = frames.get(frame);
+    if (!meta || meta.revision !== revision || !meta.current() || description && meta.sequence < description.meta.sequence || !words ||
+        typeof words.en !== 'string' || typeof words.bn !== 'string') return false;
+    description = { meta, en: words.en.slice(0, 8000), bn: words.bn.slice(0, 8000), online: provider === 'online' };
+    renderDescription(); return true;
+  }
+  function renderDescription() {
+    if (description && (description.meta.revision !== revision || !description.meta.current())) description = null;
+    const node = element('vision-description-text'), info = element('vision-description-meta');
+    const button = element('vision-describe');
+    if (button) button.disabled = !state.source || Boolean(state.busy) || document.hidden;
+    const bn = typeof uiLang !== 'undefined' && uiLang === 'bn';
+    const text = description ? (bn ? description.bn || description.en : description.en || description.bn) : t('vision_description_empty');
+    if (node && node.textContent !== text) node.textContent = text;
+    const metadata = description ? t('vision_description_meta', {
+      source: t(description.meta.source === 'pi' ? 'vision_description_pi' : description.meta.source === 'camera' ? 'vision_description_camera' : 'vision_description_image'),
+      time: new Date(description.meta.capturedAt).toLocaleTimeString(bn ? 'bn-BD' : 'en-GB'),
+      provider: t(description.online ? 'vision_description_online' : 'vision_description_local'),
+    }) : '';
+    if (info && info.textContent !== metadata) info.textContent = metadata;
   }
   function sourceChanged() { clear(); }
   function modelChanged() {
@@ -101,11 +125,12 @@ const AsthaVisionDetails = (() => {
     if (engine.coco.status === 'loading') return 'vision_loading';
     if (engine.coco.status === 'error' || reason === 'failed') return 'vision_failed';
     if (active) return 'vision_checking';
-    if (latest) return !latest.meta.detected ? 'vision_waiting' : latest.boxes ? (live(latest.meta.source) ? 'vision_live_results' : 'vision_image_results') : 'vision_none';
+    if (latest) return !latest.meta.detected ? 'vision_waiting' : latest.boxes ? (live(latest.meta.source) ? 'vision_live_results' : 'vision_image_results') : 'vision_no_boxes';
     return reason === 'stale' ? 'vision_stale' : 'vision_waiting';
   }
   function render(force = false) {
     expire();
+    renderDescription();
     const key = statusKey(), model = modelKey();
     const next = [uiLang, key, model, latest?.meta.sequence, state.source, Boolean(state.busy), Boolean(state.cameraPending)].join('|');
     if (next === signature && !force) return;
@@ -163,9 +188,10 @@ const AsthaVisionDetails = (() => {
     if (booted) return;
     booted = true;
     element('vision-check')?.addEventListener('click', check);
+    element('vision-describe')?.addEventListener('click', () => describeScene(undefined, true));
     element('vision-camera')?.addEventListener('click', () => toggleCamera());
     document.addEventListener('visibilitychange', () => { if (document.hidden) clear(); render(); schedule(); });
     render();
   }
-  return { capture, begin, skipped, complete, failed, canDraw, publish, sourceChanged, modelChanged, clear, render, setVisible, check, boot };
+  return { capture, begin, skipped, complete, failed, canDraw, publish, describeResult, sourceChanged, modelChanged, clear, render, setVisible, check, boot };
 })();

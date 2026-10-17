@@ -490,7 +490,7 @@ function sceneSummary(opts = {}) {
 // ---- "Describe" now goes through the summary above ----
 function describeScene(skipCloud, forceDetailed) {
   if (withCamera(describeScene)) return;
-  if (typeof cloudReady === 'function' && cloudReady() && !skipCloud) return cloudDescribe();
+  if (typeof cloudReady === 'function' && cloudReady() && !skipCloud) return cloudDescribe(forceDetailed === true);
   const current = captureLocalActionGuard();
   if (!current()) return;
   return withBusy(t('analyzing_title'), async () => {
@@ -513,8 +513,12 @@ function describeScene(skipCloud, forceDetailed) {
     state.world.clear(); ingest(cocoObjs.concat(clip.hits), state.source === 'camera' ? 3500 : 1e9); drawOverlay(frame, cocoObjs, clip.hits);
     const objs = worldSorted();
     const now = Date.now(); objs.forEach(o => state.announced.set(o.id, now));
-    if (!objs.length) { setCaption(t('describe_title'), t('nothing_seen'), 'vision', null, tBn('nothing_seen')); speak(t('nothing_seen'), tBn('nothing_seen')); return; }
+    if (!objs.length) {
+      if (typeof AsthaVisionDetails !== 'undefined') AsthaVisionDetails.describeResult(frame, { en: t('nothing_seen'), bn: tBn('nothing_seen') }, 'local');
+      setCaption(t('describe_title'), t('nothing_seen'), 'vision', null, tBn('nothing_seen')); speak(t('nothing_seen'), tBn('nothing_seen')); return;
+    }
     const s = sceneSummary({ detailed: forceDetailed || ($('description-style') && $('description-style').value !== 'short') });
+    if (typeof AsthaVisionDetails !== 'undefined') AsthaVisionDetails.describeResult(frame, s, 'local');
     setCaption(t('describe_title'), s.en, 'vision', null, s.bn);
     playEarcon('confirm'); speak(s.en, s.bn); haptic('CONFIRM');
     if (typeof heartPointAt === 'function') heartPointAt(objs[0]);

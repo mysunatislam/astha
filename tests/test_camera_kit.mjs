@@ -338,8 +338,24 @@ function remembered(store, record, profile = 'user-1') {
   store.records.set(profile, { origin: HOST, token: TOKEN, fallbacks: [], autoConnect: true, device: { id: ID, proof: true, name: 'hemovasc-pi' }, ...record });
   return store;
 }
-function kitSetup({ store = memoryStore(), net = network(), source = null, account = 'user-1', boot = true } = {}) {
+function kitSetup({ store = memoryStore(), net = network(), source = null, account = 'user-1', boot = true, identityCrypto = globalThis.crypto } = {}) {
   const elements = new Map(), documentListeners = new Map(), windowListeners = new Map(), timers = new Map(), spoken = [], captions = [], printed = [];
+  const pendingCrypto = new Set();
+  const cryptoCall = (method, args) => {
+    const pending = identityCrypto.subtle[method](...args);
+    pendingCrypto.add(pending);
+    pending.then(() => pendingCrypto.delete(pending), () => pendingCrypto.delete(pending));
+    return pending;
+  };
+  const trackedCrypto = { getRandomValues: bytes => identityCrypto.getRandomValues(bytes), subtle: {
+    importKey: (...args) => cryptoCall('importKey', args), sign: (...args) => cryptoCall('sign', args),
+  } };
+  // Crypto uses real worker threads, outside the fake clock. A fixed count of event-loop
+  // turns does not prove it has finished (CI can run those turns before the worker replies).
+  const drain = async () => {
+    await settle();
+    while (pendingCrypto.size) { await Promise.allSettled([...pendingCrypto]); await settle(); }
+  };
   let timerId = 0, now = 1000;
   const element = id => {
     if (!elements.has(id)) elements.set(id, { id, value: '', hidden: false, checked: false, disabled: false, required: true, readOnly: false, textContent: '', width: 640, height: 480, listeners: {},
@@ -353,7 +369,7 @@ function kitSetup({ store = memoryStore(), net = network(), source = null, accou
   const record = (...args) => printed.push(args.map(String).join(' '));
   const context = vm.createContext({
     console: { log: record, info: record, warn: record, error: record, debug: record },
-    URL, Blob, Response, Uint8Array, AbortController, TextEncoder, TextDecoder, crypto: globalThis.crypto, btoa,
+    URL, Blob, Response, Uint8Array, AbortController, TextEncoder, TextDecoder, crypto: trackedCrypto, btoa,
     performance: { now: () => now }, Date: { now: () => now },
     setTimeout: (fn, ms = 0) => { timers.set(++timerId, { fn, at: now + ms }); return timerId; }, clearTimeout: id => timers.delete(id),
     createImageBitmap: async () => ({ width: 640, height: 480, close() {} }),
@@ -378,13 +394,13 @@ globalThis.ui = AsthaPiCamera; globalThis.kit = AsthaCameraKit;`, context);
     async advance(ms = 0) {
       const target = now + ms;
       for (;;) {
-        await settle();
+        await drain();
         const due = [...timers.entries()].filter(([, timer]) => timer.at <= target).sort((a, b) => a[1].at - b[1].at || a[0] - b[0])[0];
         if (!due) break;
         timers.delete(due[0]); now = Math.max(now, due[1].at);
         await due[1].fn();
       }
-      now = target; await settle();
+      now = target; await drain();
     },
     async hide(hidden) { context.document.hidden = hidden; for (const fn of documentListeners.get('visibilitychange') || []) fn(); await this.advance(0); },
     async fire(type) { for (const fn of windowListeners.get(type) || []) fn(); await this.advance(0); },
@@ -394,6 +410,25 @@ globalThis.ui = AsthaPiCamera; globalThis.kit = AsthaCameraKit;`, context);
   if (boot) { context.ui.boot(); context.kit.boot(); }
   return h;
 }
+
+test('the fake clock awaits actual identity crypto before asserting automatic connection state', async () => {
+  let release, entered;
+  const gate = new Promise(resolve => { release = resolve; });
+  const started = new Promise(resolve => { entered = resolve; });
+  const identityCrypto = { getRandomValues: bytes => globalThis.crypto.getRandomValues(bytes), subtle: {
+    async importKey(...args) { entered(); await gate; return globalThis.crypto.subtle.importKey(...args); },
+    sign: (...args) => globalThis.crypto.subtle.sign(...args),
+  } };
+  const net = network(); net.hosts.set(HOST, net.device());
+  const h = kitSetup({ store: remembered(memoryStore()), net, identityCrypto });
+  let finished = false;
+  const advancing = h.advance(0).then(() => { finished = true; });
+  await started; await settle(60);
+  assert.equal(h.kit.phase, 'looking', 'identity must finish before a connection is trusted');
+  assert.equal(finished, false, 'advancing fake time cannot outrun a pending real crypto operation');
+  release(); await advancing;
+  assert.equal(h.kit.phase, 'connected'); assert.equal(h.context.state.source, 'pi'); assert(h.ui.frame());
+});
 
 test('pair once with Remember; after closing and reopening ASTHA the same ClipCam connects by itself', async () => {
   const net = network(); net.hosts.set(HOST, net.device());

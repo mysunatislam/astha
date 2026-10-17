@@ -206,13 +206,15 @@ function scheduleCloudFallback(run) {
 }
 
 // ---- Server-backed actions with on-device fallback ----
-async function cloudDescribe() {
+async function cloudDescribe(detailed = false) {
   return withBusy(t('analyzing_title'), async () => {
     const frame = captureFrame(896); if (!frame) return;
     heartSet({ x: 0.5, y: 0.5, mode: 'seek', label: 'Looking…' });
     try {
-      const r = await gemini(CLOUD_PROMPTS.describe, frame, { observeMemory: true });
-      if (r.mirror === true) { await cloudCompliment(frame, r); return; }
+      const prompt = detailed ? CLOUD_PROMPTS.describe.replace('in at most two short sentences per language', 'in four to six concise sentences per language, as explicitly requested, covering the visible objects and their positions') : CLOUD_PROMPTS.describe;
+      const r = await gemini(prompt, frame, { observeMemory: true, ...(detailed ? { maxTokens: 1500 } : {}) });
+      if (typeof AsthaVisionDetails !== 'undefined') AsthaVisionDetails.describeResult(frame, { en: r.en || t('nothing_seen'), bn: r.bn || tBn('nothing_seen') }, 'online');
+      if (r.mirror === true && !detailed) { await cloudCompliment(frame, r); return; }
       announce(r.en || t('nothing_seen'), r.bn || tBn('nothing_seen'), 'vision'); playEarcon(r.hazard ? 'hazard' : 'confirm'); haptic(r.hazard ? 'RAPID' : 'CONFIRM');
       heartFlash({ x: 0.5, y: 0.5, mode: 'lock', label: (r.objects || [])[0] || '' });
       logEvent('Cloud described: ' + ((r.objects || []).slice(0, 4).join(', ') || 'scene'));
@@ -222,7 +224,7 @@ async function cloudDescribe() {
     } catch (e) {
       if (e.cancelled) return;
       if (cloudFail(e)) announce('The cloud is busy for a moment; describing on-device.', 'ক্লাউড একটু ব্যস্ত; ডিভাইসেই বর্ণনা করছি।', 'system');
-      scheduleCloudFallback(() => describeScene(true));
+      scheduleCloudFallback(() => describeScene(true, detailed));
     }
   });
 }

@@ -496,7 +496,9 @@ const AsthaExperience = (() => {
     }
     document.addEventListener('visibilitychange', () => { if (document.hidden) { visualGeneration++; contextGeneration++; clearTimeout(boardTimer); boardTimer = null; } else if (mode === 'reading' && !boardTimer) boardTimer = setTimeout(checkBoard, 5000); });
     fillForm(preferences);
-    showPage('home', { focus: false, speakTitle: false });
+    // A presentation shortcut may open the existing view; camera access still requires
+    // an explicitly remembered kit or the normal camera permission control.
+    showPage(typeof location !== 'undefined' && location.hash === '#detailed-view' ? 'tools' : 'home', { focus: false, speakTitle: false });
     // Consent lasts one session. Someone who chose Online last time is asked again at the
     // start, so the Bangla voice does not stay unavailable until they find the switch.
     if (typeof Subscription !== 'undefined' && Subscription.getMode() === 'gemini' && !remoteProcessingAllowed() &&
