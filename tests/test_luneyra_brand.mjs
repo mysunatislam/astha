@@ -27,13 +27,14 @@ test('LUNEYRA preserves the supplied emblem and names the app without changing i
  assert.match(html,/<html[^>]+data-theme="lavender"/);
  assert.equal(manifest.short_name,'LUNEYRA');assert.equal(manifest.theme_color,'#64409a');
  for(const [name,hash] of [['astha-mulberry-apricot-v1.png','e712869f7134de9acbb1705152d46fb84576711eea27351d654370d13107f706'],['astha-mulberry-apricot-dark-v1.png','df4a48c46143e07cfef366b29950bab0930ec7ae858cfa116b61b4a0726b386f']]){
-  assert(html.includes('brand/'+name));
   assert.equal(createHash('sha256').update(fs.readFileSync(new URL('../web/brand/'+name,import.meta.url))).digest('hex'),hash,'supplied logo bytes are unchanged');
   assert(read('web/sw.js').includes('brand/'+name),'branding stays available offline');
  }
  const markup=html.slice(0,html.indexOf('<script'));
  assert.doesNotMatch(markup,/alt="Astha"|>Ask Astha</);
  assert.match(markup,/class="brand-wordmark" data-i18n="brand">LUNEYRA<\/span>/);
+ assert.match(markup,/src="brand\/luneyra-purple-winged-v1\.png"/,'the complete updated purple wordmark is displayed');
+ assert(read('web/sw.js').includes('brand/luneyra-purple-winged-v1.png'),'the updated logo is cached for offline use');
  const native=JSON.parse(read('capacitor.config.json'));
  assert.equal(native.appName,'LUNEYRA');assert.equal(native.appId,'com.astha.companion');
  assert.match(read('tools/experience.js'),/const PREF_KEY = 'astha\.accessibility\.v2'/,'account and kit storage compatibility is preserved');

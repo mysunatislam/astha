@@ -192,7 +192,8 @@ test('service-worker install caches bootstrap dependencies and preserves unrelat
   s.events.get('install')({ waitUntil: promise => { pending = promise; } }); await pending;
   assert(s.added.includes(bootstrapPath('config.js'))); assert(s.added.includes(bootstrapPath('backend.js')));
   assert(s.addedRequests.every(request => request.cache === 'reload'), 'installation bypasses an older release HTTP cache, including HTML');
-  assert(s.added.includes('./brand/astha-mulberry-apricot-v1.png'), 'the header logo is available in the installed offline shell');
+  assert(s.added.includes('./brand/luneyra-purple-winged-v1.png'), 'the LUNEYRA header logo is available in the installed offline shell');
+  assert(s.added.includes('./brand/astha-mulberry-apricot-v1.png'), 'the retained original logo remains available');
   assert(s.added.includes('./brand/astha-mulberry-apricot-dark-v1.png'), 'and its dark-theme variant');
   s.events.get('activate')({ waitUntil: promise => { pending = promise; } }); await pending;
   assert.deepEqual(s.removed, ['astha-shell-old']);

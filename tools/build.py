@@ -642,7 +642,7 @@ print("wrote", DST, len(html.encode("utf-8")), "bytes")
 # ---- service worker: a new cache name per build, so stale shells are dropped on activate ----
 sw_path = DST.parent / "sw.js"
 sw = sw_path.read_text(encoding="utf-8")
-shell_assets = ("manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png", "brand/astha-mulberry-apricot-v1.png", "brand/astha-mulberry-apricot-dark-v1.png")
+shell_assets = ("manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png", "brand/luneyra-purple-winged-v1.png", "brand/astha-mulberry-apricot-v1.png", "brand/astha-mulberry-apricot-dark-v1.png")
 shell_urls = ["./", "./index.html"] + ["./" + bootstrap_urls[name] for name in BOOTSTRAP] + ["./" + name for name in shell_assets]
 sw, replacements = re.subn(r"^const SHELL = .*;$", "const SHELL = " + json.dumps(shell_urls) + ";", sw, count=1, flags=re.MULTILINE)
 assert replacements == 1, 'Service-worker shell URL anchor is missing.'

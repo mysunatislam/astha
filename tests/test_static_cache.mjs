@@ -56,7 +56,7 @@ test('a changed bootstrap gets a new HTTP cache key on first load and matching o
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'astha-cache-release-'));
   try {
     fs.cpSync(path.join(root, 'tools'), path.join(directory, 'tools'), { recursive: true });
-    for (const name of [...bootstrap, 'sw.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'brand/astha-mulberry-apricot-v1.png', 'brand/astha-mulberry-apricot-dark-v1.png']) {
+    for (const name of [...bootstrap, 'sw.js', 'manifest.webmanifest', 'icons/icon-192.png', 'icons/icon-512.png', 'brand/luneyra-purple-winged-v1.png', 'brand/astha-mulberry-apricot-v1.png', 'brand/astha-mulberry-apricot-dark-v1.png']) {
       const target = path.join(directory, 'web', name); fs.mkdirSync(path.dirname(target), { recursive: true });
       fs.copyFileSync(path.join(root, 'web', name), target);
     }
