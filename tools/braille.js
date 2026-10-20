@@ -1,6 +1,6 @@
 // Six-key Braille controller support, ready for hardware that does not exist yet.
 //
-//   transport  ->  key masks  ->  chord decoder  ->  command map / text entry  ->  ASTHA action
+//   transport  ->  key masks  ->  chord decoder  ->  command map / text entry  ->  LUNEYRA action
 //
 // A transport only reports which keys are down. Everything after that is shared, so the
 // planned ESP32 controller needs a transport and nothing else. Today the keyboard practice
@@ -34,7 +34,7 @@ const AsthaBraille = (() => {
     } },
     text: { label: 'brl_cmd_text', run: () => setTextMode(!textMode) },
   };
-  // The full cell is the easiest chord to find in a hurry, so it always stops ASTHA.
+  // The full cell is the easiest chord to find in a hurry, so it always stops LUNEYRA.
   const DEFAULT_MAP = Object.freeze({ [FULL_CELL]: 'stop', 7: 'listen', 25: 'describe', 23: 'read', 11: 'find', 1: 'repeat', 9: 'camera', 19: 'home', 13: 'mode', 30: 'text' });
   const MAP_KEY = 'astha.braille.map.v1';
   let mapping = { ...DEFAULT_MAP };

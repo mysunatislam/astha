@@ -1,9 +1,9 @@
-// "Remember this ASTHA kit". After one authorised pairing ASTHA finds the same ClipCam again
+// "Remember this LUNEYRA kit". After one authorised pairing LUNEYRA finds the same ClipCam again
 // by itself: after the app or the Pi restarts, after a Wi-Fi drop, and at a new address on a
 // reachable network. It looks for the camera's .local name first and uses addresses that have
 // worked before only as fallbacks; an address is never treated as the camera's identity. The
 // pairing code stays sealed on this device (paired-camera-store.js) and is never spoken,
-// shown, logged or sent anywhere but to the camera. Searching happens only while ASTHA is on
+// shown, logged or sent anywhere but to the camera. Searching happens only while LUNEYRA is on
 // screen, and never takes over a phone camera or photo the user chose.
 const AsthaCameraKit = (() => {
   const RETRY_MS = [3000, 6000, 12000, 20000, 30000];
@@ -113,7 +113,7 @@ const AsthaCameraKit = (() => {
       const code = error?.code;
       if (!current() || code === 'busy' || code === 'stopped') return { result: 'cancelled' };
       // A refused code is only believed from the camera's own name or a proven identity;
-      // an unrelated device at an old address must not make ASTHA forget the pairing.
+      // an unrelated device at an old address must not make LUNEYRA forget the pairing.
       if (code === 'pairing_rejected') return { result: identity.supported || origin === record.origin ? 'rejected' : 'mismatch' };
       return { result: identity.reachable && CAMERA_CODES.has(code) ? 'camera' : 'unreachable' };
     }
@@ -348,14 +348,14 @@ const AsthaCameraKit = (() => {
     return true;
   }
   // ---- Voice ----
-  const DEVICE = '(?:my |the |this )?(?:astha )?(?:clip ?-?cam(?:era)?|clip-on camera|wi-?fi camera|camera kit|astha kit|kit|device|camera)';
+  const DEVICE = '(?:my |the |this )?(?:(?:luneyra|luneira|astha) )?(?:clip ?-?cam(?:era)?|clip-on camera|wi-?fi camera|camera kit|(?:luneyra|luneira|astha) kit|kit|device|camera)';
   const BN_DEVICE = '(?:ক্যামেরা|ক্লিপক্যাম|ক্লিপ ক্যামেরা|ডিভাইস|কিট)';
   const FORGET = new RegExp('^forget ' + DEVICE + '$');
   const DISCONNECT = new RegExp('^(?:please )?disconnect(?: from)? ' + DEVICE + '$');
   const STATUS = new RegExp('^(?:is|are) ' + DEVICE + '(?: still)? (?:connected|on|working|online|live|there)$|^(?:clip ?cam|camera|device|kit|connection) status$|^(?:what is|what\'s) (?:the )?(?:status of )?' + DEVICE + '(?: status)?$');
-  const CONNECT = new RegExp('^(?:please )?(?:re)?connect(?: to| with)? ' + DEVICE + '(?: again)?$|^(?:use|switch to|find) (?:my |the )?(?:astha )?(?:clip ?cam|wi-?fi camera|camera kit)$');
+  const CONNECT = new RegExp('^(?:please )?(?:re)?connect(?: to| with)? ' + DEVICE + '(?: again)?$|^(?:use|switch to|find) (?:my |the )?(?:(?:luneyra|luneira|astha) )?(?:clip ?cam|wi-?fi camera|camera kit)$');
   function route(query) {
-    const q = String(query || '').normalize('NFC').toLowerCase().replace(/^(?:hey\s+|ok\s+)?astha[,!.\s]*|^আস্থা[,।\s]*/i, '').replace(/[.!?।\s]+$/, '').trim();
+    const q = String(query || '').normalize('NFC').toLowerCase().replace(/^(?:hey\s+|ok\s+|হেই\s+|হে\s+)?(?:luneyra|luneira|লুনেইরা|লুনেয়রা|astha|আস্থা)[,!.।\s]*/i, '').replace(/[.!?।\s]+$/, '').trim();
     if (forgetAskedAt) {
       const pending = Date.now() - forgetAskedAt < 15000;
       forgetAskedAt = 0;

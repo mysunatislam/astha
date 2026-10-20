@@ -6,7 +6,7 @@
    Two independent distances in the same picture can fit both numbers:
    the Pi's ultrasonic reading and object-size estimates. Physical sensor
    alignment, size priors and camera focal length still need calibration. With
-   fewer than two, or with known distances that disagree, ASTHA says
+   fewer than two, or with known distances that disagree, LUNEYRA says
    only which side is nearer. Nothing here calls a way clear or safe.
    ===================================================================== */
 const AsthaSpatial = (() => {
@@ -107,7 +107,7 @@ const AsthaSpatial = (() => {
     const v = Math.round(m * 2) / 2;   // half-metre steps: no false precision
     return bn ? `প্রায় ${digits(v)} মিটার` : `about ${v} ${v === 1 ? 'metre' : 'metres'}`;
   }
-  // What ASTHA says. Directions are relative to where the camera points.
+  // What LUNEYRA says. Directions are relative to where the camera points.
   function sentences(result) {
     const en = [], bn = [];
     if (!result) return null;

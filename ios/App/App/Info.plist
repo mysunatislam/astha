@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-        <string>Astha</string>
+        <string>LUNEYRA</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -67,10 +67,10 @@
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>Astha requires camera access to describe surroundings, identify objects, and guide visually impaired users.</string>
+	<string>LUNEYRA requires camera access to describe surroundings, identify objects, and guide visually impaired users.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Astha requires microphone access to listen to voice queries in Bangla and English.</string>
+	<string>LUNEYRA requires microphone access to listen to voice queries in Bangla and English.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>Astha uses speech recognition to understand spoken voice instructions.</string>
+	<string>LUNEYRA uses speech recognition to understand spoken voice instructions.</string>
 </dict>
 </plist>

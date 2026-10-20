@@ -70,7 +70,7 @@ app.get('/api/health', asyncRoute(async (req, res) => {
   try { await storageReady(); }
   catch { return res.status(503).json({ ok: false, error: 'storage_unavailable', cloud: false, cloudProvider: null }); }
   const cloud = hasCloudAI();
-  res.json({ ok: true, name: 'Astha', name_bn: 'আস্থা', cloud, cloudProvider: cloud ? getCloudProvider() : null });
+  res.json({ ok: true, name: 'LUNEYRA', name_bn: 'লুনেইরা', cloud, cloudProvider: cloud ? getCloudProvider() : null });
 }));
 
 // ---- Auth: name + a spoken passcode, no email required ----
@@ -174,7 +174,7 @@ app.get('*', (req, res, next) => {
 // Body-parser and unexpected route failures return bounded JSON without exposing a stack.
 app.use(requestMonitor.errorMiddleware);
 
-const server = app.listen(PORT, () => console.log(`Astha server listening on :${PORT}`));
+const server = app.listen(PORT, () => console.log(`LUNEYRA server listening on :${PORT}`));
 let stopping = false;
 for (const signal of ['SIGTERM', 'SIGINT']) process.on(signal, () => {
   if (stopping) return;

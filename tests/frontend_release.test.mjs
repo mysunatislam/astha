@@ -349,9 +349,9 @@ test('Bangla is the default UI while UI and voice preferences stay independent',
   h.run(translations + languageSetters + 'function applyLanguage(){ window.currentUi = uiLang; }');
   assert.equal(h.run('uiLang'), 'bn');
   assert.equal(h.run('voiceLang'), 'en');
-  assert.equal(h.run("t('brand')"), 'আস্থা');
+  assert.equal(h.run("t('brand')"), 'লুনেইরা');
   h.run("setUiLanguage('en')");
-  assert.equal(h.run("t('brand')"), 'Astha');
+  assert.equal(h.run("t('brand')"), 'LUNEYRA');
   assert.equal(h.run('voiceLang'), 'en');
   assert.equal(h.storage.get('astha.ui_lang'), 'en');
   h.run("setUiLanguage('bn')");
@@ -367,7 +367,7 @@ test('invalid persisted locale values fall back without breaking dictionaries', 
   h.run(translations);
   assert.equal(h.run('uiLang'), 'bn');
   assert.equal(h.run('voiceLang'), 'bn');
-  assert.equal(h.run("t('brand')"), 'আস্থা');
+  assert.equal(h.run("t('brand')"), 'লুনেইরা');
 });
 
 test('unrequested observations do not save memory in the module implementation', async () => {

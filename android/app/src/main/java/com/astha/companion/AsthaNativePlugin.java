@@ -518,7 +518,7 @@ public class AsthaNativePlugin extends Plugin {
             return;
         }
         if (!messageConsent()) {
-            call.reject("Message help has not been turned on in ASTHA.", "consent_required");
+            call.reject("Message help has not been turned on in LUNEYRA.", "consent_required");
             return;
         }
         SpeechInputRequests.Change<PluginCall> change = backgroundRequests.begin(call);
@@ -589,7 +589,7 @@ public class AsthaNativePlugin extends Plugin {
     @PluginMethod
     public void openNotificationAccessSettings(PluginCall call) {
         if (!messageConsent()) {
-            call.reject("Message help has not been turned on in ASTHA.", "consent_required");
+            call.reject("Message help has not been turned on in LUNEYRA.", "consent_required");
             return;
         }
         // Android shows its own warning and only the user can grant notification access.
@@ -600,12 +600,12 @@ public class AsthaNativePlugin extends Plugin {
     @PluginMethod
     public void replyToMessage(PluginCall call) {
         if (!messageConsent()) {
-            call.reject("Message help has not been turned on in ASTHA.", "consent_required");
+            call.reject("Message help has not been turned on in LUNEYRA.", "consent_required");
             return;
         }
         AsthaNotificationListener listener = AsthaNotificationListener.running();
         if (listener == null) {
-            call.reject("ASTHA does not have notification access.", "service_disabled");
+            call.reject("LUNEYRA does not have notification access.", "service_disabled");
             return;
         }
         String key = call.getString("key", "");
@@ -778,11 +778,11 @@ public class AsthaNativePlugin extends Plugin {
     private AsthaAccessibilityService permittedService(PluginCall call) {
         AsthaAccessibilityService service = AsthaAccessibilityService.running();
         if (!screenConsent()) {
-            call.reject("Screen reading has not been turned on in ASTHA.", "consent_required");
+            call.reject("Screen reading has not been turned on in LUNEYRA.", "consent_required");
             return null;
         }
         if (service == null) {
-            call.reject("ASTHA is not enabled in Android Accessibility settings.", "service_disabled");
+            call.reject("LUNEYRA is not enabled in Android Accessibility settings.", "service_disabled");
             return null;
         }
         return service;
@@ -809,7 +809,7 @@ public class AsthaNativePlugin extends Plugin {
     @PluginMethod
     public void openAccessibilitySettings(PluginCall call) {
         if (!screenConsent()) {
-            call.reject("Screen reading has not been turned on in ASTHA.", "consent_required");
+            call.reject("Screen reading has not been turned on in LUNEYRA.", "consent_required");
             return;
         }
         // Android shows its own warning and only the user can switch the service on.

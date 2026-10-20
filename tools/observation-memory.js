@@ -54,7 +54,7 @@ const AsthaObservationMemory = (() => {
     return true;
   }
   function route(query) {
-    const q = String(query || '').toLowerCase().trim().replace(/[.!?।]+$/, '').replace(/^(?:hey\s+)?astha[,!\s]*|^আস্থা[,।\s]*/i, '').trim();
+    const q = String(query || '').toLowerCase().trim().replace(/[.!?।]+$/, '').replace(/^(?:hey\s+|হেই\s+|হে\s+)?(?:luneyra|luneira|লুনেইরা|লুনেয়রা|astha|আস্থা)[,!।\s]*/i, '').trim();
     if (/^(?:(?:enable|turn on|start) automatic (?:object )?memory|automatically remember (?:my )?(?:important (?:things|objects)|essentials)|স্বয়ংক্রিয় স্মৃতি চালু করো|দরকারি জিনিস নিজে থেকে মনে রাখো)$/.test(q)) { setEnabled(true); return true; }
     if (/^(?:(?:disable|turn off|stop) automatic (?:object )?memory|stop automatically remembering|স্বয়ংক্রিয় স্মৃতি বন্ধ করো|নিজে থেকে মনে রাখা বন্ধ করো)$/.test(q)) { setEnabled(false); return true; }
     return false;

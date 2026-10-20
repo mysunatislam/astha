@@ -72,7 +72,7 @@ const AsthaAiStatus = (() => {
     bn: [onlineText('bn'), lastText('bn'), tr('bn', 'ai_voice_boxes')].join(' ') });
   const ASK = /^(?:which|what) (?:ai|model)(?: (?:are you|is) (?:using|working|answering))?$|^are you (?:using (?:gemini|the internet|online ai|ai)|online|offline)$|^is (?:the )?(?:online ai|gemini|online mode) (?:on|working|being used)$|^(?:online or offline|ai status)$|কোন এআই|অনলাইন না অফলাইন|জেমিনি (?:ব্যবহার|চালু)|অনলাইনে আছ/;
   function route(query) {
-    const q = String(query || '').normalize('NFC').toLowerCase().replace(/^(?:hey\s+)?astha[,!.\s]*|^আস্থা[,।\s]*/i, '').replace(/[.!?।\s]+$/, '').trim();
+    const q = String(query || '').normalize('NFC').toLowerCase().replace(/^(?:hey\s+|হেই\s+|হে\s+)?(?:luneyra|luneira|লুনেইরা|লুনেয়রা|astha|আস্থা)[,!.।\s]*/i, '').replace(/[.!?।\s]+$/, '').trim();
     if (!ASK.test(q)) return false;
     const said = summary();
     if (typeof announce === 'function') announce(said.en, said.bn, 'system');
@@ -82,7 +82,7 @@ const AsthaAiStatus = (() => {
     if (booted) return;
     booted = true;
     render();
-    // Cheap text-only refresh while ASTHA is on screen; nothing is measured or sent.
+    // Cheap text-only refresh while LUNEYRA is on screen; nothing is measured or sent.
     setInterval(() => { if (!document.hidden) render(); }, 2000);
   }
   return { boot, render, route, summary, onlineStarted, onlineFinished, onlineSkipped, fallbackUsed,

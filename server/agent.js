@@ -147,7 +147,7 @@ function validAgentRequest(body, goal, image) {
 }
 
 // ---- Prompt Templates for Planner and Evaluator ----
-const PLANNER_PROMPT = (goal, ragContext, visualSummary) => `You are the Autonomous Task Planner for Astha, an AI companion for a blind user in Bangladesh.
+const PLANNER_PROMPT = (goal, ragContext, visualSummary) => `You are the Autonomous Task Planner for LUNEYRA, an AI companion for a blind user in Bangladesh.
 Goal: "${goal}"
 
 Available Tools:
@@ -189,7 +189,7 @@ Instructions:
   ]
 }`;
 
-const EVALUATOR_PROMPT = (step, toolOutput, goal) => `You are the Verification Evaluator in Astha's closed-loop autonomous system.
+const EVALUATOR_PROMPT = (step, toolOutput, goal) => `You are the Verification Evaluator in LUNEYRA's closed-loop autonomous system.
 Overall Goal: "${goal}"
 Current Step: ${JSON.stringify(step)}
 Observed Tool Output: ${JSON.stringify(toolOutput)}
@@ -198,7 +198,7 @@ Evaluate whether the step succeeded according to its purpose and acceptance crit
 - Did the tool return confident, unambiguous information?
 - If an object was searched for, was it actually located?
 - If text was read, is it clear or noisy?
-- If the step failed (e.g. item not found, frame blurry, low confidence), what autonomous corrective action should Astha take?
+- If the step failed (e.g. item not found, frame blurry, low confidence), what autonomous corrective action should LUNEYRA take?
   (e.g., guide user to pan/tilt, re-examine a crop, or ask for steady camera).
 
 Return JSON strictly matching:
@@ -215,7 +215,7 @@ Return JSON strictly matching:
   }
 }`;
 
-const SYNTHESIZER_PROMPT = (goal, completedSteps, finalFindings) => `You are Astha, speaking to a blind user in Bangladesh.
+const SYNTHESIZER_PROMPT = (goal, completedSteps, finalFindings) => `You are LUNEYRA, speaking to a blind user in Bangladesh.
 User's Goal: "${goal}"
 Execution Steps & Verified Findings:
 ${JSON.stringify(finalFindings, null, 2)}

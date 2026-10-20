@@ -18,7 +18,7 @@ import { PGlite } from '@electric-sql/pglite';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
 const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
-const VALID = { vision: 'none', language: 'bn', feedback: 'brief', textSize: 'large', theme: 'mulberry-apricot', speechRate: '1.2',
+const VALID = { vision: 'none', language: 'bn', feedback: 'brief', textSize: 'large', theme: 'lavender', speechRate: '1.2',
   devices: ['clip_camera', 'braille_controller'], modes: ['ask', 'classroom'], haptics: false };
 
 test('every preferences statement is accepted by the restricted Supabase query adapter', () => {
@@ -165,6 +165,13 @@ test('setup preferences are validated, isolated per account, exported, kept out 
   assert.deepEqual(saved.data.preferences, VALID);
   const fetched = (await api('/api/preferences', { token: owner.token })).data;
   assert.deepEqual(fetched.preferences, VALID); assert.equal(fetched.updated_at, saved.data.updated_at);
+
+  // The renamed default can sync, while old installs can still send their saved colour choice.
+  for (const theme of ['lavender', 'mulberry-apricot', 'calm-teal', 'clinical-yellow', 'monochrome', 'navy-cyan']) {
+    const result = await api('/api/preferences', { method: 'PUT', token: owner.token, body: { preferences: { theme } } });
+    assert.equal(result.status, 200, theme);
+    assert.deepEqual((await api('/api/preferences', { token: owner.token })).data.preferences, { theme });
+  }
 
   // A second save replaces the first: one row per account, and array order is normalised.
   const changed = { ...VALID, vision: 'low', devices: ['braille_controller', 'phone_camera'] };

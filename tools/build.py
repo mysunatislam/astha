@@ -41,13 +41,12 @@ def rep_between(start, end, new):
 # Optional local inference libraries must not block the app shell or online requests.
 rep("async function ensureVisionModels() {", runtime_js.rstrip("\n") + "\n\nasync function ensureVisionModels() {")
 
-# ---- theme: calm navy by default (no yellow), selector kept ----
-rep('<html lang="en" data-theme="clinical-yellow"', '<html lang="en" data-theme="mulberry-apricot"')
-rep("localStorage.getItem('astha.clinical_theme') || 'clinical-yellow'", "localStorage.getItem('astha.clinical_theme') || 'mulberry-apricot'")
+# ---- Lavender is the default; high-contrast choices remain available. ----
+rep('<html lang="en" data-theme="clinical-yellow"', '<html lang="en" data-theme="lavender"')
 rep("""        <option value="clinical-yellow">🟡 Yellow on black</option>
         <option value="monochrome">⚪ Monochrome (Inverted White/Black)</option>
         <option value="navy-cyan">🌊 Navy and cyan</option>""",
-    """        <option value="mulberry-apricot" data-i18n="theme_calm">Mulberry &amp; Apricot</option>
+    """        <option value="lavender" data-i18n="theme_calm">Lavender</option>
         <option value="navy-cyan">🌊 Navy and cyan</option>
         <option value="monochrome">⚪ Monochrome (white on black)</option>
         <option value="clinical-yellow">🟡 Yellow on black (photophobia)</option>""")
@@ -64,7 +63,7 @@ rep('<div class="hazard" id="hazard" hidden><span id="hazard-text" data-i18n="ha
     '        </div>\n')
 rep('        <span class="mic-hint" data-i18n="mic_hint">Ask in Bangla or English: “What is in front of me?”, “Read this”, “Where is my charger?”</span>\n      </div>',
     '        <span class="mic-hint" data-i18n="mic_hint">Ask in Bangla or English: “What is in front of me?”, “Read this”, “Where is my charger?”</span>\n'
-    '        <button class="chip-btn" id="hf-btn" onclick="toggleHandsFree()" aria-pressed="false" title="Keep listening for “Astha, …”">🎧 <span id="hf-label">Hands-free: off</span></button>\n      </div>')
+    '        <button class="chip-btn" id="hf-btn" onclick="toggleHandsFree()" aria-pressed="false" title="Keep listening for “LUNEYRA, …”">🎧 <span id="hf-label">Hands-free: off</span></button>\n      </div>')
 rep('<button class="action" onclick="readText()">', '<button class="action" id="read-btn" onclick="readText()" aria-pressed="false">')
 rep('<div class="title" data-i18n="act_read">Read text</div>', '<div class="title" id="read-title" data-i18n="act_read">Read to me</div>')
 
@@ -74,9 +73,9 @@ rep("act_read: 'Read text', act_read_desc: 'Labels, medicine, notes, signs',",
 rep("act_read: 'লেখা পড়ুন', act_read_desc: 'লেবেল, ওষুধ, নোট, সাইনবোর্ড',",
     "act_read: 'আমাকে পড়ে শোনাও', act_read_desc: 'পৃষ্ঠা ধরুন; আমি ধরতে সাহায্য করব, তারপর পড়ে শোনাব',")
 rep("mic_hint: 'Tap, then ask in your selected voice language. You can also type in Bangla or English.',",
-    "mic_hint: 'Tap once to ask, or turn on Hands-free and just say “Astha, read this”. You can also type below.',")
-rep('<p class="help">Tap the microphone before saying “Hey Astha”. Browser speech recognition may use an online service. There is no background wake-word listener.</p>',
-    '<p class="help">Hands-free mode keeps the microphone open in this tab and waits for “Astha, …”. Browser speech recognition may use an online service.</p>')
+    "mic_hint: 'Tap once to ask, or turn on Hands-free and just say “LUNEYRA, read this”. You can also type below.',")
+rep('<p class="help">Tap the microphone before saying “Hey LUNEYRA”. Browser speech recognition may use an online service. There is no background wake-word listener.</p>',
+    '<p class="help">Hands-free mode keeps the microphone open in this tab and waits for “LUNEYRA, …”. Browser speech recognition may use an online service.</p>')
 
 # ---- vocabulary: restore the full list ----
 rep_between("// COCO classes + everyday objects with Bangla mapping and hazard labels\n",
@@ -338,7 +337,7 @@ rep("const fresh = worldSorted().filter(o => (state.announced.get(o.id) || 0) < 
 rep("const selected = localOnly ? matches.find(v => v.localService) : matches[0];", "const selected = localOnly ? matches.find(v => v.localService) : pickVoice(matches, language);")
 rep('<label class="field" for="ocr-language">Reading language<select class="select-dropdown" id="ocr-language" onchange="savePreferences()"><option value="ben+eng">বাংলা + English</option><option value="eng">English</option></select></label>',
     '<label class="field" for="ocr-language">Reading language<select class="select-dropdown" id="ocr-language" onchange="savePreferences()"><option value="ben+eng">বাংলা + English</option><option value="eng">English</option></select></label>\n'
-    '      <label class="field" for="voice-select">Astha\'s voice<select class="select-dropdown" id="voice-select" onchange="onVoiceChosen(this.value)"></select></label>')
+    '      <label class="field" for="voice-select">LUNEYRA\'s voice<select class="select-dropdown" id="voice-select" onchange="onVoiceChosen(this.value)"></select></label>')
 rep("  voiceLang = next === 'en' ? 'en' : 'bn';\n  updateVoiceSupport();", "  voiceLang = next === 'en' ? 'en' : 'bn';\n  updateVoiceSupport();\n  if (typeof populateVoices === 'function') populateVoices();")
 
 # If Bangla is selected but the device has no Bangla voice, speak the English text with the preferred English voice.
@@ -371,19 +370,19 @@ rep("return state.source === 'camera' ? readText() : startReader();", "return re
 rep("  if (!text) return announce('Add text to the reader first.', 'আগে রিডারে লেখা যোগ করুন।');", "  if (!text) return readText();")
 rep('<div class="card-head"><h2>Book & document reader</h2>', '<div class="card-head"><h2>Reading transcript</h2>')
 rep('<p class="help">Read a page with the camera and add it here, or paste text. All paragraphs are read aloud; add pages in order for longer documents.</p>',
-    '<p class="help">Everything Astha reads from the camera is collected here. Say “Astha, read this” or tap “Read to me” to read a book or letter. Pasting text is optional.</p>')
+    '<p class="help">Everything LUNEYRA reads from the camera is collected here. Say “LUNEYRA, read this” or tap “Read to me” to read a book or letter. Pasting text is optional.</p>')
 rep('<label class="field" for="reader-text">Text to read<textarea id="reader-text" placeholder="Paste Bangla or English text…" oninput="readerTextChanged()"></textarea></label>',
-    '<label class="field" for="reader-text">Transcript<textarea id="reader-text" placeholder="Pages Astha has read will appear here." oninput="readerTextChanged()"></textarea></label>')
+    '<label class="field" for="reader-text">Transcript<textarea id="reader-text" placeholder="Pages LUNEYRA has read will appear here." oninput="readerTextChanged()"></textarea></label>')
 rep('<button class="btn accent" onclick="startReader()">Read all</button>', '<button class="btn accent" onclick="startReader()">Read the transcript again</button>')
 
-# ---- Astha's eye on your screen (replaces the earlier "Clicky" panel) ----
+# ---- LUNEYRA's eye on your screen (replaces the earlier "Clicky" panel) ----
 eye_js = (HERE / "eye.js").read_text(encoding="utf-8")
 EYE_HTML = r"""    <div class="card" id="eye-card">
       <div class="card-head">
-        <h2>♥ Astha on your screen</h2>
+        <h2>♥ LUNEYRA on your screen</h2>
         <span class="pill" id="eye-pill">Not watching</span>
       </div>
-      <p class="help">Share your screen and Astha tells you what is on it: a message, a slide, a document, a web page, a design or code. Ask her to read it, explain it, or help you with it. Say “Astha, watch my screen”.</p>
+      <p class="help">Share your screen and LUNEYRA tells you what is on it: a message, a slide, a document, a web page, a design or code. Ask her to read it, explain it, or help you with it. Say “LUNEYRA, watch my screen”.</p>
       <div class="eye-view">
         <div class="empty" id="eye-empty"><div>Screen not shared yet.</div></div>
         <video id="eye-video" autoplay muted playsinline hidden></video>
@@ -392,10 +391,10 @@ EYE_HTML = r"""    <div class="card" id="eye-card">
           <span class="heart-label" id="eye-heart-label" hidden></span>
         </div>
       </div>
-      <div class="utility-row"><button class="btn accent" id="eye-start" onclick="toggleEye()">Let Astha see my screen</button><button class="btn" onclick="eyeWhatsOnScreen()">What is on my screen?</button><button class="btn" onclick="eyeExplain()">Explain what is on my screen</button></div>
-      <label class="field" for="eye-paste">Or paste any text from your screen<textarea id="eye-paste" placeholder="Paste text here, then say “Astha, explain this”."></textarea></label>
+      <div class="utility-row"><button class="btn accent" id="eye-start" onclick="toggleEye()">Let LUNEYRA see my screen</button><button class="btn" onclick="eyeWhatsOnScreen()">What is on my screen?</button><button class="btn" onclick="eyeExplain()">Explain what is on my screen</button></div>
+      <label class="field" for="eye-paste">Or paste any text from your screen<textarea id="eye-paste" placeholder="Paste text here, then say “LUNEYRA, explain this”."></textarea></label>
       <div class="toggle-row"><span>Keyboard guidance: name each control as I Tab to it</span><button class="switch" id="focus-switch" role="switch" aria-checked="false" onclick="toggleFocusNarration()" aria-label="Keyboard guidance"></button></div>
-      <p class="help">Astha can read and explain a shared screen. On an Android phone she can also read other apps and answer your messages; see Devices.</p>
+      <p class="help">LUNEYRA can read and explain a shared screen. On an Android phone she can also read other apps and answer your messages; see Devices.</p>
     </div>
   </section>
 """
@@ -432,12 +431,12 @@ rep("  const u = makeUtterance(text, /[\\u0980-\\u09ff]/.test(text) ? 'bn' : 'en
 rep("    const lines = (data.lines || []).filter(l => l.confidence >= 55).map(l => l.text.replace(/\\s+/g, ' ').trim())\n      .filter(l => { const letters = l.replace(/[^\\p{L}\\p{N}]/gu, '').length; return letters >= 2 && letters / l.length >= 0.5; });\n    const text = lines.join('\\n');\n    if (!text) { $('ocr-result').hidden = true;",
     "    const lines = (data.lines || []).filter(l => l.confidence >= 55).map(l => cleanOcrLine(l.text))\n      .filter(l => { const letters = l.replace(/[^\\p{L}\\p{N}]/gu, '').length; return letters >= 2 && letters / l.length >= 0.5; });\n    const text = lines.join('\\n');\n    if (!text) { $('ocr-result').hidden = true;")
 # Listening language preference + OCR language follows the voice language by default.
-rep("      <label class=\"field\" for=\"voice-select\">Astha's voice<select class=\"select-dropdown\" id=\"voice-select\" onchange=\"onVoiceChosen(this.value)\"></select></label>",
-    "      <label class=\"field\" for=\"voice-select\">Astha's voice<select class=\"select-dropdown\" id=\"voice-select\" onchange=\"onVoiceChosen(this.value)\"></select></label>\n"
+rep("      <label class=\"field\" for=\"voice-select\">LUNEYRA's voice<select class=\"select-dropdown\" id=\"voice-select\" onchange=\"onVoiceChosen(this.value)\"></select></label>",
+    "      <label class=\"field\" for=\"voice-select\">LUNEYRA's voice<select class=\"select-dropdown\" id=\"voice-select\" onchange=\"onVoiceChosen(this.value)\"></select></label>\n"
     "      <label class=\"field\" for=\"stt-lang\">I speak<select class=\"select-dropdown\" id=\"stt-lang\" onchange=\"try{localStorage.setItem('astha.stt',this.value)}catch(e){}\"><option value=\"auto\">Same as the voice language</option><option value=\"en-US\">English</option><option value=\"bn-BD\">বাংলা (Banglish works too)</option></select></label>")
 rep("    if(['ben+eng','eng'].includes(p.ocr))$('ocr-language').value=p.ocr;",
     "    if(['ben+eng','eng'].includes(p.ocr))$('ocr-language').value=p.ocr; else if(voiceLang==='en')$('ocr-language').value='eng';\n    const stt=localStorage.getItem('astha.stt'); if(stt && $('stt-lang'))$('stt-lang').value=stt;")
-rep("const q = query.toLowerCase().replace(/^(?:hey\\s+)?astha[,.!\\s]*/i, '')", "const q = query.toLowerCase().replace(/^(?:hey\\s+)?(?:astha|asta|ashtha)[,.!\\s]*/i, '')")
+rep("const q = query.toLowerCase().replace(/^(?:hey\\s+)?(?:luneyra|astha)[,.!\\s]*/i, '')", "const q = query.toLowerCase().replace(/^(?:hey\\s+)?(?:luneyra|luneira|astha|asta|ashtha)[,.!\\s]*/i, '')")
 
 # ---- Round 1 memory: approved object events with time and confidence ----
 rep("    const partsEn = fresh.slice(0, 3).map(o => `${labelWithArticle(o.id)} ${t('pos_' + o.pos)}`);\n    const partsBn = fresh.slice(0, 3).map(o => `${tBn('pos_' + o.pos)} ${labelBn(o.id)}`);\n    const msgEn = t('new_object', { list: joinList(partsEn, false) });\n    const msgBn = tBn('new_object', { list: joinList(partsBn, true) });",
@@ -450,11 +449,11 @@ rep("    const partsEn = fresh.slice(0, 3).map(o => `${labelWithArticle(o.id)} $
 
 # ---- Cloud reasoning, modes, owner ID, secure-connection banner ----
 cloud_js = (HERE / "cloud.js").read_text(encoding="utf-8")
-rep('<p class="prototype-note">Browser prototype · Camera recognition and reading are experimental. Use your usual mobility aid; Astha cannot confirm a safe path.</p>',
-    '<p class="prototype-note"><strong>Astha AI Companion</strong> <span id="safety-note">· Experimental visual assistance. Use your usual mobility aid; Astha cannot confirm a safe path. আস্থা নিরাপদ পথ নিশ্চিত করতে পারে না।</span></p>\n'
+rep('<p class="prototype-note">Browser prototype · Camera recognition and reading are experimental. Use your usual mobility aid; LUNEYRA cannot confirm a safe path.</p>',
+    '<p class="prototype-note"><strong>LUNEYRA AI Companion</strong> <span id="safety-note">· Experimental visual assistance. Use your usual mobility aid; LUNEYRA cannot confirm a safe path. লুনেইরা নিরাপদ পথ নিশ্চিত করতে পারে না।</span></p>\n'
     '      <p class="prototype-note" id="secure-banner" hidden style="border-color:var(--danger)"><strong>This page is open on an insecure address.</strong> <span id="secure-body">The browser will ask for the microphone and camera every time and may block them. Open the app on localhost or over HTTPS. On Android, use Chrome\'s port forwarding (chrome://inspect on the computer) so the phone sees localhost, or a Cloudflare tunnel.</span></p>')
-rep('        <button class="chip-btn" id="hf-btn" onclick="toggleHandsFree()" aria-pressed="false" title="Keep listening for “Astha, …”">🎧 <span id="hf-label">Hands-free: off</span></button>\n      </div>',
-    '        <button class="chip-btn" id="hf-btn" onclick="toggleHandsFree()" aria-pressed="false" title="Keep listening for “Astha, …”">🎧 <span id="hf-label">Hands-free: off</span></button>\n'
+rep('        <button class="chip-btn" id="hf-btn" onclick="toggleHandsFree()" aria-pressed="false" title="Keep listening for “LUNEYRA, …”">🎧 <span id="hf-label">Hands-free: off</span></button>\n      </div>',
+    '        <button class="chip-btn" id="hf-btn" onclick="toggleHandsFree()" aria-pressed="false" title="Keep listening for “LUNEYRA, …”">🎧 <span id="hf-label">Hands-free: off</span></button>\n'
     '        <div class="segmented" role="group" aria-label="AI Engine Mode" title="Choose online processing or on-device models">\n'
     '          <button id="btn-mode-gemini" onclick="Subscription.setMode(\'gemini\')" aria-pressed="false">✨ Online AI</button>\n'
     '          <button id="btn-mode-offline" onclick="Subscription.setMode(\'offline\')" aria-pressed="false">📱 Offline</button>\n'
@@ -474,7 +473,7 @@ rep('    <!-- AI Model Diagnostics -->',
     '    </div>\n\n    <!-- AI Model Diagnostics -->')
 # Cloud-first actions with on-device fallback
 rep("function describeScene() {\n  if (withCamera(describeScene)) return;", "function describeScene(skipCloud) {\n  if (withCamera(describeScene)) return;\n  if (cloudReady() && !skipCloud) return cloudDescribe();")
-# Auto mode: the cloud checks the frame before Astha speaks about new on-device detections; stricter thresholds otherwise.
+# Auto mode: the cloud checks the frame before LUNEYRA speaks about new on-device detections; stricter thresholds otherwise.
 rep("const fresh = worldSorted().filter(o => (state.announced.get(o.id) || 0) < now - 10000 && o.score >= (o.src === 'coco' ? 0.55 : 0.28));",
     "const fresh = worldSorted().filter(o => (state.announced.get(o.id) || 0) < now - 10000 && o.score >= (o.src === 'coco' ? (STRICT_COCO.has(o.id) ? 0.75 : 0.65) : 0.3) && !(o.flags && (o.flags.doubtful || o.flags.onScreen)));")
 rep("    setCaption(t('new_title'), msgEn, 'vision', null, msgBn);\n    speak(msgEn, msgBn);\n    heartPointAt(fresh[0]);",
@@ -494,7 +493,7 @@ rep("  if (!privacyMode) logEvent('Request: ' + query);\n",
     "  if (/read (what i wrote|what i typed|my code|the code|the screen|the document|this page on (the )?screen|what is written|what's written)|read aloud what|স্ক্রিনের লেখা পড়|কোড পড়|যা লিখেছি পড়/.test(q)) return eyeReadScreen();\n"
     "  if (/remember my face|learn my face|enrol+ my face|আমার মুখ মনে রাখো|মুখ শেখো/.test(q)) return enrollOwnerFace();\n"
     "  if (/remember my voice|learn my voice|enrol+ my voice|আমার কণ্ঠ মনে রাখো|গলা শেখো/.test(q)) return enrollOwnerVoice();\n"
-    "  if (/^(it'?s me|this is me|unlock)\\b|আমি আস্থা|আনলক করো|এটা আমি/.test(q)) return ownerItsMe();\n"
+    "  if (/^(it'?s me|this is me|unlock)\\b|আমি লুনেইরা|আনলক করো|এটা আমি/.test(q)) return ownerItsMe();\n"
     "  if (/owner lock|মালিক লক/.test(q)) return toggleOwnerLock();\n"
     "  if (/(delete|close|remove) my account|অ্যাকাউন্ট (মুছ|ডিলিট)|একাউন্ট (মুছ|ডিলিট)/.test(q)) return openDeleteAccount(true);\n"
     "  if (/(download|export) my (data|information)|আমার (তথ্য|ডেটা) (ডাউনলোড|রপ্তানি)/.test(q)) return exportMyData();\n"
@@ -524,12 +523,12 @@ rep('      <div class="card-head"><h2>Your preferences</h2></div>',
     '      <p class="help" id="account-row" role="status"></p>\n'
     '      <div class="utility-row"><button class="btn small" id="account-open-btn" onclick="openAuthGate()" hidden>Create account or log in</button>'
     '<button class="btn small" id="sign-out-btn" onclick="signOut()" hidden>Sign out</button></div>\n'
-    '      <p class="help" id="data-help">You can download everything Astha has saved about you, remove your face and voice templates, or delete your account.</p>\n'
+    '      <p class="help" id="data-help">You can download everything LUNEYRA has saved about you, remove your face and voice templates, or delete your account.</p>\n'
     '      <div class="utility-row"><button class="btn small" onclick="exportMyData()">Download my data</button>'
     '<button class="btn small" onclick="forgetOwnerBiometrics()">Forget my face and voice</button>'
     '<button class="btn small danger" id="delete-account-btn" onclick="openDeleteAccount()" aria-expanded="false" aria-controls="delete-account-panel">Delete my account</button></div>\n'
     '      <div id="delete-account-panel" role="group" aria-labelledby="delete-account-warning" hidden>\n'
-    '        <p class="help" id="delete-account-warning">This permanently deletes your Astha account, every saved memory, room note, activity record and personal note, and the copies on this phone. It cannot be undone.</p>\n'
+    '        <p class="help" id="delete-account-warning">This permanently deletes your LUNEYRA account, every saved memory, room note, activity record and personal note, and the copies on this phone. It cannot be undone.</p>\n'
     '        <p class="help" id="delete-account-note" hidden></p>\n'
     '        <label class="field" id="delete-account-pin-field" for="delete-account-pin">Enter your passcode to confirm<input id="delete-account-pin" type="password" inputmode="numeric" autocomplete="current-password" maxlength="128"></label>\n'
     '        <div class="utility-row"><button class="btn danger" id="delete-account-confirm" onclick="confirmDeleteAccount()">Delete permanently</button><button class="btn" onclick="closeDeleteAccount()">Cancel</button></div>\n'
@@ -537,9 +536,9 @@ rep('      <div class="card-head"><h2>Your preferences</h2></div>',
     '      <p class="help" id="data-status" role="status"></p>\n')
 
 # ---- PWA head tags ----
-rep('<title>Astha Vision — AI Visual Companion</title>',
-    '<title>Astha</title>\n'
-    '<meta name="theme-color" content="#0a0e17">\n'
+rep('<title>LUNEYRA — AI Vision Companion</title>',
+    '<title>LUNEYRA — AI Vision Companion</title>\n'
+    '<meta name="theme-color" content="#64409a">\n'
     '<link rel="manifest" href="manifest.webmanifest">\n'
     '<link rel="apple-touch-icon" href="icons/icon-192.png">\n'
     '<meta name="apple-mobile-web-app-capable" content="yes">\n'
@@ -548,8 +547,8 @@ rep('<title>Astha Vision — AI Visual Companion</title>',
 # ---- the sign-in / create-account gate shown before the app boots ----
 AUTH_GATE = ('<div id="auth-gate" role="dialog" aria-modal="true" aria-labelledby="auth-title">\n'
     '  <div class="auth-card">\n'
-    '    <h1 id="auth-title">Astha — আস্থা</h1>\n'
-    '    <p class="auth-sub">Your voice-first visual companion. Create an account once; Astha remembers your things and rooms after that.</p>\n'
+    '    <h1 id="auth-title">LUNEYRA — লুনেইরা</h1>\n'
+    '    <p class="auth-sub">Your voice-first visual companion. Create an account once; LUNEYRA remembers your things and rooms after that.</p>\n'
     '    <div class="segmented" role="group" aria-label="Account action" style="margin-bottom:14px">\n'
     '      <button id="auth-tab-signup" onclick="setAuthTab(\'signup\')" aria-pressed="true">Create account</button>\n'
     '      <button id="auth-tab-login" onclick="setAuthTab(\'login\')" aria-pressed="false">Log in</button>\n'
@@ -561,7 +560,7 @@ AUTH_GATE = ('<div id="auth-gate" role="dialog" aria-modal="true" aria-labelledb
     '      <button class="btn accent" type="submit" id="auth-submit" style="width:100%">Create my account</button>\n'
     '    </form>\n'
     '    <p class="help" id="auth-status" role="status"></p>\n'
-    '    <p class="help">Your name and phone are used only to sign you back in. Everything Astha remembers stays tied to your account.</p>\n'
+    '    <p class="help">Your name and phone are used only to sign you back in. Everything LUNEYRA remembers stays tied to your account.</p>\n'
     '    <button class="btn" type="button" id="auth-close" onclick="closeAuthGate()">Continue without an account</button>\n'
     '  </div>\n'
     '</div>\n')

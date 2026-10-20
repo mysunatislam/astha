@@ -153,6 +153,16 @@ test('a legitimate hands-free final survives the recognizer natural end and rest
   assert.deepEqual(h.queries, ['where is my synthetic charger?']);
 });
 
+test('LUNEYRA wake words in English and Bangla dispatch the requested command once', async () => {
+  for (const [words, expected] of [['LUNEYRA, where is my synthetic charger?', 'where is my synthetic charger?'],
+    ['Hey Luneyra, describe this view.', 'describe this view.'], ['লুনেইরা, আমার সামনে কী আছে?', 'আমার সামনে কী আছে?'],
+    ['হেই লুনেইরা, এটা পড়ো।', 'এটা পড়ো।']]) {
+    const h = harness(); h.emit(words, true); await h.advance(1100);
+    assert.deepEqual(h.queries, [expected], words);
+    await h.advance(5000); assert.deepEqual(h.queries, [expected], words);
+  }
+});
+
 test('a queued recognition result cannot dispatch or Stop after listening was stopped or opted out', async () => {
   for (const boundary of ['stopped', 'opted-out', 'privacy', 'offline']) {
     const h = harness(), previous = h.ear.rec, result = previous.onresult;
@@ -515,7 +525,9 @@ test('sentences mentioning stops or quoted instructions never cancel the active 
 
 test('whole English and Bangla Stop commands with wake words or curly apostrophes cancel immediately', () => {
   for (const words of ['Stop.', 'Astha, stop!', 'Hey Astha, stop speaking please.', "don't talk", 'don’t speak',
-    "Astha, don't talk.", 'আস্থা, থামো।', 'হেই আস্থা, চুপ করো!', 'আস্থা, কথা বন্ধ।']) {
+    "Astha, don't talk.", 'আস্থা, থামো।', 'হেই আস্থা, চুপ করো!', 'আস্থা, কথা বন্ধ।',
+    'LUNEYRA, stop!', 'Hey Luneyra, stop speaking please.', "Luneyra, don't talk.",
+    'লুনেইরা, থামো।', 'হেই লুনেইরা, চুপ করো!', 'হে লুনেইরা, কথা বন্ধ।']) {
     const h = harness(); h.emit(words, false);
     assert.equal(h.counts.agent, 1, words); assert.equal(h.context.state.pendingAction, null, words);
     assert.equal(h.captions.at(-1)[1], 'Stopped speech.', words); assert.equal(h.ear.active, true, words);

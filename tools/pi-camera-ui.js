@@ -196,7 +196,7 @@ const AsthaPiCamera = (() => {
     }
   }
   // The pairing form. With "remember" ticked, a code that worked is sealed on this device
-  // so ASTHA can reconnect by itself next time. With a ClipCam already remembered, an empty
+  // so LUNEYRA can reconnect by itself next time. With a ClipCam already remembered, an empty
   // code means "this is its new address": the sealed code is used and never retyped.
   async function connect(event) {
     event?.preventDefault();

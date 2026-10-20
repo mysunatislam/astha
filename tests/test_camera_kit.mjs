@@ -588,6 +588,20 @@ test('the user stays in control: disconnect holds, a chosen phone camera is neve
   assert.equal(phone.kit.phase, 'other'); assert.equal(phone.context.state.source, 'camera'); assert.deepEqual(phone.spoken, []);
 });
 
+test('LUNEYRA camera commands use the same remembered pairing in both languages', async () => {
+  for (const words of ['LUNEYRA, connect to my camera', 'connect to my LUNEYRA ClipCam',
+    'লুনেইরা, ক্যামেরা সংযোগ করো', 'ASTHA, connect to my camera', 'আস্থা, ক্যামেরা সংযোগ করো']) {
+    const net = network(); net.hosts.set(HOST, net.device());
+    const store = remembered(memoryStore()), h = kitSetup({ store, net });
+    await h.advance(0); await h.say('disconnect my camera');
+    assert.equal(h.pi.paired(), false);
+    assert.equal(await h.say(words), true, words);
+    assert.equal(h.kit.phase, 'connected', words);
+    assert.equal(h.pi.active(), true, words);
+    assert.equal(store.records.size, 1, 'renaming must reuse the saved pairing');
+  }
+});
+
 test('explicit disconnect stays off after reopening, and explicit reconnect restores the saved choice', async () => {
   const net = network(); net.hosts.set(HOST, net.device());
   const store = remembered(memoryStore());

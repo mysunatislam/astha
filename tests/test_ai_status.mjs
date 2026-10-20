@@ -55,7 +55,7 @@ test('an answer is credited to online AI only after a request was sent and answe
   assert.equal(result.en, 'A desk.');
   assert.equal(h.status.online.state, 'answered'); assert.equal(h.status.online.ms, 5600);
   assert.match(h.node('ai-status-last').textContent, /^Online answer at \d\d:\d\d:\d\d, in 5\.6 seconds\.$/);
-  assert.equal(h.node('ai-status-online').textContent, 'Online: Maira AI through the ASTHA server, allowed for this session.');
+  assert.equal(h.node('ai-status-online').textContent, 'Online: Maira AI through the LUNEYRA server, allowed for this session.');
   assert.equal(h.node('ai-status-boxes').textContent, en('ai_boxes_running'));
   assert.equal(h.node('ai-status-camera').textContent, en('ai_camera_pi_live'));
   assert.equal(h.requests.length, 1);
@@ -115,9 +115,9 @@ test('"which AI are you using" is answered in English and Bangla from what actua
   await h.context.gemini('prompt', null);
   assert.equal(h.status.route('ASTHA, which AI are you using?'), true);
   const said = h.spoken.at(-1);
-  assert.match(said.en, /^Online: Maira AI through the ASTHA server, allowed for this session\. Online answer at .*\. The boxes on the picture come from this device, not from online AI\.$/);
+  assert.match(said.en, /^Online: Maira AI through the LUNEYRA server, allowed for this session\. Online answer at .*\. The boxes on the picture come from this device, not from online AI\.$/);
   assert.match(said.bn, /মায়রা এআই/); assert.match(said.bn, /এই ডিভাইস থেকে আসে/);
-  for (const words of ['are you online', 'Is Gemini working?', 'কোন এআই ব্যবহার করছ?', 'অনলাইন না অফলাইন']) assert.equal(h.status.route(words), true, words);
+  for (const words of ['are you online', 'Is Gemini working?', 'কোন এআই ব্যবহার করছ?', 'অনলাইন না অফলাইন', 'LUNEYRA, which AI are you using?', 'লুনেইরা, কোন এআই ব্যবহার করছ?']) assert.equal(h.status.route(words), true, words);
   for (const words of ['describe the room', 'what is in front of me', 'read this', 'connect to my camera']) assert.equal(h.status.route(words), false, words);
   h.context.uiLang = 'bn'; h.status.render();
   assert.match(h.node('ai-status-last').textContent, /[০-৯]/, 'Bangla shows Bangla digits');

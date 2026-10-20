@@ -1,5 +1,5 @@
 /* =====================================================================
-   0. VoiceEngine — Astha's real voice
+   0. VoiceEngine — LUNEYRA's real voice
       Speaks through our backend's neural TTS (a genuine Bangla female voice,
       "bn-BD-NabanitaNeural", not a robotic default) when the phone is online and
       signed in. Falls back to the browser's own speechSynthesis automatically
@@ -281,7 +281,7 @@ const VoiceEngine = {
   // `admitted` is 'critical' when the caller already passed the priority gate.
   emergencyAlert(textEn, textBn, hazardType, admitted = null) {
     const priority = admitted || (typeof AsthaExperience !== 'undefined' ? AsthaExperience.acceptHazard(hazardType) : 'critical');
-    if (!priority) return;   // an answer is in progress, a repeat, or ASTHA was not asked to watch
+    if (!priority) return;   // an answer is in progress, a repeat, or LUNEYRA was not asked to watch
     const useBn = voiceLang === 'bn' && !!textBn;
     const text = useBn ? textBn : textEn;
     if (!text) return;
@@ -294,7 +294,7 @@ const VoiceEngine = {
       return;
     }
     this.stop(true);
-    // The caption and vibration reach users who keep ASTHA's voice off.
+    // The caption and vibration reach users who keep LUNEYRA's voice off.
     if (typeof setCaption === 'function') setCaption('EMERGENCY HAZARD', textEn, 'safety', 'danger', textBn);
     if (typeof haptic === 'function') haptic('RAPID');
     if (!state.audio) return;
@@ -386,11 +386,11 @@ function stopAllSpeech() {
        - Clothing: garment, colours and pattern
        - Mirror compliments
        - Guided, continuous reading with spoken alignment help
-       - Astha's heart: on-screen attention cursor with click feedback
-       - Hands-free wake-word mode ("Astha, …")
+       - LUNEYRA's heart: on-screen attention cursor with click feedback
+       - Hands-free wake-word mode ("LUNEYRA, …")
    ===================================================================== */
 
-// Classes the small detector confuses most often need a higher score before Astha speaks about them.
+// Classes the small detector confuses most often need a higher score before LUNEYRA speaks about them.
 const STRICT_COCO = new Set(['traffic light', 'dog', 'cat', 'bird', 'horse', 'cow', 'sheep', 'bear', 'teddy bear', 'kite', 'frisbee', 'toilet', 'fire hydrant', 'parking meter', 'stop sign', 'airplane', 'boat', 'train', 'elephant', 'zebra', 'giraffe']);
 function themeAccent() { return getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() || '#2dd4bf'; }
 function withArticle(noun, pl) { return pl ? noun : article(noun) + ' ' + noun; }
@@ -785,7 +785,7 @@ async function mirrorCheck(frame, onlyIfMirror, current = captureLocalActionGuar
   } catch (e) { if (e.cancelled || !current()) return false; throw e; }
 }
 
-// ---- Astha's heart --------------------------------------------------------
+// ---- LUNEYRA's heart --------------------------------------------------------
 const heart = { period: 0, tickTimer: null, hideTimer: null };
 function heartSet(o) {
   const el = $('heart'); if (!el) return;
@@ -1003,10 +1003,11 @@ async function ocrPage() {
 // ---- Foreground hands-free listening (only after explicit consent) ---
 // Whole commands only: a bus stop or quoted instructions are not a request to stop.
 const STOP_TALKING_REGEX = /^(?:please\s+)?(?:stop(?: talking| speaking| reading)?|pause|shut up|be quiet|quiet|silence|enough|halt|don'?t (?:speak|talk)|থামো|চুপ|চুপ কর|চুপ করো|থামুন|কথা বন্ধ|পড়া বন্ধ|বন্ধ করো|স্টপ|thamo|chup|bondho koro|bondho kor)(?:\s+please)?[.!?।\s]*$/i;
-const WAKE_RE = /(^|[\s,.!?])(astha|asta|ashtha|aastha|astar|হে আস্থা|আস্থা|আসথা|আস্তা)(?=$|[\s,.!?])/i;
+// Keep the former wake words as aliases so existing hands-free habits still work.
+const WAKE_RE = /(^|[\s,.!?।])(luneyra|luneira|লুনেইরা|লুনেয়রা|astha|asta|ashtha|aastha|astar|হে আস্থা|আস্থা|আসথা|আস্তা)(?=$|[\s,.!?।])/i;
 function isSpeechStopCommand(text) {
   const command = String(text || '').trim().replace(/[’]/g, "'")
-    .replace(/^(?:hey\s+|হেই\s+)?(?:astha|asta|ashtha|aastha|astar|হে আস্থা|আস্থা|আসথা|আস্তা)[,.!?।\s]+/i, '');
+    .replace(/^(?:hey\s+|হেই\s+|হে\s+)?(?:luneyra|luneira|লুনেইরা|লুনেয়রা|astha|asta|ashtha|aastha|astar|আস্থা|আসথা|আস্তা)[,.!?।\s]+/i, '');
   return STOP_TALKING_REGEX.test(command);
 }
 
@@ -1129,7 +1130,7 @@ const SiriVoice = {
           this.lastBargeInAt = Date.now();
           if (/stop reading|পড়া বন্ধ/i.test(currentSpeech) && typeof AsthaExperience !== 'undefined' && AsthaExperience.mode === 'reading') AsthaExperience.setContext('ask', true);
           stopAllSpeech();
-          setCaption(t('agent_voice') || 'Astha', 'Stopped speech.', 'voice', null, 'কথা থামানো হয়েছে।');
+          setCaption(t('agent_voice') || 'LUNEYRA', 'Stopped speech.', 'voice', null, 'কথা থামানো হয়েছে।');
           playEarcon('click');
           return;
         }
@@ -1228,7 +1229,7 @@ const SiriVoice = {
     if (hasWake || isFollowUp || recognizedIntent || isDirectQuestion) {
       let cmd = q;
       if (hasWake) {
-        cmd = q.replace(/^[\s\S]*?(astha|asta|ashtha|aastha|astar|হে আস্থা|আস্থা|আসথা|আস্তা)[,.!?\s]*/i, '').trim();
+        cmd = q.replace(/^[\s\S]*?(luneyra|luneira|লুনেইরা|লুনেয়রা|astha|asta|ashtha|aastha|astar|হে আস্থা|আস্থা|আসথা|আস্তা)[,.!?।\s]*/i, '').trim();
       }
       this.lastCommandAt = Date.now();
       playEarcon('click');
@@ -1236,7 +1237,7 @@ const SiriVoice = {
       if (/^(sleep|go to sleep|stop listening|hands.?free off|voice off|ঘুমাও|শোনা বন্ধ)/i.test(cmd)) {
         this.enabled = false;
         this.stop();
-        return announce('Astha voice listening paused. Turn Hands-free on or tap the microphone when you need me.', 'আস্থার ভয়েস শোনা বন্ধ আছে। দরকার হলে হ্যান্ডস-ফ্রি চালু করুন অথবা মাইক্রোফোন চাপুন।', 'voice');
+        return announce('LUNEYRA voice listening paused. Turn Hands-free on or tap the microphone when you need me.', 'লুনেইরার ভয়েস শোনা বন্ধ আছে। দরকার হলে হ্যান্ডস-ফ্রি চালু করুন অথবা মাইক্রোফোন চাপুন।', 'voice');
       }
 
       if (!cmd) {
@@ -1452,7 +1453,7 @@ function recordConversationTurn(role, text) {
 }
 
 function getConversationContext() {
-  return conversationHistory.map(t => `${t.role === 'user' ? 'User' : 'Astha'}: ${t.text}`).join('\n');
+  return conversationHistory.map(t => `${t.role === 'user' ? 'User' : 'LUNEYRA'}: ${t.text}`).join('\n');
 }
 
 async function handleVisualQA(query) {
@@ -1752,7 +1753,7 @@ function companionBoot() {
    17. Server-backed memory (replaces the old browser-encrypted vault)
        Every save already went through the same privacy-mode guard clauses
        as before; only the storage target changed, from a client-side
-       encrypted blob to this account's row on Astha's own server.
+       encrypted blob to this account's row on LUNEYRA's own server.
    ===================================================================== */
 // On a static host (GitHub Pages) with no backend configured there is no API at all; once the
 // health check has said so, skip the network instead of logging a 404 for every sync attempt.
@@ -1880,7 +1881,7 @@ async function deleteMemory(uid) {
   $('memory-search').focus();
 }
 async function clearMemory() {
-  if (!confirm('Delete all saved object memories and room notes from your Astha account?')) return;
+  if (!confirm('Delete all saved object memories and room notes from your LUNEYRA account?')) return;
   try { await Promise.all([apiSend('DELETE', '/api/memories'), apiSend('DELETE', '/api/rooms'), apiSend('DELETE', '/api/log')]); }
   catch (e) { return announce('Could not clear your account data. Check your connection and try again.', 'অ্যাকাউন্টের তথ্য মুছা যায়নি। সংযোগ দেখে আবার চেষ্টা করুন।'); }
   await refreshMemory(); await refreshRooms(); state.log = []; renderLog();

@@ -23,9 +23,9 @@ test('provider tasks carry Astha identity without replacing names read from docu
     return reply(JSON.stringify(document));
   });
   assert.deepEqual(await callMaira({ task: 'read', userId: 'synthetic-identity-user' }), document);
-  assert.match(query, /Your user-facing name is Astha/);
-  assert.match(query, /Hello, I am Astha, your AI vision companion\./);
-  assert.match(query, /হ্যালো, আমি আস্থা, আপনার এআই দৃষ্টি সহায়ক।/);
+  assert.match(query, /Your user-facing name is LUNEYRA/);
+  assert.match(query, /Hello, I am LUNEYRA, your AI vision companion\./);
+  assert.match(query, /হ্যালো, আমি লুনেইরা, আপনার এআই দৃষ্টি সহায়ক।/);
   assert.match(query, /Do not add an introduction to ordinary visual answers unless asked/);
 });
 

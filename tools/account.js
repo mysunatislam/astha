@@ -33,7 +33,7 @@ async function deliverExport(text) {
     try {
       const url = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
       const link = document.createElement('a');
-      link.href = url; link.download = 'astha-my-data.json';
+      link.href = url; link.download = 'luneyra-my-data.json';
       document.body.appendChild(link); link.click(); link.remove();
       setTimeout(() => URL.revokeObjectURL(url), 60000);
       return 'file';
@@ -53,7 +53,7 @@ async function exportMyData() {
   const how = await deliverExport(text);
   if (!how) return dataStatus('I could not prepare your data on this device.', 'এই ডিভাইসে আপনার তথ্য প্রস্তুত করা যায়নি।');
   const where = {
-    file: ['saved as the file astha-my-data.json', 'astha-my-data.json ফাইল হিসেবে সংরক্ষিত হয়েছে'],
+    file: ['saved as the file luneyra-my-data.json', 'luneyra-my-data.json ফাইল হিসেবে সংরক্ষিত হয়েছে'],
     clipboard: ['copied to the clipboard', 'ক্লিপবোর্ডে কপি করা হয়েছে'],
     reader: ['placed in the reading box', 'পড়ার বাক্সে রাখা হয়েছে'],
   }[how];

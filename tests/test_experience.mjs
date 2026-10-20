@@ -45,7 +45,7 @@ function harness() {
     setTimeout: (fn, ms) => { const id = ++nextTimer; timers.set(id, { fn, ms }); return id; },
     clearTimeout: id => timers.delete(id),
     localStorage: { getItem: key => storage.get(key) ?? null, setItem: (key, value) => storage.set(key, value), removeItem: key => storage.delete(key) }, $: element,
-    document: { hidden: false, body: element('body'), documentElement: { getAttribute: name => name === 'data-theme' ? 'mulberry-apricot' : 'normal' },
+    document: { hidden: false, body: element('body'), documentElement: { getAttribute: name => name === 'data-theme' ? 'lavender' : 'normal' },
       querySelectorAll: selector => selector === '[data-astha-context]' ? contextButtons : selector === '[data-astha-page]' ? pageButtons : [],
       querySelector: selector => selector === 'main' ? element('main') : element(selector),
       addEventListener: (name, fn) => events.set(name, fn), removeEventListener: name => events.delete(name) },
@@ -172,8 +172,20 @@ test('setup answers outside the known choices are dropped and answering when ask
   const h = harness();
   const clean = h.experience.sanitize({ vision: 'legally-blind', language: 'fr', feedback: 'brief', textSize: 'xlarge', theme: 'x', speechRate: 3,
     devices: ['clip_camera', 'toaster', 'braille_controller'], modes: ['classroom', 'road'], haptics: 'yes', diagnosis: 'private' });
-  assert.deepEqual(JSON.parse(JSON.stringify(clean)), { vision: 'unspecified', feedback: 'brief', textSize: 'xlarge', theme: 'mulberry-apricot', speechRate: '1',
+  assert.deepEqual(JSON.parse(JSON.stringify(clean)), { vision: 'unspecified', feedback: 'brief', textSize: 'xlarge', theme: 'lavender', speechRate: '1',
     devices: ['clip_camera', 'braille_controller'], modes: ['ask', 'road'], haptics: true });
+});
+
+test('the lavender rebrand migrates old calm themes and preserves accessibility and account data', () => {
+  const h = harness();
+  for (const theme of ['mulberry-apricot', 'calm-teal']) {
+    const original = { theme, textSize: 'xlarge', feedback: 'brief', devices: ['clip_camera'], haptics: false };
+    const clean = h.experience.sanitize(original);
+    assert.equal(clean.theme, 'lavender'); assert.equal(clean.textSize, 'xlarge');
+    assert.equal(clean.feedback, 'brief'); assert.equal(clean.haptics, false);
+    assert.equal(clean.devices[0], 'clip_camera'); assert.equal(original.theme, theme, 'never mutates an account response');
+  }
+  for (const theme of ['clinical-yellow', 'monochrome', 'navy-cyan']) assert.equal(h.experience.sanitize({ theme }).theme, theme);
 });
 
 test('saved setup goes to the account, stays on the device when the server is unreachable, and is cleared on sign-out', async () => {

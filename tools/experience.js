@@ -1,6 +1,6 @@
 // Voice-first interaction manager: assistance modes, speech priority, cancellation of
 // stale visual work, page navigation and the personal setup preferences.
-// It records how the user wants ASTHA to behave; it makes no medical classification.
+// It records how the user wants LUNEYRA to behave; it makes no medical classification.
 const AsthaExperience = (() => {
   const MODES = ['ask', 'road', 'reading'];
   const PAGES = ['home', 'tools', 'memory', 'devices', 'assessment', 'settings'];
@@ -15,7 +15,7 @@ const AsthaExperience = (() => {
      high      the user's own command and its answer; never gated here
      medium    updates the user asked to keep receiving (surroundings, whiteboard, shield)
      low       routine observations
-     Medium and low wait for the user and for ASTHA's current answer, and stay silent for a
+     Medium and low wait for the user and for LUNEYRA's current answer, and stay silent for a
      short while after Stop. Repeats of the same alert are dropped inside its window. */
   const CRITICAL_HAZARDS = new Set(['stairs', 'drop_off', 'vehicle_collision']);
   const CRITICAL_REPEAT = 8000, CRITICAL_GAP = 2500, UPDATE_REPEAT = 30000, UPDATE_GAP = 4000, STOP_QUIET = 10000;
@@ -29,7 +29,7 @@ const AsthaExperience = (() => {
   const foregroundBusy = () => state.busy || state.listening || reader.active ||
     (typeof reading !== 'undefined' && reading.active) || asthaSpeaking() || Boolean(VoiceEngine.requestController);
   const busy = () => pending > 0 || foregroundBusy();
-  // Image-derived hazard warnings are only credible while the user has asked ASTHA to watch.
+  // Image-derived hazard warnings are only credible while the user has asked LUNEYRA to watch.
   const monitoring = () => mode === 'road' || Boolean(state.shield);
   function say(en, bn) { announce(en, bn, 'system'); }
 
@@ -121,7 +121,7 @@ const AsthaExperience = (() => {
   function markAsked() { document.body?.classList?.add('has-answer'); }
   function route(query) {
     markAsked();
-    const q = String(query || '').toLowerCase().replace(/^(?:hey\s+)?astha[,!\s]*|^আস্থা[,।\s]*/i, '').trim();
+    const q = String(query || '').toLowerCase().replace(/^(?:hey\s+|হেই\s+|হে\s+)?(?:luneyra|luneira|লুনেইরা|লুনেয়রা|astha|আস্থা)(?=$|[,!?।.\s])[,!?।.\s]*/i, '').trim();
     if (guide) { answerGuide(q); return true; }
     // A message being answered owns the next request, as the guide does.
     if (typeof AsthaMessages !== 'undefined' && AsthaMessages.route(query)) return true;
@@ -133,7 +133,7 @@ const AsthaExperience = (() => {
     // A complete greeting or identity question is local; quoted words and reading tasks
     // keep their normal route. A guided setup or message reply still owns its next answer.
     const greeting = q.normalize('NFC').replace(/[.!?।\s]+$/, '');
-    if (/^(?:(?:hello|hi|hey)(?:[,\s]+astha)?|who are you|introduce yourself|are you there|হ্যালো(?:[,\s]+আস্থা)?|হাই(?:[,\s]+আস্থা)?|তুমি কে|আপনি কে|নিজের পরিচয় দাও|নিজের পরিচয় দিন|তুমি কি আছো|আপনি কি আছেন|আছো|আছেন)$/.test(greeting)) {
+    if (/^(?:(?:hello|hi|hey)(?:[,\s]+(?:luneyra|astha))?|who are you|introduce yourself|are you there|হ্যালো(?:[,\s]+(?:লুনেইরা|আস্থা))?|হাই(?:[,\s]+(?:লুনেইরা|আস্থা))?|তুমি কে|আপনি কে|নিজের পরিচয় দাও|নিজের পরিচয় দিন|তুমি কি আছো|আপনি কি আছেন|আছো|আছেন)$/.test(greeting)) {
       say(I18N.en.identity_intro, I18N.bn.identity_intro); return true;
     }
     if (/^(?:start |begin )?(?:the )?(?:guided|voice|spoken) setup$|^set me up$|গাইডেড সেটআপ|কণ্ঠে সেটআপ|সেটআপ শুরু করো/.test(q.replace(/[.!?।\s]+$/, ''))) { showPage('assessment', { speakTitle: false }); startGuide(); return true; }
@@ -150,7 +150,7 @@ const AsthaExperience = (() => {
     }
     if (mode === 'reading' && /^stop reading|পড়া বন্ধ/.test(q)) { setContext('ask'); return true; }
     if (/stop updates|only when i ask|quiet mode|আপডেট বন্ধ|জিজ্ঞাসা করলে|শান্ত মোড/.test(q)) { setContext('ask'); return true; }
-    // Stop silences ASTHA and drops unspoken answers. The chosen mode stays until changed.
+    // Stop silences LUNEYRA and drops unspoken answers. The chosen mode stays until changed.
     if ((typeof isSpeechStopCommand === 'function' && isSpeechStopCommand(query)) || /^(?:stop|stop talking|don't talk|don't speak|cancel|be quiet|quiet|silence|enough|shut up|halt|থামো|থামুন|বন্ধ করো|চুপ|চুপ কর|চুপ করো|কথা বন্ধ|স্টপ|thamo|chup|bondho koro)[.!।\s]*$/.test(q)) { cancelPending(); stopAllSpeech(); if (typeof AsthaAgent !== 'undefined') AsthaAgent.cancel?.(); return true; }
     // Page names are whole commands, so a question that merely mentions one is still answered.
     const bare = q.replace(/[.!?।\s]+$/, '');
@@ -215,9 +215,9 @@ const AsthaExperience = (() => {
   /* ---- Personal setup --------------------------------------------------------------- */
   const PREF_KEY = 'astha.accessibility.v2';
   const CHOICES = { vision: ['none', 'light', 'low', 'unspecified'], language: ['bn', 'en'], feedback: ['detailed', 'brief', 'text'],
-    textSize: ['normal', 'large', 'xlarge'], theme: ['mulberry-apricot', 'navy-cyan', 'monochrome', 'clinical-yellow'], speechRate: ['0.8', '1', '1.2', '1.5'] };
+    textSize: ['normal', 'large', 'xlarge'], theme: ['lavender', 'navy-cyan', 'monochrome', 'clinical-yellow'], speechRate: ['0.8', '1', '1.2', '1.5'] };
   const SETS = { devices: ['phone_camera', 'smart_glasses', 'clip_camera', 'braille_controller'], modes: ['ask', 'road'] };
-  const DEFAULTS = Object.freeze({ vision: 'unspecified', feedback: 'detailed', textSize: 'normal', theme: 'mulberry-apricot', speechRate: '1', devices: [], modes: ['ask', 'road'], haptics: true });
+  const DEFAULTS = Object.freeze({ vision: 'unspecified', feedback: 'detailed', textSize: 'normal', theme: 'lavender', speechRate: '1', devices: [], modes: ['ask', 'road'], haptics: true });
   let preferences = { ...DEFAULTS };
   let preferenceGeneration = 0;
   // Revoke pending results without discarding setup saved locally before going offline.
@@ -235,6 +235,7 @@ const AsthaExperience = (() => {
   function sanitize(input) {
     const clean = { ...DEFAULTS };
     if (!input || typeof input !== 'object') return clean;
+    if (['mulberry-apricot', 'calm-teal'].includes(input.theme)) input = { ...input, theme: 'lavender' };
     for (const [key, allowed] of Object.entries(CHOICES)) if (allowed.includes(input[key])) clean[key] = input[key];
     for (const [key, allowed] of Object.entries(SETS)) if (Array.isArray(input[key])) clean[key] = allowed.filter(item => input[key].includes(item));
     if (!clean.modes.includes('ask')) clean.modes.unshift('ask');
@@ -321,7 +322,7 @@ const AsthaExperience = (() => {
     if (!preferenceContextCurrent(context)) return;
     setupStatus(synced ? 'setup_saved_account' : 'setup_saved_device');
     showPage('home', { speakTitle: false });
-    say(synced ? 'Your setup is saved to your account.' : 'Your setup is saved on this device. It will be copied to your account when you allow online processing and ASTHA can reach the server.',
+    say(synced ? 'Your setup is saved to your account.' : 'Your setup is saved on this device. It will be copied to your account when you allow online processing and LUNEYRA can reach the server.',
       synced ? 'আপনার পছন্দ অ্যাকাউন্টে রাখা হয়েছে।' : 'আপনার পছন্দ এই ডিভাইসে রাখা হয়েছে। অনলাইন প্রসেসিংয়ের অনুমতি দিলে এবং সার্ভারে সংযোগ পেলে অ্যাকাউন্টে তোলা হবে।');
   }
   // A setting changed elsewhere in the app (header menus, Settings) replaces the saved
@@ -360,7 +361,7 @@ const AsthaExperience = (() => {
     preferences = { ...DEFAULTS }; fillForm(preferences); setupStatus('');
   }
   /* ---- Guided setup: the same answers, given by voice -------------------------------
-     ASTHA asks one short question at a time and listens. While it is running every
+     LUNEYRA asks one short question at a time and listens. While it is running every
      request is taken as an answer, so "one" or "yes" never reaches another feature. */
   const YES = /^(?:yes|yeah|yep|sure|ok|okay|please|হ্যাঁ|হুম|জি|জ্বি|চাই|ha|hae)(?![A-Za-z0-9_\u0980-\u09FF])/, NO = /^(?:no|nope|nah|না|চাই না|লাগবে না|na)(?![A-Za-z0-9_\u0980-\u09FF])/;
   const GUIDE = [
@@ -412,8 +413,8 @@ const AsthaExperience = (() => {
     if (guide.step < GUIDE.length) askGuide(); else finishGuide();
   }
   function readAssessment() {
-    say('Personal setup. Each question is read when you reach it. Tab moves to the next choice, and Space or Enter selects it. Your answers only change how Astha presents information. Choose Save when you finish. Or say “start guided setup” and I will ask the main questions one at a time.',
-      'নিজের পছন্দ। প্রতিটি প্রশ্নে পৌঁছালে তা পড়ে শোনানো হবে। ট্যাব দিয়ে পরের পছন্দে যান, স্পেস বা এন্টার দিয়ে বাছুন। উত্তরগুলো শুধু আস্থার উপস্থাপনা বদলায়। শেষ হলে সংরক্ষণ বেছে নিন। অথবা বলুন “গাইডেড সেটআপ শুরু করো”, আমি মূল প্রশ্নগুলো একটি একটি করে জিজ্ঞাসা করব।');
+    say('Personal setup. Each question is read when you reach it. Tab moves to the next choice, and Space or Enter selects it. Your answers only change how LUNEYRA presents information. Choose Save when you finish. Or say “start guided setup” and I will ask the main questions one at a time.',
+      'নিজের পছন্দ। প্রতিটি প্রশ্নে পৌঁছালে তা পড়ে শোনানো হবে। ট্যাব দিয়ে পরের পছন্দে যান, স্পেস বা এন্টার দিয়ে বাছুন। উত্তরগুলো শুধু লুনেইরার উপস্থাপনা বদলায়। শেষ হলে সংরক্ষণ বেছে নিন। অথবা বলুন “গাইডেড সেটআপ শুরু করো”, আমি মূল প্রশ্নগুলো একটি একটি করে জিজ্ঞাসা করব।');
   }
   // Spoken instructions for each question: read its heading once when focus enters it.
   function speakGroup(event) {
@@ -431,7 +432,7 @@ const AsthaExperience = (() => {
     if (join(0) || join(1)) VoiceEngine.say(join(0), join(1));
   }
 
-  /* ---- Presence: what ASTHA is doing right now -------------------------------------- */
+  /* ---- Presence: what LUNEYRA is doing right now -------------------------------------- */
   function presence() {
     if (state.listening) return 'listening';
     if (asthaSpeaking()) return 'speaking';
@@ -446,7 +447,7 @@ const AsthaExperience = (() => {
       const avatar = $('astha-avatar'); if (avatar) avatar.setAttribute('data-state', next);
       const status = $('astha-state');
       if (status) {
-        // ASTHA's own voice already reports each step; avoid a second, overlapping reading.
+        // LUNEYRA's own voice already reports each step; avoid a second, overlapping reading.
         status.setAttribute('aria-live', state.audio ? 'off' : 'polite');
         status.textContent = t(STATE_KEYS[next]);
       }

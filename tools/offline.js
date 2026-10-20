@@ -2,7 +2,7 @@
 /* =====================================================================
    19. Offline companion: local memory, search & guidance, on-device
        voice input, and the "works without internet" pack
-       Nothing in this file needs the Astha server or a cloud key. The
+       Nothing in this file needs the LUNEYRA server or a cloud key. The
        server, when reachable, is only a backup copy of what the phone
        already remembers.
    ===================================================================== */
@@ -554,7 +554,7 @@ function memoryRecallText(memory) {
   };
 }
 function findItems(query) {
-  const raw = (query || '').toLowerCase().replace(/^(?:hey\s+)?(?:astha|asta|ashtha)[,.!\s]*/i, '').trim();
+  const raw = (query || '').toLowerCase().replace(/^(?:hey\s+|হেই\s+|হে\s+)?(?:luneyra|luneira|লুনেইরা|লুনেয়রা|astha|asta|ashtha|আস্থা)[,.!।\s]*/i, '').trim();
   const targetQuery = raw.replace(/[?!.,।]/g, '').replace(/^where did i (put|leave|keep)( my| the)?\s+/, 'find ')
     .replace(/^(search for|look for|locate|khojo|khuje dao)\s+/, 'find ');
   let q = typeof extractTargetItemFromQuery === 'function' ? extractTargetItemFromQuery(targetQuery) : null;
@@ -868,7 +868,7 @@ const OfflinePack = {
     if (this.running) return announce('Still preparing. I will tell you when it is done.', 'এখনো প্রস্তুত করছি। শেষ হলে বলব।', 'system');
     this.running = true;
     const btn = $('offline-prepare-btn'); if (btn) btn.disabled = true;
-    announce('Preparing Astha for offline use. This downloads the models once; keep the app open.', 'অফলাইনে চালানোর জন্য আস্থাকে প্রস্তুত করছি। মডেলগুলো একবার ডাউনলোড হবে; অ্যাপটি খোলা রাখুন।', 'system');
+    announce('Preparing LUNEYRA for offline use. This downloads the models once; keep the app open.', 'অফলাইনে চালানোর জন্য লুনেইরাকে প্রস্তুত করছি। মডেলগুলো একবার ডাউনলোড হবে; অ্যাপটি খোলা রাখুন।', 'system');
     let ok = 0;
     for (const p of this.parts) {
       try {
@@ -895,7 +895,7 @@ function offlineRoute(query, q) {
     // The Pi's distance sensor and the depth model are on this phone; the online assistant cannot use them.
     if (/\b(which way (should|can|do) i (go|walk|turn)|where can i (walk|go)|what('s| is) on (each|either|both) sides?|how far .* on (each|either|both) sides?|spatial (view|layout|map))\b|কোন দিকে (ফাঁকা|যাব|জায়গা)|চারদিকে কত দূরে|দুই পাশে কী|দুপাশে কী/.test(q)) { answerSpatial(); return true; }
     if (/how far|কত ?দূরে|koto dure/.test(q) && state.source === 'pi' && typeof AsthaSensors !== 'undefined' && AsthaSensors.measured('front')) { answerHowFar(query); return true; }
-    if (/prepare (for |me for )?offline|download (the |all )?models|work offline|go offline|make (it|astha) work without internet|অফলাইন/.test(q)) { OfflinePack.prepare(); return true; }
+    if (/prepare (for |me for )?offline|download (the |all )?models|work offline|go offline|make (it|luneyra|luneira|astha) work without internet|অফলাইন/.test(q)) { OfflinePack.prepare(); return true; }
     if (/\b(am i|are we|are you) (online|offline|connected)\b|is there internet|do (i|we) have internet|ইন্টারনেট আছে|নেট আছে/.test(q)) { announce('Internet is connected. Cloud mode has permission and credentials; a successful model response has not yet been confirmed.', 'ইন্টারনেট সংযোগ আছে। ক্লাউড মোডে অনুমতি ও পরিচয়পত্র আছে; মডেলের সফল উত্তর এখনো নিশ্চিত করা হয়নি।', 'system'); return true; }
     return false;
   }
@@ -910,7 +910,7 @@ function offlineRoute(query, q) {
   if (/(which|what) room|what kind of (room|place)|what place is this|কোন ঘর|কোন রুম|kon ghor/.test(q)) { answerWhichRoom(); return true; }
   if (/describe (it |everything )?in detail|in detail|full description|বিস্তারিত/.test(q)) { describeScene(undefined, true); return true; }
   if (/what('s| is) (happening|going on)|whats (happening|going on)|what is around me|summari[sz]e|give me a summary|কী হচ্ছে|কি হচ্ছে|সারাংশ|ki hocche|ki hochche/.test(q)) { describeScene(); return true; }
-  if (/prepare (for |me for )?offline|download (the |all )?models|work offline|offline mode|go offline|make (it|astha) work without internet|অফলাইন/.test(q)) { OfflinePack.prepare(); return true; }
+  if (/prepare (for |me for )?offline|download (the |all )?models|work offline|offline mode|go offline|make (it|luneyra|luneira|astha) work without internet|অফলাইন/.test(q)) { OfflinePack.prepare(); return true; }
   if (/\b(am i|are we|are you) (online|offline|connected)\b|is there internet|do (i|we) have internet|ইন্টারনেট আছে|নেট আছে/.test(q)) { announce(navigator.onLine === false ? 'No internet right now. I keep working on this phone.' : 'You are connected to the internet.', navigator.onLine === false ? 'এখন ইন্টারনেট নেই। আমি এই ফোনেই কাজ চালিয়ে যাচ্ছি।' : 'আপনি ইন্টারনেটে যুক্ত আছেন।', 'system'); return true; }
   if (/^(search for|look for|find|locate)\s+(my |the |a |an )?\S/.test(q) && !/\band\b/.test(q)) { findItems(query); return true; }
   return false;

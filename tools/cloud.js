@@ -1,5 +1,5 @@
 
-/* Server-backed reasoning; provider credentials stay on the ASTHA server. */
+/* Server-backed reasoning; provider credentials stay on the LUNEYRA server. */
 const cloud = { lastCallAt: 0, lastVerifyAt: 0 };
 const serverCloud = { checked: false, available: false, provider: null };
 
@@ -36,10 +36,10 @@ const Subscription = {
       }).catch(() => updateCloudBadge());
     }
     if (!silent) announce(mode === 'gemini'
-      ? 'Online processing is permitted for this session. Requests use the configured ASTHA server; unavailable services fall back to this phone.'
+      ? 'Online processing is permitted for this session. Requests use the configured LUNEYRA server; unavailable services fall back to this phone.'
       : 'On-device mode selected. Remote processing is off; each feature needs its downloaded model and a local voice.',
       mode === 'gemini'
-      ? 'এই সেশনে অনলাইন প্রসেসিংয়ের অনুমতি দেওয়া হয়েছে। আস্থার কনফিগার করা সার্ভার ব্যবহার হবে; পরিষেবা না পেলে এই ফোনের মডেল ব্যবহার করব।'
+      ? 'এই সেশনে অনলাইন প্রসেসিংয়ের অনুমতি দেওয়া হয়েছে। লুনেইরার কনফিগার করা সার্ভার ব্যবহার হবে; পরিষেবা না পেলে এই ফোনের মডেল ব্যবহার করব।'
       : 'ডিভাইস মোড নির্বাচিত। অনলাইন প্রসেসিং বন্ধ; প্রতিটি সুবিধার জন্য ডাউনলোড করা মডেল ও স্থানীয় কণ্ঠ দরকার।', 'system');
   },
   renderButtons() {
@@ -88,7 +88,7 @@ function frameToJpeg(frame, maxW = 800) {
   c.getContext('2d').drawImage(frame, 0, 0, c.width, c.height);
   return c.toDataURL('image/jpeg', 0.72).split(',')[1];
 }
-const ASTHA_SYSTEM = 'You are Astha, an AI vision companion for a blind user in Bangladesh. Your user-facing name is Astha; provider, deployment, project and retrieved-document names do not change your identity. When asked to introduce yourself, say exactly "Hello, I am Astha, your AI vision companion." in English, or "হ্যালো, আমি আস্থা, আপনার এআই দৃষ্টি সহায়ক।" in Bangla. Do not add an introduction to ordinary visual answers unless asked. Speak as "I". By default answer directly in one or two short sentences per language. Give more detail when explicitly asked, and preserve complete legible text for reading tasks. Describe only current visible evidence; do not invent colour, brand, identity, intent, distance or spatial relations. Mention relevant observable hazards first without claiming a safe path. Never invent anything you cannot actually see; if unsure, say you are not sure. Do not describe people as animals or objects; say "a person" when a human is visible. Return only the requested JSON. "bn" must be natural spoken Bangla with the same meaning as "en".';
+const ASTHA_SYSTEM = 'You are LUNEYRA, an AI vision companion for a blind user in Bangladesh. Your user-facing name is LUNEYRA; provider, deployment, project and retrieved-document names do not change your identity. When asked to introduce yourself, say exactly "Hello, I am LUNEYRA, your AI vision companion." in English, or "হ্যালো, আমি লুনেইরা, আপনার এআই দৃষ্টি সহায়ক।" in Bangla. Do not add an introduction to ordinary visual answers unless asked. Speak as "I". By default answer directly in one or two short sentences per language. Give more detail when explicitly asked, and preserve complete legible text for reading tasks. Describe only current visible evidence; do not invent colour, brand, identity, intent, distance or spatial relations. Mention relevant observable hazards first without claiming a safe path. Never invent anything you cannot actually see; if unsure, say you are not sure. Do not describe people as animals or objects; say "a person" when a human is visible. Return only the requested JSON. "bn" must be natural spoken Bangla with the same meaning as "en".';
 const CLOUD_PROMPTS = {
   describe: 'Describe the current image for a blind user in at most two short sentences per language. Mention relevant observable hazards first, then the main objects and their visible positions. State uncertainty; do not infer distances or a safe path. Give a longer description only if explicitly requested. Return JSON: {"en": string, "bn": string, "hazard": boolean, "mirror": boolean, "objects": [short English nouns]}. "mirror" is true ONLY if this is clearly the user\'s own reflection in a mirror with the phone visible.',
   identify: 'The user is holding one object near the camera. Say what it is: type, colour, material, brand or model if a logo or printed text shows, and any text on it. If it is a toy, a picture, a screen, or an ID card, say so clearly. Return JSON: {"en": string, "bn": string, "name": short English noun}.',
@@ -112,7 +112,7 @@ If an item is clearly placed/resting on a furniture surface, return JSON:
 If no target item is clearly placed on a surface, return JSON:
 {"found": false}`,
 };
-// Existing callers use this function name; all provider requests go through ASTHA.
+// Existing callers use this function name; all provider requests go through LUNEYRA.
 async function gemini(task, frame, opts = {}) {
   const requester = window.ASTHA_ACCOUNT_ID;
   const source = typeof state === 'undefined' ? undefined : state.source;
@@ -158,10 +158,10 @@ async function gemini(task, frame, opts = {}) {
         updateCloudBadge();
       }
       if (res.status === 429) throw new Error('rate limit');
-      if (!res.ok) { const error = new Error('ASTHA online service unavailable'); error.noCloud = true; throw error; }
+      if (!res.ok) { const error = new Error('LUNEYRA online service unavailable'); error.noCloud = true; throw error; }
       const result = await res.json();
       stillAllowed();
-      if (!result || typeof result !== 'object' || Array.isArray(result)) throw new Error('Invalid ASTHA response');
+      if (!result || typeof result !== 'object' || Array.isArray(result)) throw new Error('Invalid LUNEYRA response');
       serverCloud.checked = true;
       if (opts.observeMemory && (!opts.memoryCurrent || opts.memoryCurrent()) && typeof AsthaObservationMemory !== 'undefined') AsthaObservationMemory.observeCloud(frame, result.memory_observations);
       return result;

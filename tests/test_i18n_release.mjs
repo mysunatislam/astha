@@ -69,7 +69,7 @@ test('every translation hook in the page resolves in both languages and every li
 });
 
 // Text that is correct in both interface languages, or redrawn from state by refreshStateLabels().
-const SAME_IN_BOTH = new Set(['Astha — আস্থা', 'English', 'বাংলা + English', 'GPIO 25', 'GPIO 26', 'GPIO 27', 'CLIP ViT-B/32', '120 cm', 'IDLE', '01XXXXXXXXX']);
+const SAME_IN_BOTH = new Set(['LUNEYRA — লুনেইরা', 'English', 'বাংলা + English', 'GPIO 25', 'GPIO 26', 'GPIO 27', 'CLIP ViT-B/32', '120 cm', 'IDLE', '01XXXXXXXXX']);
 const STATE_DRIVEN = new Set(['auth-submit', 'hf-label', 'source-status', 'reader-progress', 'eye-pill', 'eye-start', 'private-btn', 'privacy-status',
   'owner-lock-btn', 'cloud-pill', 'calib-status-pill', 'calib-start-btn']);
 
@@ -161,7 +161,7 @@ test('Bangla yes and no answer a confirmation, and Bangla stop and camera comman
   context.ask('Open it?', 'খুলব?', () => outcomes.push('yes'), () => outcomes.push('no'));
   for (const reply of ['নাম কী', 'november', 'okra']) assert.equal(context.answer(reply), false, reply);
   const stop = vm.runInNewContext(slice('const STOP_TALKING_REGEX =', 'const SiriVoice =') + '\nisSpeechStopCommand;');
-  for (const phrase of ['থামো', 'আস্থা থামো', 'stop talking', 'please be quiet']) assert.equal(stop(phrase), true, phrase);
+  for (const phrase of ['থামো', 'আস্থা থামো', 'লুনেইরা থামো', 'LUNEYRA, stop talking', 'stop talking', 'please be quiet']) assert.equal(stop(phrase), true, phrase);
   for (const phrase of ['unstoppable', 'থামোনা', 'read the bus stop sign']) assert.equal(stop(phrase), false, phrase);
   const camera = new RegExp(/if \(\/((?:[^\/\\\n]|\\.)*start camera(?:[^\/\\\n]|\\.)*)\/i\.test\(q\)\)/.exec(script)[1], 'i');
   assert.equal(camera.test('ক্যামেরা চালু করো'), true); assert.equal(camera.test('start camera'), true);

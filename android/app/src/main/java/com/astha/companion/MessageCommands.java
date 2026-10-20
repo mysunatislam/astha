@@ -30,7 +30,8 @@ final class MessageCommands {
     // A word ends at the end of the phrase or at a space or punctuation, in either script.
     private static final String END = "(?=$|[\\s,.!?।])";
     private static final int FLAGS = Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE;
-    private static final Pattern WAKE = Pattern.compile("^(?:hey\\s+)?astha[,!\\s]*|^আস্থা[,।\\s]*", FLAGS);
+    // The previous name stays an alias for existing voice habits after the display rename.
+    private static final Pattern WAKE = Pattern.compile("^(?:(?:hey\\s+)?(?:luneyra|astha)|(?:হেই\\s+)?(?:লুনেইরা|আস্থা))(?=$|[,!।\\s])[,!।\\s]*", FLAGS);
     private static final Pattern YES = Pattern.compile("^(?:(?:yes|yeah|yep|sure|ok|okay)(?:[,\\s]+send it)?|send|send it|go ahead|do it|হ্যাঁ(?:[,\\s]+(?:পাঠাও|পাঠিয়ে দাও))?|হুম|জি|জ্বি|পাঠাও|পাঠিয়ে দাও|ঠিক আছে)$", FLAGS);
     private static final Pattern CHANGE = Pattern.compile("^(?:change|change it|edit|বদলাও)" + END, FLAGS);
     private static final Pattern CANCEL = Pattern.compile("^(?:cancel|never mind|forget it|ignore|skip|stop|no|nope|leave it|dismiss|বাতিল|থাক|বাদ দাও|থামো|না)" + END, FLAGS);

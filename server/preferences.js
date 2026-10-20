@@ -17,7 +17,8 @@ const CHOICES = Object.freeze({
   language: ['bn', 'en'],
   feedback: ['detailed', 'brief', 'text'],
   textSize: ['normal', 'large', 'xlarge'],
-  theme: ['mulberry-apricot', 'navy-cyan', 'monochrome', 'clinical-yellow'],
+  // Legacy colour choices remain readable so existing account preferences survive the rename.
+  theme: ['lavender', 'mulberry-apricot', 'calm-teal', 'navy-cyan', 'monochrome', 'clinical-yellow'],
   speechRate: ['0.8', '1', '1.2', '1.5'],
 });
 const SETS = Object.freeze({

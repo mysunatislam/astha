@@ -238,8 +238,8 @@ public class AsthaMessageAssistant extends Service {
         voiceReady = chosen != null && voice.setVoice(chosen) == TextToSpeech.SUCCESS;
         if (!voiceReady) {
             try {
-                showNotification(listenBangla ? "অফলাইন কণ্ঠ নেই। ফোনের ভাষা সেটিংসে বাংলা বা ইংরেজি কণ্ঠ ইনস্টল করে আস্থা আবার খুলুন। বার্তা পড়া বা পাঠানো হচ্ছে না।"
-                    : "No offline voice is installed. Install a Bangla or English device voice and reopen Astha. Messages are not being read or sent.");
+                showNotification(listenBangla ? "অফলাইন কণ্ঠ নেই। ফোনের ভাষা সেটিংসে বাংলা বা ইংরেজি কণ্ঠ ইনস্টল করে লুনেইরা আবার খুলুন। বার্তা পড়া বা পাঠানো হচ্ছে না।"
+                    : "No offline voice is installed. Install a Bangla or English device voice and reopen LUNEYRA. Messages are not being read or sent.");
             } catch (RuntimeException refused) { disableAndStop(); }
             return;
         }
@@ -419,8 +419,8 @@ public class AsthaMessageAssistant extends Service {
         if (!mayWork()) return;
         stopListening();
         draft = "";
-        say(bangla ? "এই ফোনে এই ভাষার অফলাইন কণ্ঠ শনাক্তকরণ নেই। কিছু পাঠানো হয়নি। আস্থা খুলে লিখে উত্তর দিন।"
-            : "On-device speech input is unavailable for this language. Nothing was sent. Open Astha to type your reply.", false);
+        say(bangla ? "এই ফোনে এই ভাষার অফলাইন কণ্ঠ শনাক্তকরণ নেই। কিছু পাঠানো হয়নি। লুনেইরা খুলে লিখে উত্তর দিন।"
+            : "On-device speech input is unavailable for this language. Nothing was sent. Open LUNEYRA to type your reply.", false);
     }
 
     private void stopListening() {

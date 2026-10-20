@@ -11,7 +11,7 @@
 
 // ---- Typical real-world size of each class (metres): long side L, short side S ----
 // Used with the camera focal length to turn a box height into a distance. Coarse on
-// purpose: Astha speaks in bands ("about two metres"), never false precision.
+// purpose: LUNEYRA speaks in bands ("about two metres"), never false precision.
 const SIZE_PRIOR = {
   person: [1.65, 0.5], bicycle: [1.7, 1.0], car: [4.2, 1.5], motorcycle: [2.0, 1.1], bus: [11, 3.0], truck: [7, 3.0], train: [20, 3.8], boat: [5, 1.5], airplane: [35, 10],
   'traffic light': [1.0, 0.35], 'fire hydrant': [0.75, 0.3], 'stop sign': [0.75, 0.75], 'parking meter': [1.4, 0.25], bench: [1.6, 0.9],

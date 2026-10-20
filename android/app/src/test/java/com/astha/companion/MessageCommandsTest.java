@@ -33,7 +33,7 @@ public class MessageCommandsTest {
 
     @Test
     public void onlyAClearYesSendsAtTheConfirmStep() {
-        for (String yes : new String[] { "yes", "Yes.", "yeah send it", "okay", "Astha, yes", "হ্যাঁ", "হ্যাঁ।", "পাঠাও", "ঠিক আছে" }) {
+        for (String yes : new String[] { "yes", "Yes.", "yeah send it", "okay", "LUNEYRA, yes", "Hey Luneyra, yes", "লুনেইরা, হ্যাঁ", "হেই লুনেইরা, হ্যাঁ", "Astha, yes", "হ্যাঁ", "হ্যাঁ।", "পাঠাও", "ঠিক আছে" }) {
             assertEquals(yes, MessageCommands.Kind.YES, kind(yes, MessageCommands.CONFIRM));
         }
         for (String other : new String[] { "", "   ", "no", "না", "yesterday was fine", "what", "noise", "cancel", "maybe",
@@ -52,6 +52,9 @@ public class MessageCommandsTest {
         assertEquals(MessageCommands.Kind.REPLY, reply.kind);
         assertEquals("I will be there at five", reply.text);
         assertEquals("on my way", MessageCommands.parse("Astha, tell her that on my way", MessageCommands.DECIDE).text);
+        assertEquals("on my way", MessageCommands.parse("LUNEYRA, tell her that on my way", MessageCommands.DECIDE).text);
+        assertEquals("আমি আসছি", MessageCommands.parse("লুনেইরা, উত্তর দাও আমি আসছি", MessageCommands.DECIDE).text);
+        assertEquals(MessageCommands.Kind.UNKNOWN, kind("luneyrable reply something", MessageCommands.DECIDE));
         assertEquals(MessageCommands.Kind.ASK_TEXT, kind("reply", MessageCommands.DECIDE));
         assertEquals(MessageCommands.Kind.ASK_TEXT, kind("উত্তর দাও", MessageCommands.DECIDE));
         MessageCommands.Command bangla = MessageCommands.parse("উত্তর দাও আমি আসছি", MessageCommands.DECIDE);

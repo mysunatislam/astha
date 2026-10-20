@@ -1,5 +1,5 @@
 /* =====================================================================
-   Astha Autonomous Agentic Engine
+   LUNEYRA Autonomous Agentic Engine
    Provides:
    1. Standardized Tool Orchestration (Vision, Crop, OCR, Guidance, RAG, Memory, Safety)
    2. Client & Cloud Retrieval-Augmented Generation (RAG) over Room & Item Vaults

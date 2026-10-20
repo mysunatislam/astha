@@ -1,4 +1,4 @@
-// Reading other apps aloud in the Android app. Everything here is opt-in: ASTHA asks first,
+// Reading other apps aloud in the Android app. Everything here is opt-in: LUNEYRA asks first,
 // Android asks again in its own settings, and either side can switch it off. In a browser
 // there is no native bridge and these controls stay hidden.
 const AsthaScreenAccess = (() => {
@@ -27,12 +27,12 @@ const AsthaScreenAccess = (() => {
     if (await refresh() !== 'off') {
       await bridge.setConsent(false);
       await refresh();
-      say('Astha can no longer read other apps.', 'আস্থা আর অন্য অ্যাপ পড়তে পারবে না।');
+      say('LUNEYRA can no longer read other apps.', 'লুনেইরা আর অন্য অ্যাপ পড়তে পারবে না।');
       return;
     }
     await bridge.setConsent(true);
-    say('Android will now open its Accessibility settings. Choose Astha screen reading and turn it on. Android will show its own warning first.',
-      'এখন অ্যান্ড্রয়েডের অ্যাক্সেসিবিলিটি সেটিংস খুলবে। আস্থার স্ক্রিন পড়া বেছে চালু করুন। অ্যান্ড্রয়েড আগে নিজের সতর্কবার্তা দেখাবে।');
+    say('Android will now open its Accessibility settings. Choose LUNEYRA screen reading and turn it on. Android will show its own warning first.',
+      'এখন অ্যান্ড্রয়েডের অ্যাক্সেসিবিলিটি সেটিংস খুলবে। লুনেইরার স্ক্রিন পড়া বেছে চালু করুন। অ্যান্ড্রয়েড আগে নিজের সতর্কবার্তা দেখাবে।');
     await refresh();
     try { await bridge.openSettings(); } catch { /* The status line already says it is waiting. */ }
   }
@@ -41,7 +41,7 @@ const AsthaScreenAccess = (() => {
     const bridge = native(); if (!bridge) return false;
     const q = String(query || '').toLowerCase();
     const read = /what(?:'s| is) on (?:my|the) (?:phone )?screen|read (?:my|the|this) (?:phone )?screen|স্ক্রিনে কী আছে|স্ক্রিন পড়ো/.test(q);
-    const move = /^(?:astha[,\s]*)?(?:press|go) (back|home) on (?:my|the) phone[.!\s]*$/.exec(q);
+    const move = /^(?:(?:luneyra|luneira|astha)[,\s]*)?(?:press|go) (back|home) on (?:my|the) phone[.!\s]*$/.exec(q);
     if (!read && !move) return false;
     (async () => {
       if (await refresh() !== 'on') {
@@ -60,11 +60,11 @@ const AsthaScreenAccess = (() => {
     return true;
   }
   // Opening an app or preparing a message uses ordinary Android intents, not the screen
-  // reader. ASTHA asks first every time, and never chooses a recipient or presses send.
+  // reader. LUNEYRA asks first every time, and never chooses a recipient or presses send.
   function routeAction(query) {
     const apps = typeof window !== 'undefined' && window.AsthaNative ? window.AsthaNative.apps : null;
     if (!apps) return false;
-    const q = String(query || '').trim().replace(/^(?:hey\s+)?astha[,!\s]*|^আস্থা[,।\s]*/i, '').replace(/[.!?।\s]+$/, '');
+    const q = String(query || '').trim().replace(/^(?:hey\s+|হেই\s+|হে\s+)?(?:luneyra|luneira|লুনেইরা|লুনেয়রা|astha|আস্থা)[,!।\s]*/i, '').replace(/[.!?।\s]+$/, '');
     const open = /^(?:open|launch|start) (?:the |my )?(.{2,40}?) app$/i.exec(q) || /^(.{2,40}?) অ্যাপ(?:টি|টা)? (?:খোলো|খুলুন|খুলো|চালু করো)$/.exec(q);
     const message = /^(?:send|write|compose) (?:a |the )?message(?: saying| that says|:|,)?\s+(.{1,500})$/i.exec(q) || /^(?:বার্তা|মেসেজ) (?:লেখো|লিখো|পাঠাও)[:,]?\s+(.{1,500})$/.exec(q);
     if (!open && !message) return false;

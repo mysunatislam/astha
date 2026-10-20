@@ -252,12 +252,14 @@ function identityHarness({ messageOwns = false } = {}) {
   return { context, spoken, experience: context.experience };
 }
 
-test('whole local greeting/identity requests return the exact Astha introduction without camera/provider work', () => {
+test('whole local greeting/identity requests return the exact LUNEYRA introduction without camera/provider work', () => {
   const h = identityHarness();
-  for (const query of ['Hello', 'hi Astha', 'Who are you?', 'Introduce yourself.', 'Astha, are you there?', 'আস্থা তুমি কে?', 'হ্যালো আস্থা', 'নিজের পরিচয় দিন।']) {
+  for (const query of ['Hello', 'hi LUNEYRA', 'Who are you?', 'Introduce yourself.', 'LUNEYRA, are you there?',
+    'Hey LUNEYRA, introduce yourself.', 'লুনেইরা তুমি কে?', 'হেই লুনেইরা, তুমি কে?', 'হে লুনেইরা, নিজের পরিচয় দাও।',
+    'হ্যালো লুনেইরা', 'নিজের পরিচয় দিন।', 'hi Astha', 'Astha, are you there?', 'আস্থা তুমি কে?', 'হ্যালো আস্থা']) {
     assert.equal(h.experience.route(query), true, query);
-    assert.equal(h.spoken.at(-1)[0], 'Hello, I am Astha, your AI vision companion.');
-    assert.equal(h.spoken.at(-1)[1], 'হ্যালো, আমি আস্থা, আপনার এআই দৃষ্টি সহায়ক।');
+    assert.equal(h.spoken.at(-1)[0], 'Hello, I am LUNEYRA, your AI vision companion.');
+    assert.equal(h.spoken.at(-1)[1], 'হ্যালো, আমি লুনেইরা, আপনার এআই দৃষ্টি সহায়ক।');
   }
   const owned = identityHarness({ messageOwns: true }); assert.equal(owned.experience.route('hello'), true); assert.equal(owned.spoken.length, 0, 'message replies own their text');
   for (const query of ['read the word hello', 'what does "who are you" mean', 'say hello to Rina', 'hello, read this page', 'হ্যালো শব্দটি পড়ো']) {

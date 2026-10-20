@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Astha Vision — AI Visual Companion</title>
+<title>LUNEYRA — AI Vision Companion</title>
+<link rel="icon" type="image/png" href="icons/icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Noto+Sans+Bengali:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -474,21 +475,22 @@
   .prototype-note { border-left: 3px solid var(--accent); padding-left: .8rem; font-size: .875rem; color: var(--muted); }
   @media (max-width: 960px) { .layout { grid-template-columns: 1fr; } }
   @media (max-width: 580px) { .viewport { aspect-ratio: 4/3; } .caption-row { flex-wrap: wrap; } .command-bar { flex-wrap: wrap; } .topbar { padding: 12px; } }
-  /* Mulberry & Apricot. The legacy draft theme name remains an alias for saved preferences. */
+  /* Lavender. Legacy theme names remain aliases so saved preferences keep working. */
+  html[data-theme="lavender"],
   html[data-theme="mulberry-apricot"],
   html[data-theme="calm-teal"] {
     color-scheme: light;
-    --bg: #f6f1e9; --bg-2: #efe8dd;
-    --surface: #fffdf9; --surface-2: #f3ede5; --surface-3: #e9e1d8;
-    --border: #d9cfc8; --border-strong: #82717e;
-    --text: #412b43; --muted: #655160; --faint: #705b67;
-    --accent: #412b43; --accent-strong: #302032; --accent-soft: #eee5ed; --accent-ink: #fffaf4;
-    --apricot: #efa36a; --apricot-strong: #e39458; --apricot-ink: #412b43;
-    --sage: #aab39d; --sage-soft: #edf0e6;
-    --danger: #a6263e; --danger-soft: #fbe9ed;
-    --warn: #815000; --warn-soft: #fff0d8;
-    --ok: #455735; --ok-soft: #e9eedf; --info: #345e7c;
-    --shadow: 0 4px 18px rgba(65, 43, 67, .05);
+    --bg: #f7f4fd; --bg-2: #efe8f8;
+    --surface: #fffefe; --surface-2: #f0eaf8; --surface-3: #e7ddf2;
+    --border: #d9cee8; --border-strong: #877099;
+    --text: #30233f; --muted: #655477; --faint: #6e5d7d;
+    --accent: #64409a; --accent-strong: #4c2b7d; --accent-soft: #ede4f8; --accent-ink: #ffffff;
+    --companion-tone: #dac6f4; --companion-tone-strong: #cbb1ee; --companion-tone-ink: #30233f;
+    --companion-tint: #c3b4df; --companion-tint-soft: #f0eaf8;
+    --danger: #9f294a; --danger-soft: #fbe8ef;
+    --warn: #805000; --warn-soft: #fff0d8;
+    --ok: #30634f; --ok-soft: #e6f1eb; --info: #4b5189;
+    --shadow: 0 8px 28px rgba(67, 41, 104, .06);
   }
   .astha-app { letter-spacing: 0; }
   .astha-app .topbar {
@@ -600,15 +602,15 @@
   .astha-app #pi-connection-slot { min-width: 0; margin: 16px 0; overflow-wrap: anywhere; }
   .astha-app #pi-connection-slot .utility-row { align-items: stretch; }
   .astha-app #pi-connection-slot .field { width: 100%; }
-  html:is([data-theme="mulberry-apricot"], [data-theme="calm-teal"]) .astha-app .brand-mark { background: var(--apricot); color: var(--apricot-ink); }
-  html:is([data-theme="mulberry-apricot"], [data-theme="calm-teal"]) .astha-app .mic:not(.listening),
-  html:is([data-theme="mulberry-apricot"], [data-theme="calm-teal"]) .astha-app .command-bar .btn.accent {
-    background: var(--apricot); color: var(--apricot-ink); border-color: var(--accent);
+  html:is([data-theme="lavender"], [data-theme="mulberry-apricot"], [data-theme="calm-teal"]) .astha-app .brand-mark { background: var(--companion-tone); color: var(--companion-tone-ink); }
+  html:is([data-theme="lavender"], [data-theme="mulberry-apricot"], [data-theme="calm-teal"]) .astha-app .mic:not(.listening),
+  html:is([data-theme="lavender"], [data-theme="mulberry-apricot"], [data-theme="calm-teal"]) .astha-app .command-bar .btn.accent {
+    background: var(--companion-tone); color: var(--companion-tone-ink); border-color: var(--accent);
   }
-  html:is([data-theme="mulberry-apricot"], [data-theme="calm-teal"]) .astha-app .command-bar .btn.accent:hover { background: var(--apricot-strong); }
-  html:is([data-theme="mulberry-apricot"], [data-theme="calm-teal"]) .astha-app .assessment-page section[aria-labelledby="devices-heading"] { background: var(--sage-soft); }
-  html:is([data-theme="mulberry-apricot"], [data-theme="calm-teal"]) .astha-app .mode-panel { background: var(--sage-soft); }
-  /* ---- Hero: who is speaking, and what ASTHA is doing right now ---------------- */
+  html:is([data-theme="lavender"], [data-theme="mulberry-apricot"], [data-theme="calm-teal"]) .astha-app .command-bar .btn.accent:hover { background: var(--companion-tone-strong); }
+  html:is([data-theme="lavender"], [data-theme="mulberry-apricot"], [data-theme="calm-teal"]) .astha-app .assessment-page section[aria-labelledby="devices-heading"] { background: var(--companion-tint-soft); }
+  html:is([data-theme="lavender"], [data-theme="mulberry-apricot"], [data-theme="calm-teal"]) .astha-app .mode-panel { background: var(--companion-tint-soft); }
+  /* ---- Hero: who is speaking, and what LUNEYRA is doing right now ---------------- */
   .astha-app .hero { display: flex; align-items: center; gap: 24px; margin-bottom: 24px; }
   .astha-app .hero-copy { min-width: 0; overflow-wrap: anywhere; }
   .astha-app .hero-copy h2 { margin: 0 0 8px; font-size: clamp(1.65rem, 3vw, 2.15rem); line-height: 1.3; color: var(--text); }
@@ -619,11 +621,11 @@
   .astha-app .avatar-disc { fill: var(--accent); }
   .astha-app .avatar-bowl { fill: none; stroke: var(--accent-ink); stroke-width: 7; }
   .astha-app .avatar-stem { fill: none; stroke: var(--accent-ink); stroke-width: 7; stroke-linecap: round; }
-  .astha-app .avatar-spark { fill: var(--apricot, var(--accent-ink)); transform-box: fill-box; transform-origin: center; }
+  .astha-app .avatar-spark { fill: var(--companion-tone, var(--accent-ink)); transform-box: fill-box; transform-origin: center; }
   /* Each state also differs without motion or colour: solid ring, dashed ring, larger spark. */
-  .astha-app [data-state="listening"] .avatar-halo { fill: var(--apricot, var(--accent-soft)); stroke: var(--accent); animation: astha-listen 1.8s ease-in-out infinite; }
+  .astha-app [data-state="listening"] .avatar-halo { fill: var(--companion-tone, var(--accent-soft)); stroke: var(--accent); animation: astha-listen 1.8s ease-in-out infinite; }
   .astha-app [data-state="processing"] .avatar-halo { stroke: var(--accent); stroke-dasharray: 9 11; animation: astha-think 8s linear infinite; }
-  .astha-app [data-state="speaking"] .avatar-halo { fill: var(--sage, var(--accent-soft)); stroke: var(--accent); }
+  .astha-app [data-state="speaking"] .avatar-halo { fill: var(--companion-tint, var(--accent-soft)); stroke: var(--accent); }
   .astha-app [data-state="speaking"] .avatar-spark { transform: scale(1.35); animation: astha-speak 1.1s ease-in-out infinite; }
   @keyframes astha-listen { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.05); } }
   @keyframes astha-think { to { transform: rotate(360deg); } }
@@ -693,10 +695,11 @@
   .astha-app[data-view] .topbar { max-width: 560px; padding: 18px 20px 4px; gap: 12px; border-bottom: 0; align-items: flex-start; flex-wrap: nowrap; }
   .astha-app[data-view="settings"] .topbar { flex-wrap: wrap; }
   .astha-app .brand-mark, .astha-app .brand h1 .pill { display: none; }
-  .astha-app .brand h1 { font-size: 1.75rem; font-weight: 600; text-transform: lowercase; }
-  .astha-app .brand-logo { display: block; width: 192px; max-width: 100%; height: auto; aspect-ratio: 3 / 1; object-fit: contain; }
+  .astha-app .brand h1 { font-size: 1.75rem; font-weight: 600; text-transform: none; gap: 8px; }
+  .astha-app .brand-logo { display: block; width: 80px; height: 64px; flex: 0 0 80px; object-fit: cover; object-position: left center; }
+  .astha-app .brand-wordmark { font-size: 1.3rem; font-weight: 700; letter-spacing: .055em; color: var(--text); }
   .astha-app .brand-logo-dark { display: none; }
-  /* The dark themes get the same emblem recoloured with their cream and muted mulberry. */
+  /* Preserve the supplied winged emblem; crop its old wordmark and render the current name beside it. */
   html:is([data-theme="clinical-yellow"], [data-theme="monochrome"], [data-theme="navy-cyan"]) .astha-app .brand-logo-light { display: none; }
   html:is([data-theme="clinical-yellow"], [data-theme="monochrome"], [data-theme="navy-cyan"]) .astha-app .brand-logo-dark { display: block; }
   .astha-app .brand p { margin-top: 2px; font-size: .85rem; color: var(--muted); }
@@ -716,8 +719,8 @@
   .astha-app .hero-card .hero-copy h2 { margin: 0 0 12px; font-size: 1.45rem; font-weight: 700; color: var(--accent-ink); }
   .astha-app .hero-card .hero-state { font-size: 1.05rem; font-weight: 500; color: var(--accent-ink); }
   .astha-app .hero-card .astha-avatar { width: 124px; height: 124px; }
-  .astha-app .avatar-ring { fill: none; stroke: var(--apricot, var(--accent-ink)); stroke-width: 1.5; opacity: .5; transform-box: fill-box; transform-origin: center; }
-  .astha-app .avatar-disc { fill: var(--apricot, var(--accent-ink)); }
+  .astha-app .avatar-ring { fill: none; stroke: var(--companion-tone, var(--accent-ink)); stroke-width: 1.5; opacity: .5; transform-box: fill-box; transform-origin: center; }
+  .astha-app .avatar-disc { fill: var(--companion-tone, var(--accent-ink)); }
   .astha-app .avatar-wave path { fill: none; stroke: var(--accent); stroke-width: 5; stroke-linecap: round; transform-box: fill-box; transform-origin: center; }
   /* States differ without motion too: solid rings, a dashed ring, or taller bars. */
   .astha-app [data-state="listening"] .avatar-ring { opacity: 1; stroke-width: 3; animation: astha-listen 1.8s ease-in-out infinite; }
@@ -726,7 +729,7 @@
   .astha-app [data-state="speaking"] .avatar-wave path:nth-child(2n) { animation-delay: .25s; }
   @keyframes astha-wave { 0%, 100% { transform: scaleY(.6); } 50% { transform: scaleY(1.15); } }
   .astha-app .hero-card .mic-area { justify-content: center; padding: 0; }
-  .astha-app .hero-card .mic { width: auto; height: auto; min-height: 60px; display: inline-flex; align-items: center; justify-content: center; gap: 12px; padding: 0 30px; border-radius: 999px; background: var(--apricot, var(--surface)); color: var(--apricot-ink, var(--text)); font: inherit; }
+  .astha-app .hero-card .mic { width: auto; height: auto; min-height: 60px; display: inline-flex; align-items: center; justify-content: center; gap: 12px; padding: 0 30px; border-radius: 999px; background: var(--companion-tone, var(--surface)); color: var(--companion-tone-ink, var(--text)); font: inherit; }
   .astha-app .hero-card .mic svg { width: 22px; height: 22px; }
   .astha-app .hero-card .mic-label { font-size: 1.1rem; font-weight: 600; color: inherit; }
   .astha-app .hero-card .mic.listening { background: var(--accent-ink); color: var(--accent); }
@@ -810,7 +813,7 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12z"/><circle cx="12" cy="12" r="3"/></svg>
     </div>
     <div>
-      <h1><img class="brand-logo brand-logo-light" src="brand/astha-mulberry-apricot-v1.png" width="576" height="192" alt="Astha" data-i18n-alt="brand_logo_alt" decoding="async"><img class="brand-logo brand-logo-dark" src="brand/astha-mulberry-apricot-dark-v1.png" width="576" height="192" alt="Astha" data-i18n-alt="brand_logo_alt" decoding="async"> <span class="pill ok"><span class="dot pulse"></span><span data-i18n="badge_clinical">Prototype</span></span></h1>
+      <h1><img class="brand-logo brand-logo-light" src="brand/astha-mulberry-apricot-v1.png" width="80" height="64" alt="" aria-hidden="true" decoding="async"><img class="brand-logo brand-logo-dark" src="brand/astha-mulberry-apricot-dark-v1.png" width="80" height="64" alt="" aria-hidden="true" decoding="async"><span class="brand-wordmark" data-i18n="brand">LUNEYRA</span> <span class="pill ok"><span class="dot pulse"></span><span data-i18n="badge_clinical">Prototype</span></span></h1>
       <p data-i18n="tagline">Real-time AI visual companion for blind and low-vision users</p>
     </div>
   </div>
@@ -888,14 +891,14 @@
       </div>
       <!-- Accessible Microphone Area -->
       <div class="mic-area">
-        <button class="mic" id="mic" onclick="toggleListening()" aria-label="Talk to ASTHA">
+        <button class="mic" id="mic" onclick="toggleListening()" aria-label="Talk to LUNEYRA">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0014 0"/><path d="M12 17v5M8 22h8"/></svg>
-          <span class="mic-label" id="mic-label" data-i18n="mic_idle">Talk to ASTHA</span>
+          <span class="mic-label" id="mic-label" data-i18n="mic_idle">Talk to LUNEYRA</span>
         </button>
         <span class="mic-hint" data-i18n="mic_hint">Ask in Bangla or English: “What is in front of me?”, “Read this”, “Where is my charger?”</span>
       </div>
       </div>
-      <p class="voice-notice" id="voice-notice" role="status" hidden><span data-i18n="voice_no_bangla">This device has no Bangla voice, so Astha is speaking English.</span> <button class="btn" type="button" id="voice-online" data-i18n="voice_turn_on">Turn on the Bangla voice</button></p>
+      <p class="voice-notice" id="voice-notice" role="status" hidden><span data-i18n="voice_no_bangla">This device has no Bangla voice, so LUNEYRA is speaking English.</span> <button class="btn" type="button" id="voice-online" data-i18n="voice_turn_on">Turn on the Bangla voice</button></p>
       <section class="essentials" aria-labelledby="essentials-title">
         <h2 id="essentials-title" data-i18n="essentials_title">Your everyday essentials</h2>
         <div class="essentials-grid">
@@ -908,16 +911,16 @@
       <details class="type-instead">
         <summary data-i18n="type_instead">Type a request instead</summary>
       <form class="command-bar" onsubmit="event.preventDefault(); submitCommand()">
-        <label class="sr-only" for="command-input">Ask Astha in Bangla or English</label>
+        <label class="sr-only" for="command-input">Ask LUNEYRA in Bangla or English</label>
         <input id="command-input" maxlength="500" placeholder="Type a request, e.g. Where are my glasses?" autocomplete="off">
-        <button class="btn accent" type="submit">Ask Astha</button>
+        <button class="btn accent" type="submit">Ask LUNEYRA</button>
       </form>
       </details>
       <div class="utility-row"><button class="btn" onclick="repeatResponse()">Repeat</button><button class="btn" onclick="stopAllSpeech()">Stop speaking</button><button class="btn" onclick="showCommandHelp()">Voice commands</button></div>
         <!-- Accessible High-Contrast Caption Card (WCAG AAA) -->
         <div class="caption" id="caption" aria-live="polite" aria-atomic="true">
           <div class="caption-row">
-            <span class="caption-status"><span class="dot pulse"></span><span id="caption-status" data-i18n="ready_title">Astha is ready</span></span>
+            <span class="caption-status"><span class="dot pulse"></span><span id="caption-status" data-i18n="ready_title">LUNEYRA is ready</span></span>
             <span class="pill accent" id="agent-pill" data-i18n="agent_vision">Vision agent</span>
           </div>
           <p class="caption-text" id="caption-text" data-i18n="ready_text">Start the camera or pick a demo scene, then tap “Describe surroundings”.</p>
@@ -957,7 +960,7 @@
         <p id="vision-sensor-status" class="help" role="status" aria-live="polite" aria-atomic="true" data-i18n="pi_sensor_no_data">Ultrasonic: no fresh data; distance unknown.</p>
         <p id="vision-sensor-value" class="help" aria-live="off" hidden></p>
       </section>
-      <p class="prototype-note">Browser prototype · Camera recognition and reading are experimental. Use your usual mobility aid; Astha cannot confirm a safe path.</p>
+      <p class="prototype-note">Browser prototype · Camera recognition and reading are experimental. Use your usual mobility aid; LUNEYRA cannot confirm a safe path.</p>
       <p id="source-status" class="source-status" role="status">Camera off · No image selected</p>
       <div class="viewport" id="viewport">
         <div class="empty" id="viewport-empty">
@@ -1089,7 +1092,7 @@
             <h3 id="calib-heading" tabindex="-1">🏠 Video Home & Room Calibration</h3>
             <span class="pill ok" id="calib-status-pill">Ready to scan</span>
           </div>
-          <p class="help" id="calib-instruction">Choose a room name, then walk through with your camera. Astha will continuously identify furniture surfaces (dressing table, reading table, bed, chairs) and remember where items are placed.</p>
+          <p class="help" id="calib-instruction">Choose a room name, then walk through with your camera. LUNEYRA will continuously identify furniture surfaces (dressing table, reading table, bed, chairs) and remember where items are placed.</p>
           
           <div style="display: flex; gap: 0.5rem; margin-bottom: 0.75rem; flex-wrap: wrap;">
             <label class="field" for="room-name" style="flex: 1; min-width: 180px; margin: 0;">Room name
@@ -1162,7 +1165,7 @@
       <label class="field" for="description-style">Description length<select class="select-dropdown" id="description-style" onchange="savePreferences()"><option value="short">Short</option><option value="detailed">Detailed</option></select></label>
       <label class="field" for="ocr-language">Reading language<select class="select-dropdown" id="ocr-language" onchange="savePreferences()"><option value="ben+eng">বাংলা + English</option><option value="eng">English</option></select></label>
       <p id="voice-support" class="help" role="status"></p>
-      <p class="help">Tap the microphone before saying “Hey Astha”. Browser speech recognition may use an online service. There is no background wake-word listener.</p>
+      <p class="help">Tap the microphone before saying “Hey LUNEYRA”. Browser speech recognition may use an online service. There is no background wake-word listener.</p>
       <button class="btn" id="private-btn" aria-pressed="false" onclick="togglePrivateMode()">Privacy mode: off</button>
       <p id="privacy-status" class="help" role="status">Memory is kept for this session unless you unlock encrypted storage.</p>
     </div>
@@ -1250,7 +1253,7 @@
     <div class="card" id="hw-card" hidden>
       <div class="card-head">
         <div>
-          <h3 data-i18n="band_title">Astha wearable band</h3>
+          <h3 data-i18n="band_title">LUNEYRA wearable band</h3>
           <div class="sub" style="font-size: 0.875rem;color:var(--muted)" data-i18n="band_sub">ESP32 · 3-channel haptic feedback · distance sensor (simulated)</div>
         </div>
         <span class="pill ok"><span class="dot pulse"></span><span data-i18n="band_connected">Connected</span></span>
@@ -1307,11 +1310,11 @@
       </div>
     </div>
     </details>
-  <div class="card"><details><summary>Voice Commands & Assistant Guide</summary><p>Always-listening Siri mode: Say “Astha” or ask directly: “What is in front of me?”, “Read this”, “Check clothes”, “Where are my keys?”. Say “Stop talking” to silence instantly.</p></details></div></aside>
+  <div class="card"><details><summary>Voice Commands & Assistant Guide</summary><p>Always-listening Siri mode: Say “LUNEYRA” or ask directly: “What is in front of me?”, “Read this”, “Check clothes”, “Where are my keys?”. Say “Stop talking” to silence instantly.</p></details></div></aside>
 </main>
 
 <footer>
-  <span data-i18n="footer">Astha — Voice-Led AI Visual Companion.</span>
+  <span data-i18n="footer">LUNEYRA — Voice-Led AI Visual Companion.</span>
 </footer>
 
 <!-- Local vision runtimes load on demand; the app shell does not wait for a CDN. -->
@@ -1322,12 +1325,12 @@
    ===================================================================== */
 const I18N = {
   en: {
-    brand: 'Astha', badge_clinical: 'AI Visual Companion',
+    brand: 'LUNEYRA', badge_clinical: 'AI Visual Companion',
     tagline: 'Real-time AI visual companion for blind and low-vision users',
     ui_language: 'Interface language',
     voice_on: 'Voice on', voice_off: 'Voice off', hw_panel: 'Hardware panel',
     viewport_empty: 'Start the camera, upload a photo, or pick a demo scene.',
-    ready_title: 'Astha is ready',
+    ready_title: 'LUNEYRA is ready',
     ready_text: 'Start the camera or pick a demo scene, then tap “Describe surroundings”.',
     hazard_banner: 'Warning! Obstacle ahead',
     src_camera: 'Camera', src_camera_stop: 'Stop camera', src_upload: 'Upload photo', src_demo: 'Demo',
@@ -1360,7 +1363,7 @@ const I18N = {
     seen_title: 'What I see', seen_list_empty: 'Nothing detected yet.',
     memory_title: 'Memory', memory_clear: 'Clear', memory_help: 'Personal items are remembered with where and when they were last seen.', memory_empty: 'Nothing remembered yet.',
     log_title: 'Activity log', log_empty: 'No activity yet.',
-    band_title: 'Astha wearable band', band_sub: 'ESP32 · 3-channel haptic feedback · distance sensor (simulated)', band_connected: 'Connected',
+    band_title: 'LUNEYRA wearable band', band_sub: 'ESP32 · 3-channel haptic feedback · distance sensor (simulated)', band_connected: 'Connected',
     motor_left: 'LEFT', motor_center: 'CENTER', motor_right: 'RIGHT',
     pattern: 'Pattern: {p}', pattern_none: 'Pattern: calm',
     test_left: 'Left', test_center: 'Center', test_right: 'Right', test_danger: 'Danger',
@@ -1370,7 +1373,7 @@ const I18N = {
     fall_title: 'Simulate fall', fall_sub: 'MPU6050 impact over 2.2 g', battery_title: 'Battery', battery_sub: 'LiPo 3.7 V · about 12 h standby',
     backend_title: 'Backend connection', backend_standalone: 'Standalone', backend_help: 'This web version works fully on its own. If your backend is running, connect it here for cloud reasoning.',
     backend_test: 'Test', backend_connecting: 'Connecting…', backend_connected: 'Connected', backend_offline: 'Offline · standalone mode',
-    footer: 'Astha Vision · Accessible Companion Prototype · Real In-Browser Inference.',
+    footer: 'LUNEYRA Vision · Accessible Companion Prototype · Real In-Browser Inference.',
     agent_vision: 'Vision agent', agent_ocr: 'Reading agent', agent_memory: 'Memory agent', agent_safety: 'Safety agent', agent_voice: 'Voice', agent_system: 'System', agent_fall: 'Fall sensor',
     lang_selected: 'English selected.',
     cam_starting: 'Starting camera…', cam_on: 'Camera is on. Loading the vision models…',
@@ -1414,12 +1417,12 @@ const I18N = {
     and: 'and',
   },
   bn: {
-    brand: 'আস্থা', badge_clinical: 'এআই সঙ্গী',
+    brand: 'লুনেইরা', badge_clinical: 'এআই সঙ্গী',
     tagline: 'দৃষ্টিহীন ও স্বল্পদৃষ্টি মানুষের জন্য রিয়েল-টাইম এআই সঙ্গী',
     ui_language: 'ইন্টারফেসের ভাষা',
     voice_on: 'কণ্ঠস্বর চালু', voice_off: 'কণ্ঠস্বর বন্ধ', hw_panel: 'হার্ডওয়্যার প্যানেল',
     viewport_empty: 'ক্যামেরা চালু করুন, ছবি আপলোড করুন, অথবা একটি ডেমো দৃশ্য বেছে নিন।',
-    ready_title: 'আস্থা প্রস্তুত',
+    ready_title: 'লুনেইরা প্রস্তুত',
     ready_text: 'ক্যামেরা চালু করুন বা ডেমো দৃশ্য বেছে নিন, তারপর “চারপাশ বর্ণনা করুন” চাপুন।',
     hazard_banner: 'সতর্ক! সামনে বাধা',
     src_camera: 'ক্যামেরা', src_camera_stop: 'ক্যামেরা বন্ধ', src_upload: 'ছবি আপলোড', src_demo: 'ডেমো',
@@ -1452,7 +1455,7 @@ const I18N = {
     seen_title: 'আমি যা দেখছি', seen_list_empty: 'এখনো কিছু শনাক্ত হয়নি।',
     memory_title: 'স্মৃতি', memory_clear: 'মুছুন', memory_help: 'ব্যক্তিগত জিনিস কোথায় ও কখন শেষ দেখা গেছে তা মনে রাখা হয়।', memory_empty: 'এখনো কিছু মনে রাখা হয়নি।',
     log_title: 'কার্যক্রম লগ', log_empty: 'এখনো কোনো কার্যক্রম নেই।',
-    band_title: 'আস্থা ওয়্যারেবল ব্যান্ড', band_sub: 'ESP32 · ৩-চ্যানেল হ্যাপটিক ফিডব্যাক · দূরত্ব সেন্সর (সিমুলেটেড)', band_connected: 'সংযুক্ত',
+    band_title: 'লুনেইরা ওয়্যারেবল ব্যান্ড', band_sub: 'ESP32 · ৩-চ্যানেল হ্যাপটিক ফিডব্যাক · দূরত্ব সেন্সর (সিমুলেটেড)', band_connected: 'সংযুক্ত',
     motor_left: 'বাম', motor_center: 'মাঝ', motor_right: 'ডান',
     pattern: 'প্যাটার্ন: {p}', pattern_none: 'প্যাটার্ন: শান্ত',
     test_left: 'বাম', test_center: 'মাঝ', test_right: 'ডান', test_danger: 'বিপদ',
@@ -1462,7 +1465,7 @@ const I18N = {
     fall_title: 'পতন সিমুলেট', fall_sub: 'MPU6050 · ২.২ g-এর বেশি আঘাত', battery_title: 'ব্যাটারি', battery_sub: 'LiPo 3.7 V · প্রায় ১২ ঘণ্টা স্ট্যান্ডবাই',
     backend_title: 'ব্যাকএন্ড সংযোগ', backend_standalone: 'স্বতন্ত্র', backend_help: 'এই ওয়েব সংস্করণ নিজে নিজেই সম্পূর্ণ কাজ করে। আপনার ব্যাকএন্ড চালু থাকলে ক্লাউড রিজনিংয়ের জন্য এখানে যুক্ত করুন।',
     backend_test: 'পরীক্ষা', backend_connecting: 'সংযোগ হচ্ছে…', backend_connected: 'সংযুক্ত', backend_offline: 'অফলাইন · স্বতন্ত্র মোড',
-    footer: 'আস্থা — কণ্ঠচালিত এআই ভিজ্যুয়াল সঙ্গী।',
+    footer: 'লুনেইরা — কণ্ঠচালিত এআই ভিজ্যুয়াল সঙ্গী।',
     agent_vision: 'ভিশন এজেন্ট', agent_ocr: 'পাঠ এজেন্ট', agent_memory: 'স্মৃতি এজেন্ট', agent_safety: 'নিরাপত্তা এজেন্ট', agent_voice: 'কণ্ঠ', agent_system: 'সিস্টেম', agent_fall: 'পতন সেন্সর',
     lang_selected: 'বাংলা নির্বাচিত হয়েছে।',
     cam_starting: 'ক্যামেরা চালু হচ্ছে…', cam_on: 'ক্যামেরা চালু। ভিশন মডেল লোড হচ্ছে…',
@@ -1602,6 +1605,8 @@ function playEarcon(type) {
    3. Contrast theme & Font Scaling Controllers
    ===================================================================== */
 function applyClinicalTheme(themeName) {
+  themeName = ['mulberry-apricot', 'calm-teal'].includes(themeName) ? 'lavender' : themeName;
+  if (!['lavender', 'clinical-yellow', 'monochrome', 'navy-cyan'].includes(themeName)) themeName = 'lavender';
   document.documentElement.setAttribute('data-theme', themeName);
   try { localStorage.setItem('astha.clinical_theme', themeName); } catch (e) {}
   playEarcon('click');
@@ -2057,7 +2062,7 @@ class YoloDetector {
     };
     this.session = await ort.InferenceSession.create(modelBuffer, sessionOpts);
     this.provider = providers[0];
-    console.log(`[Astha Vision] YOLO26n initialized on backend: ${this.provider.toUpperCase()}`);
+    console.log(`[LUNEYRA Vision] YOLO26n initialized on backend: ${this.provider.toUpperCase()}`);
     return this;
   }
 
@@ -2179,7 +2184,7 @@ function loadCoco() {
         logEvent('Vision detector: YOLO26n');
         return;
       } catch (yoloErr) {
-        console.warn('[Astha Vision] YOLO26n init failed, falling back to COCO-SSD:', yoloErr);
+        console.warn('[LUNEYRA Vision] YOLO26n init failed, falling back to COCO-SSD:', yoloErr);
       }
 
       // 2. Fallback to COCO-SSD
@@ -3044,7 +3049,7 @@ async function checkBackend() {
 /* =====================================================================
    13. System Initialization
    ===================================================================== */
-// ASTHA companion features. Integrated into the single HTML deliverable.
+// LUNEYRA companion features. Integrated into the single HTML deliverable.
 let privacyMode = false;
 let privacyTransition = false;
 let lastResponse = null;
@@ -3058,7 +3063,7 @@ const VAULT_KEY = 'astha.memory.v1.encrypted';
 
 Object.assign(I18N.en, {
   badge_clinical: 'Prototype', tagline: 'Your voice-first visual companion',
-  ready_text: 'Hello, I am Astha, your AI vision companion.',
+  ready_text: 'Hello, I am LUNEYRA, your AI vision companion.',
   act_describe_desc: 'Describe objects and their position in the image', act_identify_desc: 'Inspect the item and read its visible text',
   act_calibrate: 'Remember a room', act_calibrate_desc: 'Save landmarks confirmed by you',
   spatial_title: 'My room notes', spatial_calibrate_btn: '+ Add a room', spatial_help: 'Notes you have confirmed. These do not measure distances or track your position.', spatial_empty: 'No room notes yet.',
@@ -3070,14 +3075,14 @@ Object.assign(I18N.en, {
   memory_help: 'Save an object and its location, or enable automatic memory below. Camera observations describe what was seen; current locations are not confirmed.', memory_empty: 'No memories yet. Add an object and where you last saw it.',
   engine_help: 'Vision and OCR run in the browser after downloading models. Downloads require internet and can be large. Browser speech recognition may use an online service.',
   hw_panel: 'Developer tools', backend_help: 'This tests only the server health endpoint. Cloud reasoning is not connected.', backend_connected: 'Health check passed', backend_ok_msg: 'The server health check passed. AI actions still run in this browser.',
-  footer: 'Astha · Browser prototype · Built for voice, reading and personal memory.',
+  footer: 'LUNEYRA · Browser prototype · Built for voice, reading and personal memory.',
   mic_hint: 'Tap, then ask in your selected voice language. You can also type in Bangla or English.',
   live_on: 'Camera recognition is running. Results may be incomplete.',
   identify_sure: 'This may be {a}. Other possible matches are {b} and {c}.', identify_only: 'This may be {a}.',
   auto_narrate: 'Announce new objects automatically (off by default for screen readers)'
 });
 Object.assign(I18N.bn, {
-  ready_text: 'হ্যালো, আমি আস্থা, আপনার এআই দৃষ্টি সহায়ক।',
+  ready_text: 'হ্যালো, আমি লুনেইরা, আপনার এআই দৃষ্টি সহায়ক।',
   path_clear: 'এই ছবিতে কোনো বাধা শনাক্ত হয়নি। পথ নিরাপদ কি না নিশ্চিত করতে পারি না।',
   fall_msg: 'এটি পতন সতর্কতার ডেমো। কোনো পতন শনাক্ত হয়নি এবং কোনো বার্তা পাঠানো হয়নি।',
   shield_on_msg: 'পরীক্ষামূলক বাধা সতর্কতা চালু। বিপদ বাদ পড়তে পারে। পথ নিরাপদ কি না নিশ্চিত করতে পারি না।',
@@ -3085,7 +3090,7 @@ Object.assign(I18N.bn, {
 });
 
 function announce(en, bn, agent = 'system') {
-  setCaption(agent === 'memory' ? 'Personal memory' : 'Astha', en, agent, null, bn);
+  setCaption(agent === 'memory' ? 'Personal memory' : 'LUNEYRA', en, agent, null, bn);
   speak(en, bn);
 }
 
@@ -3215,12 +3220,12 @@ function submitCommand() {
 }
 
 function showCommandHelp() {
-  announce('Tap the microphone, then say: Hey Astha, describe my surroundings. Read this. Where are my glasses? Remember this. Pause reading. Resume reading. Stop. Computer control and route guidance are not connected.',
-    'মাইক্রোফোন চাপুন, তারপর বলুন: হেই আস্থা, চারপাশ বলো। এটা পড়ো। আমার চশমা কোথায়? এটা মনে রাখো। পড়া থামাও। আবার পড়ো। বন্ধ করো।');
+  announce('Tap the microphone, then say: Hey LUNEYRA, describe my surroundings. Read this. Where are my glasses? Remember this. Pause reading. Resume reading. Stop. Computer control and route guidance are not connected.',
+    'মাইক্রোফোন চাপুন, তারপর বলুন: হেই লুনেইরা, চারপাশ বলো। এটা পড়ো। আমার চশমা কোথায়? এটা মনে রাখো। পড়া থামাও। আবার পড়ো। বন্ধ করো।');
 }
 
 function promptAgentTask() {
-  const goal = prompt('What task should Astha execute autonomously? (e.g. Find my glasses and check if they are folded)', '');
+  const goal = prompt('What task should LUNEYRA execute autonomously? (e.g. Find my glasses and check if they are folded)', '');
   if (goal && goal.trim()) {
     if (typeof AsthaAgent !== 'undefined') {
       AsthaAgent.run(goal.trim());
@@ -3232,7 +3237,7 @@ function promptAgentTask() {
 
 function handleQuery(query) {
   if (privacyTransition) return;
-  const q = query.toLowerCase().replace(/^(?:hey\s+)?astha[,.!\s]*/i, '').replace(/^(?:হেই\s+)?আস্থা[,।\s]*/, '').trim();
+  const q = query.toLowerCase().replace(/^(?:hey\s+)?(?:luneyra|astha)[,.!\s]*/i, '').replace(/^(?:হেই\s+|হে\s+)?(?:লুনেইরা|লুনেয়রা|আস্থা)[,।\s]*/, '').trim();
   if (!privacyMode) logEvent('Request: ' + query);
   // Autonomous Agent Trigger: multi-part tasks, "find ... and check ...", "plan ...", "guide me to find ..."
   if (/(?:^|[^A-Za-z0-9_\u0980-\u09FF])(plan|task|autonomous|find\s+.+\s+and\s+|where\s+.+\s+and\s+|check\s+.+\s+and\s+|পরিকল্পনা|খুঁজে দেখো এবং|আর দেখো)(?![A-Za-z0-9_\u0980-\u09FF])/i.test(q)) {
@@ -3685,7 +3690,8 @@ function enhancementBoot() {
 
 (function boot() {
   try {
-    const savedTheme = localStorage.getItem('astha.clinical_theme') || 'clinical-yellow';
+    const previousTheme = localStorage.getItem('astha.clinical_theme');
+    const savedTheme = ['clinical-yellow', 'monochrome', 'navy-cyan'].includes(previousTheme) ? previousTheme : 'lavender';
     document.documentElement.setAttribute('data-theme', savedTheme);
     $('theme-select').value = savedTheme;
 

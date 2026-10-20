@@ -1,4 +1,4 @@
-# Astha (আস্থা)
+# LUNEYRA (লুনেইরা)
 
 A Bangla-first, voice-led AI visual companion for blind and low-vision users. A single Node
 server serves both the API and an installable phone web app (PWA) from one origin, so there is
@@ -8,8 +8,8 @@ Round 1 scope: read a board or book aloud with a concise explanation, remember a
 events ("glasses seen on the bedside table at 10:05") and answer with location, time and
 confidence, short safety-conscious Bangla voice interaction, and advisory-only obstacle warnings.
 Reading covers any text in view (a page, a board, a slide or a screen), and can keep reading as
-it changes. Astha's eye can also watch a shared computer screen and explain it: slides,
-documents, designs or code. In the Android app, with the user's consent, Astha announces new
+it changes. LUNEYRA's eye can also watch a shared computer screen and explain it: slides,
+documents, designs or code. In the Android app, with the user's consent, LUNEYRA announces new
 messages from apps such as Messenger and sends the reply the user dictates after a spoken yes,
 also with the phone locked. Online answers come from Maira (Gemini by default). See
 `docs/ROADMAP.md` for what is intentionally out of scope for now.
@@ -28,7 +28,7 @@ server/       Express API: auth, per-user storage (Supabase Postgres or existing
               text-to-speech (Microsoft Edge voices, including a real Bangla female voice).
 ```
 
-The phone talks to `/api/*` on its configured ASTHA API origin. Maira is the selected AI
+The phone talks to `/api/*` on its configured LUNEYRA API origin. Maira is the selected AI
 provider and Supabase is the selected database service. Deployment credentials stay in
 server secret storage. Existing on-device detection remains available; model readiness,
 accuracy and cold offline behavior require device verification.
@@ -36,7 +36,7 @@ accuracy and cold offline behavior require device verification.
 ## What works, what is simulated, what is pending
 
 [docs/voice-first-release-review.md](docs/voice-first-release-review.md) is the honest
-status page: how ASTHA decides when to speak, what the automated tests cover, and what
+status page: how LUNEYRA decides when to speak, what the automated tests cover, and what
 still needs a phone, a Raspberry Pi or a blind tester. Related guides:
 
 - [Raspberry Pi Wi-Fi camera](docs/pi-camera.md) — the clip-on camera bridge.
@@ -171,7 +171,7 @@ biometric data has additional privacy requirements. Offline mode blocks remote p
 Each account keeps a rolling newest-N of its records on the server. Your preferences offers
 "Download my data", "Forget my face and voice" and "Delete my account"; deletion needs the PIN
 for a registered account and removes every record that account owns.
-[What Astha stores](docs/data-handling.md) describes this in English and Bangla. The published
+[What LUNEYRA stores](docs/data-handling.md) describes this in English and Bangla. The published
 policy, provider retention and backup handling remain a release gate; provider retention is
 not established by the local tests.
 

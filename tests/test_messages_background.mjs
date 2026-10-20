@@ -33,12 +33,12 @@ async function ready() { const h = harness(); h.messages.boot(); await settle();
 
 test('background enable failures name the actual denied capability and restore the off checkbox', async () => {
   const reasons = [
-    ['notifications_permission', /Allow Astha notifications/, /নোটিফিকেশন চালু/],
-    ['notifications_disabled', /Allow Astha notifications/, /নোটিফিকেশন চালু/],
+    ['notifications_permission', /Allow LUNEYRA notifications/, /নোটিফিকেশন চালু/],
+    ['notifications_disabled', /Allow LUNEYRA notifications/, /নোটিফিকেশন চালু/],
     ['service_disabled', /notification access/, /নোটিফিকেশন অ্যাক্সেস/],
     ['permission', /microphone access/, /মাইক্রোফোন/],
     ['consent_required', /Turn on message help/, /বার্তা সহায়তা চালু/],
-    ['foreground_required', /Keep Astha open/, /আস্থা খোলা/],
+    ['foreground_required', /Keep LUNEYRA open/, /লুনেইরা খোলা/],
     ['not_started', /did not start/, /চালু করেনি/],
   ];
   for (const [code, english, bangla] of reasons) {

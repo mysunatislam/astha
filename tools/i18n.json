@@ -1,9 +1,8 @@
 {
  "strings": {
-  "brand_logo_alt": ["Astha", "আস্থা"],
   "auto_memory_label": ["Automatically remember important objects", "দরকারি জিনিস স্বয়ংক্রিয়ভাবে মনে রাখুন"],
   "auto_memory_help": ["Off by default. While your camera is active, save possible sightings of laptops, phones, glasses, wallets and ID cards with their time and image position. Ask before saving other selected personal objects. No photos or ID text are saved. Online sync requires your existing online consent.", "শুরুতে বন্ধ। ক্যামেরা চালু থাকলে ল্যাপটপ, ফোন, চশমা, মানিব্যাগ ও পরিচয়পত্রের সম্ভাব্য দেখা, সময় ও ছবিতে অবস্থান রাখুন। অন্য বাছাই করা ব্যক্তিগত জিনিস রাখতে আগে জিজ্ঞাসা করা হবে। ছবি বা পরিচয়পত্রের লেখা রাখা হয় না। অনলাইনে সংরক্ষণে আপনার অনলাইন অনুমতি লাগবে।"],
-  "identity_intro": ["Hello, I am Astha, your AI vision companion.", "হ্যালো, আমি আস্থা, আপনার এআই দৃষ্টি সহায়ক।"],
+  "identity_intro": ["Hello, I am LUNEYRA, your AI vision companion.", "হ্যালো, আমি লুনেইরা, আপনার এআই দৃষ্টি সহায়ক।"],
   "vision_back_devices": ["Back to Devices", "ডিভাইসে ফিরে যান"],
   "vision_details_intro": ["Inspect the existing camera or selected image and its actual local detector results. Opening this view does not start a camera or a recognition check.", "চালু ক্যামেরা বা নির্বাচিত ছবি এবং স্থানীয় শনাক্তকারীর আসল ফল দেখুন। এই দৃশ্য খুললেই ক্যামেরা বা শনাক্তকরণ পরীক্ষা চালু হয় না।"],
   "vision_camera_start": ["Start phone camera", "ফোনের ক্যামেরা চালু করুন"],
@@ -19,7 +18,7 @@
   "vision_model_coco": ["Loaded detector: COCO-SSD fallback.", "লোড হওয়া শনাক্তকারী: বিকল্প COCO-SSD।"],
   "vision_model_ready": ["Local object detector: ready.", "স্থানীয় বস্তু শনাক্তকারী: প্রস্তুত।"],
   "vision_off": ["Camera off. Start a camera or select a photo below.", "ক্যামেরা বন্ধ। ক্যামেরা চালু করুন অথবা নিচে ছবি বেছে নিন।"],
-  "vision_background": ["Results are cleared while Astha is in the background.", "আস্থা পেছনে থাকলে শনাক্তকরণের ফল মুছে দেওয়া হয়।"],
+  "vision_background": ["Results are cleared while LUNEYRA is in the background.", "লুনেইরা পেছনে থাকলে শনাক্তকরণের ফল মুছে দেওয়া হয়।"],
   "vision_loading": ["Loading the object detector. No result is available yet.", "বস্তু শনাক্তকারী লোড হচ্ছে। এখনও ফল পাওয়া যায়নি।"],
   "vision_failed": ["The detector could not complete this check. Try again; no result is confirmed.", "শনাক্তকারী এই পরীক্ষা শেষ করতে পারেনি। আবার চেষ্টা করুন; কোনো ফল নিশ্চিত নয়।"],
   "vision_checking": ["Checking this frame with the local object detector.", "স্থানীয় বস্তু শনাক্তকারী দিয়ে এই ছবিটি দেখা হচ্ছে।"],
@@ -59,8 +58,8 @@
   "ai_row_boxes": ["Boxes and labels", "বক্স ও লেবেল"],
   "ai_row_online": ["Spoken descriptions", "কথায় বর্ণনা"],
   "ai_row_last": ["Last online request", "শেষ অনলাইন অনুরোধ"],
-  "ai_camera_pi_live": ["ASTHA ClipCam, live.", "আস্থা ক্লিপক্যাম, এখনকার ছবি।"],
-  "ai_camera_pi_waiting": ["ASTHA ClipCam, but no fresh picture right now.", "আস্থা ক্লিপক্যাম, তবে এখন নতুন ছবি নেই।"],
+  "ai_camera_pi_live": ["LUNEYRA ClipCam, live.", "লুনেইরা ক্লিপক্যাম, এখনকার ছবি।"],
+  "ai_camera_pi_waiting": ["LUNEYRA ClipCam, but no fresh picture right now.", "লুনেইরা ক্লিপক্যাম, তবে এখন নতুন ছবি নেই।"],
   "ai_camera_phone": ["Phone camera, live.", "ফোনের ক্যামেরা, এখনকার ছবি।"],
   "ai_camera_photo": ["A selected photo, not live.", "বাছাই করা ছবি, এখনকার নয়।"],
   "ai_camera_demo": ["A demo photo, not your surroundings.", "ডেমো ছবি, আপনার চারপাশ নয়।"],
@@ -68,7 +67,7 @@
   "ai_boxes_running": ["On-device detector, running now. These boxes are not online AI results.", "এই ডিভাইসের শনাক্তকারী, এখন চলছে। এই বক্সগুলো অনলাইন এআইয়ের ফল নয়।"],
   "ai_boxes_ready": ["On-device detector, loaded but not running.", "এই ডিভাইসের শনাক্তকারী, লোড হয়েছে কিন্তু চলছে না।"],
   "ai_boxes_off": ["On-device detector not loaded.", "এই ডিভাইসের শনাক্তকারী লোড হয়নি।"],
-  "ai_online_allowed": ["Online: {provider} through the ASTHA server, allowed for this session.", "অনলাইন: আস্থা সার্ভারের মাধ্যমে {provider}, এই সেশনে অনুমতি আছে।"],
+  "ai_online_allowed": ["Online: {provider} through the LUNEYRA server, allowed for this session.", "অনলাইন: লুনেইরা সার্ভারের মাধ্যমে {provider}, এই সেশনে অনুমতি আছে।"],
   "ai_online_consent": ["Online is chosen but needs your permission; this device answers until then.", "অনলাইন বাছাই করা, কিন্তু আপনার অনুমতি লাগবে; ততক্ষণ এই ডিভাইস উত্তর দেবে।"],
   "ai_online_offline_mode": ["On-device mode: nothing is sent online.", "ডিভাইস মোড: কিছুই অনলাইনে পাঠানো হয় না।"],
   "ai_online_unavailable": ["The online service is not reachable; this device answers instead.", "অনলাইন পরিষেবা পাওয়া যাচ্ছে না; এর বদলে এই ডিভাইস উত্তর দেয়।"],
@@ -102,8 +101,8 @@
    "সরাসরি সহায়কে যান"
   ],
   "auth_sub": [
-   "Your voice-first visual companion. Create an account once; Astha remembers your things and rooms after that.",
-   "আপনার কণ্ঠ-নির্ভর দৃষ্টি-সহায়ক। একবার অ্যাকাউন্ট তৈরি করুন; এরপর আস্থা আপনার জিনিসপত্র ও ঘরের কথা মনে রাখবে।"
+   "Your voice-first visual companion. Create an account once; LUNEYRA remembers your things and rooms after that.",
+   "আপনার কণ্ঠ-নির্ভর দৃষ্টি-সহায়ক। একবার অ্যাকাউন্ট তৈরি করুন; এরপর লুনেইরা আপনার জিনিসপত্র ও ঘরের কথা মনে রাখবে।"
   ],
   "auth_action": [
    "Account action",
@@ -130,8 +129,8 @@
    "পাসকোড (৪ থেকে ৮টি সংখ্যা)"
   ],
   "auth_note": [
-   "Your name and phone are used only to sign you back in. Everything Astha remembers stays tied to your account.",
-   "আপনার নাম ও ফোন নম্বর শুধু আবার প্রবেশের জন্য ব্যবহৃত হয়। আস্থা যা মনে রাখে তা আপনার অ্যাকাউন্টের সঙ্গেই যুক্ত থাকে।"
+   "Your name and phone are used only to sign you back in. Everything LUNEYRA remembers stays tied to your account.",
+   "আপনার নাম ও ফোন নম্বর শুধু আবার প্রবেশের জন্য ব্যবহৃত হয়। লুনেইরা যা মনে রাখে তা আপনার অ্যাকাউন্টের সঙ্গেই যুক্ত থাকে।"
   ],
   "auth_close": [
    "Continue without an account",
@@ -179,7 +178,7 @@
   ],
   "voice_delivery_title": [
    "Voice Delivery Language",
-   "আস্থা যে ভাষায় কথা বলবে"
+   "লুনেইরা যে ভাষায় কথা বলবে"
   ],
   "voice_en_btn": [
    "Voice: English",
@@ -187,7 +186,7 @@
   ],
   "voice_en_title": [
    "Voice output spoken in English",
-   "আস্থা ইংরেজিতে কথা বলবে"
+   "লুনেইরা ইংরেজিতে কথা বলবে"
   ],
   "voice_bn_btn": [
    "Voice: বাংলা",
@@ -195,15 +194,15 @@
   ],
   "voice_bn_title": [
    "Voice output spoken in Bangla (বাংলা)",
-   "আস্থা বাংলায় কথা বলবে"
+   "লুনেইরা বাংলায় কথা বলবে"
   ],
   "safety_brand": [
-   "Astha AI Companion",
-   "আস্থা এআই সহায়ক"
+   "LUNEYRA AI Companion",
+   "লুনেইরা এআই সহায়ক"
   ],
   "safety_note": [
-   "· Experimental visual assistance. Use your usual mobility aid; Astha cannot confirm a safe path. আস্থা নিরাপদ পথ নিশ্চিত করতে পারে না।",
-   "· পরীক্ষামূলক দৃষ্টি-সহায়তা। আপনার চলাচলের সহায়ক ব্যবহার করুন; আস্থা নিরাপদ পথ নিশ্চিত করতে পারে না।"
+   "· Experimental visual assistance. Use your usual mobility aid; LUNEYRA cannot confirm a safe path. লুনেইরা নিরাপদ পথ নিশ্চিত করতে পারে না।",
+   "· পরীক্ষামূলক দৃষ্টি-সহায়তা। আপনার চলাচলের সহায়ক ব্যবহার করুন; লুনেইরা নিরাপদ পথ নিশ্চিত করতে পারে না।"
   ],
   "secure_title": [
    "This page is open on an insecure address.",
@@ -214,8 +213,8 @@
    "ব্রাউজার প্রতিবার মাইক্রোফোন ও ক্যামেরার অনুমতি চাইবে এবং আটকে দিতে পারে। অ্যাপটি localhost অথবা HTTPS ঠিকানায় খুলুন। অ্যান্ড্রয়েডে Chrome-এর পোর্ট ফরওয়ার্ডিং (কম্পিউটারে chrome://inspect) অথবা Cloudflare টানেল ব্যবহার করুন।"
   ],
   "hf_title": [
-   "Keep listening for “Astha, …”",
-   "“আস্থা, …” শোনার জন্য মাইক্রোফোন চালু রাখুন"
+   "Keep listening for “LUNEYRA, …”",
+   "“লুনেইরা, …” শোনার জন্য মাইক্রোফোন চালু রাখুন"
   ],
   "engine_mode": [
    "AI Engine Mode",
@@ -250,16 +249,16 @@
    "শান্ত · জিজ্ঞাসা করলে"
   ],
   "command_label": [
-   "Ask Astha in Bangla or English",
-   "বাংলা বা ইংরেজিতে আস্থাকে জিজ্ঞাসা করুন"
+   "Ask LUNEYRA in Bangla or English",
+   "বাংলা বা ইংরেজিতে লুনেইরাকে জিজ্ঞাসা করুন"
   ],
   "command_placeholder": [
    "Type a request, e.g. Where are my glasses?",
    "অনুরোধ লিখুন, যেমন: আমার চশমা কোথায়?"
   ],
   "command_submit": [
-   "Ask Astha",
-   "আস্থাকে জিজ্ঞাসা করুন"
+   "Ask LUNEYRA",
+   "লুনেইরাকে জিজ্ঞাসা করুন"
   ],
   "btn_repeat": [
    "Repeat",
@@ -302,8 +301,8 @@
    "🏠 ভিডিও দিয়ে ঘর চেনানো"
   ],
   "calib_instruction": [
-   "Choose a room name, then walk through with your camera. Astha will continuously identify furniture surfaces (dressing table, reading table, bed, chairs) and remember where items are placed.",
-   "ঘরের নাম বেছে নিন, তারপর ক্যামেরা নিয়ে ঘরটি ঘুরে দেখান। আস্থা আসবাবপত্র (ড্রেসিং টেবিল, পড়ার টেবিল, বিছানা, চেয়ার) শনাক্ত করবে এবং জিনিসপত্র কোথায় রাখা আছে তা মনে রাখবে।"
+   "Choose a room name, then walk through with your camera. LUNEYRA will continuously identify furniture surfaces (dressing table, reading table, bed, chairs) and remember where items are placed.",
+   "ঘরের নাম বেছে নিন, তারপর ক্যামেরা নিয়ে ঘরটি ঘুরে দেখান। লুনেইরা আসবাবপত্র (ড্রেসিং টেবিল, পড়ার টেবিল, বিছানা, চেয়ার) শনাক্ত করবে এবং জিনিসপত্র কোথায় রাখা আছে তা মনে রাখবে।"
   ],
   "room_name": [
    "Room name",
@@ -374,16 +373,16 @@
    "পড়া লেখার প্রতিলিপি"
   ],
   "reader_help": [
-   "Everything Astha reads from the camera is collected here. Say “Astha, read this” or tap “Read to me” to read a book or letter. Pasting text is optional.",
-   "ক্যামেরা থেকে আস্থা যা পড়ে তা এখানে জমা হয়। বই বা চিঠি পড়তে বলুন “আস্থা, এটা পড়ো” অথবা “পড়ে শোনাও” চাপুন। লেখা পেস্ট করা ঐচ্ছিক।"
+   "Everything LUNEYRA reads from the camera is collected here. Say “LUNEYRA, read this” or tap “Read to me” to read a book or letter. Pasting text is optional.",
+   "ক্যামেরা থেকে লুনেইরা যা পড়ে তা এখানে জমা হয়। বই বা চিঠি পড়তে বলুন “লুনেইরা, এটা পড়ো” অথবা “পড়ে শোনাও” চাপুন। লেখা পেস্ট করা ঐচ্ছিক।"
   ],
   "reader_label": [
    "Transcript",
    "প্রতিলিপি"
   ],
   "reader_placeholder": [
-   "Pages Astha has read will appear here.",
-   "আস্থার পড়া পাতাগুলো এখানে দেখা যাবে।"
+   "Pages LUNEYRA has read will appear here.",
+   "লুনেইরার পড়া পাতাগুলো এখানে দেখা যাবে।"
   ],
   "reader_again": [
    "Read the transcript again",
@@ -406,12 +405,12 @@
    "লেখা মুছুন"
   ],
   "eye_title": [
-   "♥ Astha on your screen",
-   "♥ আপনার স্ক্রিনে আস্থা"
+   "♥ LUNEYRA on your screen",
+   "♥ আপনার স্ক্রিনে লুনেইরা"
   ],
   "eye_help": [
-   "Share your screen and Astha tells you what is on it: a message, a slide, a document, a web page, a design or code. Ask her to read it, explain it, or help you with it. Say “Astha, watch my screen”.",
-   "আপনার স্ক্রিন শেয়ার করলে আস্থা বলে দেয় তাতে কী আছে: বার্তা, স্লাইড, নথি, ওয়েব পৃষ্ঠা, নকশা বা কোড। পড়ে শোনাতে, বুঝিয়ে বলতে বা সাহায্য করতে বলুন। বলুন “আস্থা, আমার স্ক্রিন দেখো”।"
+   "Share your screen and LUNEYRA tells you what is on it: a message, a slide, a document, a web page, a design or code. Ask her to read it, explain it, or help you with it. Say “LUNEYRA, watch my screen”.",
+   "আপনার স্ক্রিন শেয়ার করলে লুনেইরা বলে দেয় তাতে কী আছে: বার্তা, স্লাইড, নথি, ওয়েব পৃষ্ঠা, নকশা বা কোড। পড়ে শোনাতে, বুঝিয়ে বলতে বা সাহায্য করতে বলুন। বলুন “লুনেইরা, আমার স্ক্রিন দেখো”।"
   ],
   "eye_empty": [
    "Screen not shared yet.",
@@ -430,8 +429,8 @@
    "অথবা স্ক্রিনের যেকোনো লেখা পেস্ট করুন"
   ],
   "eye_paste_placeholder": [
-   "Paste text here, then say “Astha, explain this”.",
-   "লেখা এখানে পেস্ট করে বলুন “আস্থা, এটা বুঝিয়ে বলো”।"
+   "Paste text here, then say “LUNEYRA, explain this”.",
+   "লেখা এখানে পেস্ট করে বলুন “লুনেইরা, এটা বুঝিয়ে বলো”।"
   ],
   "focus_text": [
    "Keyboard guidance: name each control as I Tab to it",
@@ -442,8 +441,8 @@
    "কিবোর্ড নির্দেশনা"
   ],
   "eye_note": [
-   "Astha can read and explain a shared screen. On an Android phone she can also read other apps and answer your messages; see Devices.",
-   "আস্থা শেয়ার করা স্ক্রিন পড়তে ও বুঝিয়ে বলতে পারে। অ্যান্ড্রয়েড ফোনে সে অন্য অ্যাপও পড়তে এবং আপনার বার্তার উত্তর দিতে পারে; ডিভাইস পৃষ্ঠা দেখুন।"
+   "LUNEYRA can read and explain a shared screen. On an Android phone she can also read other apps and answer your messages; see Devices.",
+   "লুনেইরা শেয়ার করা স্ক্রিন পড়তে ও বুঝিয়ে বলতে পারে। অ্যান্ড্রয়েড ফোনে সে অন্য অ্যাপও পড়তে এবং আপনার বার্তার উত্তর দিতে পারে; ডিভাইস পৃষ্ঠা দেখুন।"
   ],
   "prefs_title": [
    "Your preferences",
@@ -458,8 +457,8 @@
    "সাইন আউট"
   ],
   "data_help": [
-   "You can download everything Astha has saved about you, remove your face and voice templates, or delete your account.",
-   "আস্থা আপনার সম্পর্কে যা সংরক্ষণ করেছে তা ডাউনলোড করতে, মুখ ও কণ্ঠের নমুনা সরাতে অথবা অ্যাকাউন্ট মুছে ফেলতে পারেন।"
+   "You can download everything LUNEYRA has saved about you, remove your face and voice templates, or delete your account.",
+   "লুনেইরা আপনার সম্পর্কে যা সংরক্ষণ করেছে তা ডাউনলোড করতে, মুখ ও কণ্ঠের নমুনা সরাতে অথবা অ্যাকাউন্ট মুছে ফেলতে পারেন।"
   ],
   "data_export": [
    "Download my data",
@@ -474,8 +473,8 @@
    "আমার অ্যাকাউন্ট মুছুন"
   ],
   "data_delete_warn": [
-   "This permanently deletes your Astha account, every saved memory, room note, activity record and personal note, and the copies on this phone. It cannot be undone.",
-   "এতে আপনার আস্থা অ্যাকাউন্ট, সংরক্ষিত সব স্মৃতি, ঘরের নোট, কার্যক্রমের রেকর্ড ও ব্যক্তিগত নোট এবং এই ফোনে থাকা কপি স্থায়ীভাবে মুছে যাবে। এটি আর ফেরানো যাবে না।"
+   "This permanently deletes your LUNEYRA account, every saved memory, room note, activity record and personal note, and the copies on this phone. It cannot be undone.",
+   "এতে আপনার লুনেইরা অ্যাকাউন্ট, সংরক্ষিত সব স্মৃতি, ঘরের নোট, কার্যক্রমের রেকর্ড ও ব্যক্তিগত নোট এবং এই ফোনে থাকা কপি স্থায়ীভাবে মুছে যাবে। এটি আর ফেরানো যাবে না।"
   ],
   "data_delete_pin": [
    "Enter your passcode to confirm",
@@ -522,8 +521,8 @@
    "পড়ার ভাষা"
   ],
   "voice_label": [
-   "Astha's voice",
-   "আস্থার কণ্ঠ"
+   "LUNEYRA's voice",
+   "লুনেইরার কণ্ঠ"
   ],
   "stt_label": [
    "I speak",
@@ -538,8 +537,8 @@
    "বাংলা (বাংলিশও চলবে)"
   ],
   "hf_help": [
-   "Hands-free mode keeps the microphone open in this tab and waits for “Astha, …”. Browser speech recognition may use an online service.",
-   "হ্যান্ডস-ফ্রি মোডে এই ট্যাবে মাইক্রোফোন চালু থাকে এবং “আস্থা, …” শোনার অপেক্ষা করে। ব্রাউজারের কণ্ঠ শনাক্তকরণ অনলাইন পরিষেবা ব্যবহার করতে পারে।"
+   "Hands-free mode keeps the microphone open in this tab and waits for “LUNEYRA, …”. Browser speech recognition may use an online service.",
+   "হ্যান্ডস-ফ্রি মোডে এই ট্যাবে মাইক্রোফোন চালু থাকে এবং “লুনেইরা, …” শোনার অপেক্ষা করে। ব্রাউজারের কণ্ঠ শনাক্তকরণ অনলাইন পরিষেবা ব্যবহার করতে পারে।"
   ],
   "owner_title": [
    "Owner ID",
@@ -606,8 +605,8 @@
    "ভয়েস কমান্ড ও সহায়িকা"
   ],
   "guide_text": [
-   "Always-listening Siri mode: Say “Astha” or ask directly: “What is in front of me?”, “Read this”, “Check clothes”, “Where are my keys?”. Say “Stop talking” to silence instantly.",
-   "সবসময় শোনার মোড: “আস্থা” বলুন অথবা সরাসরি জিজ্ঞাসা করুন: “আমার সামনে কী আছে?”, “এটা পড়ো”, “কাপড় দেখো”, “আমার চাবি কোথায়?”। সঙ্গে সঙ্গে থামাতে বলুন “কথা থামাও”।"
+   "Always-listening Siri mode: Say “LUNEYRA” or ask directly: “What is in front of me?”, “Read this”, “Check clothes”, “Where are my keys?”. Say “Stop talking” to silence instantly.",
+   "সবসময় শোনার মোড: “লুনেইরা” বলুন অথবা সরাসরি জিজ্ঞাসা করুন: “আমার সামনে কী আছে?”, “এটা পড়ো”, “কাপড় দেখো”, “আমার চাবি কোথায়?”। সঙ্গে সঙ্গে থামাতে বলুন “কথা থামাও”।"
   ],
   "hf_on": [
    "Hands-free: on",
@@ -642,8 +641,8 @@
    "মালিক লক: বন্ধ"
   ],
   "eye_start": [
-   "Let Astha see my screen",
-   "আস্থাকে আমার স্ক্রিন দেখতে দিন"
+   "Let LUNEYRA see my screen",
+   "লুনেইরাকে আমার স্ক্রিন দেখতে দিন"
   ],
   "eye_stop": [
    "Stop watching my screen",
@@ -710,8 +709,8 @@
    "দেখছে"
   ],
   "memory_clear_confirm": [
-   "Delete all saved object memories and room notes from this phone and your Astha account?",
-   "এই ফোন ও আপনার আস্থা অ্যাকাউন্ট থেকে সংরক্ষিত সব জিনিসের স্মৃতি ও ঘরের নোট মুছে ফেলবেন?"
+   "Delete all saved object memories and room notes from this phone and your LUNEYRA account?",
+   "এই ফোন ও আপনার লুনেইরা অ্যাকাউন্ট থেকে সংরক্ষিত সব জিনিসের স্মৃতি ও ঘরের নোট মুছে ফেলবেন?"
   ],
   "data_delete_guest": [
    "This is a guest account, so no passcode is needed.",
@@ -754,8 +753,8 @@
    "যাচাই হয়নি"
   ],
   "theme_calm": [
-   "Mulberry & Apricot",
-   "মালবেরি ও অ্যাপ্রিকট"
+   "Lavender",
+   "ল্যাভেন্ডার"
   ],
   "ui_display_voice": [
    "Display & voice",
@@ -794,8 +793,8 @@
    "নিজের পছন্দ"
   ],
   "assessment_intro": [
-   "Tell Astha how you would like to be helped. These are preferences, not a medical test, and you can change them at any time.",
-   "আস্থা কীভাবে সাহায্য করবে তা জানান। এগুলো আপনার পছন্দ, চিকিৎসা পরীক্ষা নয়; যেকোনো সময় বদলাতে পারবেন।"
+   "Tell LUNEYRA how you would like to be helped. These are preferences, not a medical test, and you can change them at any time.",
+   "লুনেইরা কীভাবে সাহায্য করবে তা জানান। এগুলো আপনার পছন্দ, চিকিৎসা পরীক্ষা নয়; যেকোনো সময় বদলাতে পারবেন।"
   ],
   "assessment_read": [
    "Read the instructions aloud",
@@ -850,8 +849,8 @@
    "সচেতনতা: আমার চারপাশের খবর"
   ],
   "nav_label": [
-   "Astha pages",
-   "আস্থার পৃষ্ঠাসমূহ"
+   "LUNEYRA pages",
+   "লুনেইরার পৃষ্ঠাসমূহ"
   ],
   "page_tools": [
    "Detailed view",
@@ -906,12 +905,12 @@
    "আলো বা বড় আকার বুঝতে পারি, খুঁটিনাটি নয়"
   ],
   "assessment_language": [
-   "Which language should Astha use?",
-   "আস্থা কোন ভাষা ব্যবহার করবে?"
+   "Which language should LUNEYRA use?",
+   "লুনেইরা কোন ভাষা ব্যবহার করবে?"
   ],
   "assessment_feedback": [
-   "How should Astha answer you?",
-   "আস্থা কীভাবে উত্তর দেবে?"
+   "How should LUNEYRA answer you?",
+   "লুনেইরা কীভাবে উত্তর দেবে?"
   ],
   "feedback_detailed": [
    "Speak full descriptions",
@@ -926,8 +925,8 @@
    "শুধু লেখা দেখাবে, কথা বলবে না"
   ],
   "assessment_devices": [
-   "Which devices do you use with Astha?",
-   "আস্থার সঙ্গে কোন ডিভাইস ব্যবহার করেন?"
+   "Which devices do you use with LUNEYRA?",
+   "লুনেইরার সঙ্গে কোন ডিভাইস ব্যবহার করেন?"
   ],
   "assessment_devices_hint": [
    "Choose every one that applies. Leave all empty if you are not sure.",
@@ -1006,8 +1005,8 @@
    "সতর্কতা ও নিশ্চিতকরণে কম্পন"
   ],
   "assessment_storage": [
-   "Your answers are saved to your Astha account so they follow you to another phone. You can export or delete them in Settings.",
-   "আপনার উত্তর আস্থা অ্যাকাউন্টে রাখা হয়, তাই অন্য ফোনেও পাবেন। সেটিংস থেকে রপ্তানি বা মুছে ফেলা যায়।"
+   "Your answers are saved to your LUNEYRA account so they follow you to another phone. You can export or delete them in Settings.",
+   "আপনার উত্তর লুনেইরা অ্যাকাউন্টে রাখা হয়, তাই অন্য ফোনেও পাবেন। সেটিংস থেকে রপ্তানি বা মুছে ফেলা যায়।"
   ],
   "setup_saving": [
    "Saving…",
@@ -1018,12 +1017,12 @@
    "অ্যাকাউন্টে রাখা হয়েছে।"
   ],
   "setup_saved_device": [
-   "Saved on this device. It will be copied to your account when you allow online processing and Astha can reach the server.",
+   "Saved on this device. It will be copied to your account when you allow online processing and LUNEYRA can reach the server.",
    "এই ডিভাইসে রাখা হয়েছে। অনলাইন প্রসেসিংয়ের অনুমতি দিলে এবং সার্ভারে সংযোগ পেলে অ্যাকাউন্টে তোলা হবে।"
   ],
   "devices_intro": [
-   "Astha works with the phone camera alone. A paired Wi-Fi camera and a Braille controller are optional.",
-   "শুধু ফোনের ক্যামেরা দিয়েই আস্থা চলে। ওয়াই-ফাই ক্যামেরা ও ব্রেইল কন্ট্রোলার ঐচ্ছিক।"
+   "LUNEYRA works with the phone camera alone. A paired Wi-Fi camera and a Braille controller are optional.",
+   "শুধু ফোনের ক্যামেরা দিয়েই লুনেইরা চলে। ওয়াই-ফাই ক্যামেরা ও ব্রেইল কন্ট্রোলার ঐচ্ছিক।"
   ],
   "devices_camera_title": [
    "Clip-on or glasses camera",
@@ -1034,8 +1033,8 @@
    "ওয়াই-ফাই ক্যামেরা জুড়ুন"
   ],
   "pi_help": [
-   "Keep the camera and this phone on the same Wi-Fi. Enter the camera's secure address and its private pairing code. Tick Remember to pair only once; otherwise the code is kept only until you disconnect or close Astha.",
-   "ক্যামেরা ও এই ফোন একই ওয়াই-ফাইয়ে রাখুন। ক্যামেরার সুরক্ষিত ঠিকানা ও ব্যক্তিগত পেয়ারিং কোড দিন। একবারই জুড়তে ‘মনে রাখুন’ বাছাই করুন; না হলে সংযোগ বন্ধ বা আস্থা বন্ধ না করা পর্যন্তই কোডটি রাখা হয়।"
+   "Keep the camera and this phone on the same Wi-Fi. Enter the camera's secure address and its private pairing code. Tick Remember to pair only once; otherwise the code is kept only until you disconnect or close LUNEYRA.",
+   "ক্যামেরা ও এই ফোন একই ওয়াই-ফাইয়ে রাখুন। ক্যামেরার সুরক্ষিত ঠিকানা ও ব্যক্তিগত পেয়ারিং কোড দিন। একবারই জুড়তে ‘মনে রাখুন’ বাছাই করুন; না হলে সংযোগ বন্ধ বা লুনেইরা বন্ধ না করা পর্যন্তই কোডটি রাখা হয়।"
   ],
   "pi_address": [
    "Camera HTTPS address",
@@ -1082,8 +1081,8 @@
    "ওয়াই-ফাই ক্যামেরা আবার যুক্ত হয়েছে।"
   ],
   "pi_paused": [
-   "Wi-Fi camera paused while Astha is in the background.",
-   "আস্থা পেছনে থাকায় ওয়াই-ফাই ক্যামেরা বিরত আছে।"
+   "Wi-Fi camera paused while LUNEYRA is in the background.",
+   "লুনেইরা পেছনে থাকায় ওয়াই-ফাই ক্যামেরা বিরত আছে।"
   ],
   "pi_connection_lost": [
    "The Wi-Fi camera could not be reached again. Check its power and Wi-Fi, then connect once more. You can use the phone camera.",
@@ -1130,48 +1129,48 @@
    "এই ডিভাইসে ক্লিপক্যামটি মনে রাখুন এবং নিজে থেকেই যুক্ত হোক"
   ],
   "kit_title": [
-   "Your ASTHA ClipCam",
-   "আপনার আস্থা ক্লিপক্যাম"
+   "Your LUNEYRA ClipCam",
+   "আপনার লুনেইরা ক্লিপক্যাম"
   ],
   "kit_none": [
-   "No ASTHA ClipCam is remembered on this device. Pair it once on the Devices page.",
-   "এই ডিভাইসে কোনো আস্থা ক্লিপক্যাম মনে রাখা নেই। ডিভাইস পাতায় একবার জুড়ে নিন।"
+   "No LUNEYRA ClipCam is remembered on this device. Pair it once on the Devices page.",
+   "এই ডিভাইসে কোনো লুনেইরা ক্লিপক্যাম মনে রাখা নেই। ডিভাইস পাতায় একবার জুড়ে নিন।"
   ],
   "kit_saved": [
-   "Your ASTHA ClipCam is remembered but not connected. Say: connect to my camera.",
-   "আপনার আস্থা ক্লিপক্যাম মনে রাখা আছে, তবে এখন যুক্ত নয়। বলুন: ক্যামেরা সংযোগ করো।"
+   "Your LUNEYRA ClipCam is remembered but not connected. Say: connect to my camera.",
+   "আপনার লুনেইরা ক্লিপক্যাম মনে রাখা আছে, তবে এখন যুক্ত নয়। বলুন: ক্যামেরা সংযোগ করো।"
   ],
   "kit_looking": [
-   "Looking for your ASTHA ClipCam.",
-   "আপনার আস্থা ক্লিপক্যাম খোঁজা হচ্ছে।"
+   "Looking for your LUNEYRA ClipCam.",
+   "আপনার লুনেইরা ক্লিপক্যাম খোঁজা হচ্ছে।"
   ],
   "kit_connected": [
-   "Your ASTHA ClipCam is connected.",
-   "আপনার আস্থা ক্লিপক্যাম যুক্ত হয়েছে।"
+   "Your LUNEYRA ClipCam is connected.",
+   "আপনার লুনেইরা ক্লিপক্যাম যুক্ত হয়েছে।"
   ],
   "kit_interrupted": [
    "ClipCam connection interrupted. Reconnecting automatically.",
    "ক্লিপক্যামের সংযোগ বিঘ্নিত হয়েছে। নিজে থেকেই আবার যুক্ত করার চেষ্টা চলছে।"
   ],
   "kit_waiting": [
-   "ClipCam not found yet. The phone camera is still available. Astha will keep looking while it is open.",
-   "ক্লিপক্যাম এখনো পাওয়া যায়নি। ফোনের ক্যামেরা ব্যবহার করা যাবে। আস্থা খোলা থাকলে খোঁজা চলবে।"
+   "ClipCam not found yet. The phone camera is still available. LUNEYRA will keep looking while it is open.",
+   "ক্লিপক্যাম এখনো পাওয়া যায়নি। ফোনের ক্যামেরা ব্যবহার করা যাবে। লুনেইরা খোলা থাকলে খোঁজা চলবে।"
   ],
   "kit_camera_unavailable": [
-   "Your ClipCam answered, but its camera is not sending fresh pictures. Check the camera cable. Astha will keep trying.",
-   "ক্লিপক্যাম সাড়া দিয়েছে, কিন্তু এর ক্যামেরা নতুন ছবি পাঠাচ্ছে না। ক্যামেরার তার দেখুন। আস্থা চেষ্টা চালিয়ে যাবে।"
+   "Your ClipCam answered, but its camera is not sending fresh pictures. Check the camera cable. LUNEYRA will keep trying.",
+   "ক্লিপক্যাম সাড়া দিয়েছে, কিন্তু এর ক্যামেরা নতুন ছবি পাঠাচ্ছে না। ক্যামেরার তার দেখুন। লুনেইরা চেষ্টা চালিয়ে যাবে।"
   ],
   "kit_paused": [
-   "ClipCam paused while Astha is in the background. No pictures are taken.",
-   "আস্থা পেছনে থাকায় ক্লিপক্যাম থামানো আছে। কোনো ছবি নেওয়া হচ্ছে না।"
+   "ClipCam paused while LUNEYRA is in the background. No pictures are taken.",
+   "লুনেইরা পেছনে থাকায় ক্লিপক্যাম থামানো আছে। কোনো ছবি নেওয়া হচ্ছে না।"
   ],
   "kit_rejected": [
-   "Your ClipCam no longer accepts the saved pairing, so Astha forgot it. Pair it again on the Devices page.",
-   "আপনার ক্লিপক্যাম সংরক্ষিত পেয়ারিং আর গ্রহণ করছে না, তাই আস্থা এটি ভুলে গেছে। ডিভাইস পাতায় আবার জুড়ে নিন।"
+   "Your ClipCam no longer accepts the saved pairing, so LUNEYRA forgot it. Pair it again on the Devices page.",
+   "আপনার ক্লিপক্যাম সংরক্ষিত পেয়ারিং আর গ্রহণ করছে না, তাই লুনেইরা এটি ভুলে গেছে। ডিভাইস পাতায় আবার জুড়ে নিন।"
   ],
   "kit_mismatch": [
-   "The device at your ClipCam's address could not prove it is your paired ClipCam, so Astha did not send it the pairing code. If you changed the ClipCam's code, pair it again on the Devices page.",
-   "আপনার ক্লিপক্যামের ঠিকানায় যে ডিভাইস সাড়া দিয়েছে, সেটি আপনার জোড়া ক্লিপক্যাম বলে প্রমাণ দিতে পারেনি, তাই আস্থা তাকে পেয়ারিং কোড পাঠায়নি। ক্লিপক্যামের কোড বদলে থাকলে ডিভাইস পাতায় আবার জুড়ে নিন।"
+   "The device at your ClipCam's address could not prove it is your paired ClipCam, so LUNEYRA did not send it the pairing code. If you changed the ClipCam's code, pair it again on the Devices page.",
+   "আপনার ক্লিপক্যামের ঠিকানায় যে ডিভাইস সাড়া দিয়েছে, সেটি আপনার জোড়া ক্লিপক্যাম বলে প্রমাণ দিতে পারেনি, তাই লুনেইরা তাকে পেয়ারিং কোড পাঠায়নি। ক্লিপক্যামের কোড বদলে থাকলে ডিভাইস পাতায় আবার জুড়ে নিন।"
   ],
   "kit_other_source": [
    "The phone camera or a photo is in use. Say: connect to my camera, to switch to the ClipCam.",
@@ -1202,8 +1201,8 @@
    "এই ব্রাউজার ক্লিপক্যাম নিরাপদে মনে রাখতে পারে না। সংযোগ বন্ধ না করা পর্যন্তই কোড রাখা হয়।"
   ],
   "kit_auto": [
-   "Reconnect automatically while Astha is open",
-   "আস্থা খোলা থাকলে নিজে থেকেই আবার যুক্ত হবে"
+   "Reconnect automatically while LUNEYRA is open",
+   "লুনেইরা খোলা থাকলে নিজে থেকেই আবার যুক্ত হবে"
   ],
   "kit_connect": [
    "Connect my ClipCam",
@@ -1226,20 +1225,20 @@
    "আপনার ক্লিপক্যাম মনে রাখা আছে। ঠিকানা বদলাতে শুধু নতুন ঠিকানা দিন, কোড খালি রাখুন।"
   ],
   "kit_remembered": [
-   "ClipCam remembered on this device. Next time, Astha connects to it by itself.",
-   "এই ডিভাইসে ক্লিপক্যাম মনে রাখা হয়েছে। পরেরবার আস্থা নিজে থেকেই যুক্ত হবে।"
+   "ClipCam remembered on this device. Next time, LUNEYRA connects to it by itself.",
+   "এই ডিভাইসে ক্লিপক্যাম মনে রাখা হয়েছে। পরেরবার লুনেইরা নিজে থেকেই যুক্ত হবে।"
   ],
   "kit_status_live": [
-   "Your ASTHA ClipCam is connected and the picture is live.",
-   "আপনার আস্থা ক্লিপক্যাম যুক্ত আছে, ছবি এখনকার।"
+   "Your LUNEYRA ClipCam is connected and the picture is live.",
+   "আপনার লুনেইরা ক্লিপক্যাম যুক্ত আছে, ছবি এখনকার।"
   ],
   "kit_status_no_fresh": [
    "Your ClipCam is connected, but no fresh picture has arrived in the last few seconds.",
    "ক্লিপক্যাম যুক্ত আছে, কিন্তু গত কয়েক সেকেন্ডে নতুন ছবি আসেনি।"
   ],
   "kit_lost_keep_looking": [
-   "The ClipCam connection was lost. The phone camera is still available. Astha will keep looking while it is open.",
-   "ক্লিপক্যামের সংযোগ চলে গেছে। ফোনের ক্যামেরা ব্যবহার করা যাবে। আস্থা খোলা থাকলে খোঁজা চলবে।"
+   "The ClipCam connection was lost. The phone camera is still available. LUNEYRA will keep looking while it is open.",
+   "ক্লিপক্যামের সংযোগ চলে গেছে। ফোনের ক্যামেরা ব্যবহার করা যাবে। লুনেইরা খোলা থাকলে খোঁজা চলবে।"
   ],
   "kit_disconnected": [
    "ClipCam disconnected. It stays remembered. Say: connect to my camera, to use it again.",
@@ -1342,8 +1341,8 @@
    "হোম পৃষ্ঠায় যাও"
   ],
   "brl_cmd_mode": [
-   "Change what Astha focuses on",
-   "আস্থার মনোযোগের বিষয় বদলাও"
+   "Change what LUNEYRA focuses on",
+   "লুনেইরার মনোযোগের বিষয় বদলাও"
   ],
   "brl_cmd_text": [
    "Turn Braille typing on or off",
@@ -1354,8 +1353,8 @@
    "দূরত্ব মাপার সেন্সর"
   ],
   "sensor_info": [
-   "An ultrasonic distance sensor is planned. None is connected, so Astha does not report measured distances. Distances it mentions are rough estimates from the image.",
-   "আল্ট্রাসনিক দূরত্ব সেন্সর যোগ করার পরিকল্পনা আছে। এখন কোনোটি যুক্ত নয়, তাই আস্থা মাপা দূরত্ব জানায় না। যে দূরত্ব বলে তা ছবি দেখে আনুমানিক।"
+   "An ultrasonic distance sensor is planned. None is connected, so LUNEYRA does not report measured distances. Distances it mentions are rough estimates from the image.",
+   "আল্ট্রাসনিক দূরত্ব সেন্সর যোগ করার পরিকল্পনা আছে। এখন কোনোটি যুক্ত নয়, তাই লুনেইরা মাপা দূরত্ব জানায় না। যে দূরত্ব বলে তা ছবি দেখে আনুমানিক।"
   ],
   "setup_theme_navy": [
    "Navy and cyan",
@@ -1370,24 +1369,24 @@
    "কালোর ওপর হলুদ"
   ],
   "screen_access_explain": [
-   "In the Android app you can let Astha read other apps aloud. When you ask, it reads the text on the screen and can go back or home. It does not watch in the background, never reads password fields, and cannot tap, type or send anything for you. Android shows its own warning before it is turned on, and you can turn it off here at any time.",
-   "অ্যান্ড্রয়েড অ্যাপে আস্থাকে অন্য অ্যাপের লেখা পড়ে শোনানোর অনুমতি দিতে পারেন। আপনি বললে এটি পর্দার লেখা পড়ে এবং পেছনে বা হোমে যেতে পারে। এটি পেছন থেকে নজর রাখে না, পাসওয়ার্ডের ঘর কখনো পড়ে না, এবং আপনার হয়ে চাপ দিতে, লিখতে বা কিছু পাঠাতে পারে না। চালু করার আগে অ্যান্ড্রয়েড নিজের সতর্কবার্তা দেখায়, আর এখান থেকে যেকোনো সময় বন্ধ করা যায়।"
+   "In the Android app you can let LUNEYRA read other apps aloud. When you ask, it reads the text on the screen and can go back or home. It does not watch in the background, never reads password fields, and cannot tap, type or send anything for you. Android shows its own warning before it is turned on, and you can turn it off here at any time.",
+   "অ্যান্ড্রয়েড অ্যাপে লুনেইরাকে অন্য অ্যাপের লেখা পড়ে শোনানোর অনুমতি দিতে পারেন। আপনি বললে এটি পর্দার লেখা পড়ে এবং পেছনে বা হোমে যেতে পারে। এটি পেছন থেকে নজর রাখে না, পাসওয়ার্ডের ঘর কখনো পড়ে না, এবং আপনার হয়ে চাপ দিতে, লিখতে বা কিছু পাঠাতে পারে না। চালু করার আগে অ্যান্ড্রয়েড নিজের সতর্কবার্তা দেখায়, আর এখান থেকে যেকোনো সময় বন্ধ করা যায়।"
   ],
   "screen_access_on": [
-   "Let Astha read other apps",
-   "আস্থাকে অন্য অ্যাপ পড়তে দিন"
+   "Let LUNEYRA read other apps",
+   "লুনেইরাকে অন্য অ্যাপ পড়তে দিন"
   ],
   "screen_access_off": [
-   "Stop Astha reading other apps",
-   "আস্থার অন্য অ্যাপ পড়া বন্ধ করুন"
+   "Stop LUNEYRA reading other apps",
+   "লুনেইরার অন্য অ্যাপ পড়া বন্ধ করুন"
   ],
   "screen_status_off": [
    "Reading other apps is off.",
    "অন্য অ্যাপ পড়া বন্ধ আছে।"
   ],
   "screen_status_waiting": [
-   "Almost done: turn on Astha screen reading in Android Accessibility settings.",
-   "প্রায় শেষ: অ্যান্ড্রয়েডের অ্যাক্সেসিবিলিটি সেটিংসে আস্থার স্ক্রিন পড়া চালু করুন।"
+   "Almost done: turn on LUNEYRA screen reading in Android Accessibility settings.",
+   "প্রায় শেষ: অ্যান্ড্রয়েডের অ্যাক্সেসিবিলিটি সেটিংসে লুনেইরার স্ক্রিন পড়া চালু করুন।"
   ],
   "screen_status_on": [
    "Reading other apps is on. Say “What is on my screen?”",
@@ -1402,12 +1401,12 @@
    "মাইক্রোফোনে চাপ দিন, শব্দের পরে জিজ্ঞাসা করুন। নিচে লিখেও দিতে পারেন।"
   ],
   "device_actions_info": [
-   "You can also say “open the WhatsApp app”, or “write a message saying I will be late”. Astha asks before opening anything, and you choose the person and press send yourself.",
-   "আপনি বলতে পারেন “হোয়াটসঅ্যাপ অ্যাপ খোলো”, অথবা “বার্তা লেখো, আমার দেরি হবে”। কিছু খোলার আগে আস্থা জিজ্ঞাসা করে, আর ব্যক্তি বাছাই ও পাঠানো আপনি নিজেই করেন।"
+   "You can also say “open the WhatsApp app”, or “write a message saying I will be late”. LUNEYRA asks before opening anything, and you choose the person and press send yourself.",
+   "আপনি বলতে পারেন “হোয়াটসঅ্যাপ অ্যাপ খোলো”, অথবা “বার্তা লেখো, আমার দেরি হবে”। কিছু খোলার আগে লুনেইরা জিজ্ঞাসা করে, আর ব্যক্তি বাছাই ও পাঠানো আপনি নিজেই করেন।"
   ],
   "voice_no_bangla": [
-   "This device has no Bangla voice, so Astha is speaking English.",
-   "এই ডিভাইসে বাংলা কণ্ঠ নেই, তাই আস্থা ইংরেজিতে বলছে।"
+   "This device has no Bangla voice, so LUNEYRA is speaking English.",
+   "এই ডিভাইসে বাংলা কণ্ঠ নেই, তাই লুনেইরা ইংরেজিতে বলছে।"
   ],
   "consent_title": [
    "Allow online processing?",
@@ -1426,8 +1425,8 @@
    "প্রতিদিন আরেকটু স্বাধীনতা।"
   ],
   "mic_idle": [
-   "Talk to ASTHA",
-   "আস্থার সাথে কথা বলুন"
+   "Talk to LUNEYRA",
+   "লুনেইরার সাথে কথা বলুন"
   ],
   "essentials_title": [
    "Your everyday essentials",
@@ -1490,24 +1489,24 @@
    "বার্তা"
   ],
   "messages_explain": [
-   "Astha can tell you when a message arrives in an app such as Messenger or WhatsApp, read it to you, and send the reply you dictate or one she suggests. Nothing is sent until you say yes, and messages are never saved. Android asks you to allow notification access first.",
-   "মেসেঞ্জার বা হোয়াটসঅ্যাপের মতো অ্যাপে বার্তা এলে আস্থা আপনাকে জানাতে, পড়ে শোনাতে, এবং আপনার বলা বা তার সাজানো উত্তর পাঠাতে পারে। আপনি হ্যাঁ না বলা পর্যন্ত কিছুই পাঠানো হয় না, আর বার্তা কখনো সংরক্ষণ করা হয় না। অ্যান্ড্রয়েড আগে নোটিফিকেশন অ্যাক্সেসের অনুমতি চাইবে।"
+   "LUNEYRA can tell you when a message arrives in an app such as Messenger or WhatsApp, read it to you, and send the reply you dictate or one she suggests. Nothing is sent until you say yes, and messages are never saved. Android asks you to allow notification access first.",
+   "মেসেঞ্জার বা হোয়াটসঅ্যাপের মতো অ্যাপে বার্তা এলে লুনেইরা আপনাকে জানাতে, পড়ে শোনাতে, এবং আপনার বলা বা তার সাজানো উত্তর পাঠাতে পারে। আপনি হ্যাঁ না বলা পর্যন্ত কিছুই পাঠানো হয় না, আর বার্তা কখনো সংরক্ষণ করা হয় না। অ্যান্ড্রয়েড আগে নোটিফিকেশন অ্যাক্সেসের অনুমতি চাইবে।"
   ],
   "messages_on": [
-   "Let Astha read and answer my messages",
-   "আস্থাকে আমার বার্তা পড়তে ও উত্তর দিতে দিন"
+   "Let LUNEYRA read and answer my messages",
+   "লুনেইরাকে আমার বার্তা পড়তে ও উত্তর দিতে দিন"
   ],
   "messages_off": [
-   "Stop Astha reading my messages",
-   "আস্থার বার্তা পড়া বন্ধ করুন"
+   "Stop LUNEYRA reading my messages",
+   "লুনেইরার বার্তা পড়া বন্ধ করুন"
   ],
   "messages_status_off": [
    "Message help is off.",
    "বার্তা সহায়তা বন্ধ আছে।"
   ],
   "messages_status_waiting": [
-   "Almost done: turn on Astha in Android notification access settings.",
-   "প্রায় শেষ: অ্যান্ড্রয়েডের নোটিফিকেশন অ্যাক্সেস সেটিংসে আস্থা চালু করুন।"
+   "Almost done: turn on LUNEYRA in Android notification access settings.",
+   "প্রায় শেষ: অ্যান্ড্রয়েডের নোটিফিকেশন অ্যাক্সেস সেটিংসে লুনেইরা চালু করুন।"
   ],
   "messages_status_on": [
    "Message help is on.",
@@ -1518,12 +1517,12 @@
    "ফোন লক থাকলেও বার্তা পড়ে শোনাও"
   ],
   "messages_background_explain": [
-   "Astha keeps a notification showing while this is on, with a Turn off button. She listens only for a few seconds right after reading a message or asking a question, and waits while you are on a call.",
-   "এটি চালু থাকলে আস্থা একটি নোটিফিকেশন দেখিয়ে রাখে, তাতে বন্ধ করার বোতাম থাকে। সে শুধু বার্তা পড়া বা প্রশ্ন করার ঠিক পরে কয়েক সেকেন্ড শোনে, আর আপনি ফোনে কথা বললে অপেক্ষা করে।"
+   "LUNEYRA keeps a notification showing while this is on, with a Turn off button. She listens only for a few seconds right after reading a message or asking a question, and waits while you are on a call.",
+   "এটি চালু থাকলে লুনেইরা একটি নোটিফিকেশন দেখিয়ে রাখে, তাতে বন্ধ করার বোতাম থাকে। সে শুধু বার্তা পড়া বা প্রশ্ন করার ঠিক পরে কয়েক সেকেন্ড শোনে, আর আপনি ফোনে কথা বললে অপেক্ষা করে।"
   ],
   "messages_web": [
-   "Reading and answering messages from apps such as Messenger works in the ASTHA Android app.",
-   "মেসেঞ্জারের মতো অ্যাপের বার্তা পড়া ও উত্তর দেওয়া আস্থার অ্যান্ড্রয়েড অ্যাপে কাজ করে।"
+   "Reading and answering messages from apps such as Messenger works in the LUNEYRA Android app.",
+   "মেসেঞ্জারের মতো অ্যাপের বার্তা পড়া ও উত্তর দেওয়া লুনেইরার অ্যান্ড্রয়েড অ্যাপে কাজ করে।"
   ],
   "pi_distance_sensor": [
    "distance sensor",
@@ -1715,7 +1714,7 @@
    }
   ],
   [
-   "<strong>Astha AI Companion",
+   "<strong>LUNEYRA AI Companion",
    {
     "text": "safety_brand"
    }
@@ -1739,13 +1738,13 @@
    }
   ],
   [
-   "<button class=\"mic\" id=\"mic\" onclick=\"toggleListening()\" aria-label=\"Talk to ASTHA\">",
+   "<button class=\"mic\" id=\"mic\" onclick=\"toggleListening()\" aria-label=\"Talk to LUNEYRA\">",
    {
     "aria-label": "mic_idle"
    }
   ],
   [
-   "<button class=\"chip-btn\" id=\"hf-btn\" onclick=\"toggleHandsFree()\" aria-pressed=\"false\" title=\"Keep listening for “Astha, …”\">",
+   "<button class=\"chip-btn\" id=\"hf-btn\" onclick=\"toggleHandsFree()\" aria-pressed=\"false\" title=\"Keep listening for “LUNEYRA, …”\">",
    {
     "title": "hf_title"
    }
@@ -1801,7 +1800,7 @@
    }
   ],
   [
-   "<button class=\"btn accent\" type=\"submit\">Ask Astha",
+   "<button class=\"btn accent\" type=\"submit\">Ask LUNEYRA",
    {
     "text": "command_submit"
    }
@@ -1933,7 +1932,7 @@
    }
   ],
   [
-   "<p class=\"help\">Everything Astha reads from the camera",
+   "<p class=\"help\">Everything LUNEYRA reads from the camera",
    {
     "text": "reader_help"
    }
@@ -1945,7 +1944,7 @@
    }
   ],
   [
-   "<textarea id=\"reader-text\" placeholder=\"Pages Astha has read will appear here.\" oninput=\"readerTextChanged()\">",
+   "<textarea id=\"reader-text\" placeholder=\"Pages LUNEYRA has read will appear here.\" oninput=\"readerTextChanged()\">",
    {
     "placeholder": "reader_placeholder"
    }
@@ -1981,13 +1980,13 @@
    }
   ],
   [
-   "<h2>♥ Astha on your screen",
+   "<h2>♥ LUNEYRA on your screen",
    {
     "text": "eye_title"
    }
   ],
   [
-   "<p class=\"help\">Share your screen and Astha tells you what is on it",
+   "<p class=\"help\">Share your screen and LUNEYRA tells you what is on it",
    {
     "text": "eye_help"
    }
@@ -2017,7 +2016,7 @@
    }
   ],
   [
-   "<textarea id=\"eye-paste\" placeholder=\"Paste text here, then say “Astha, explain this”.\">",
+   "<textarea id=\"eye-paste\" placeholder=\"Paste text here, then say “LUNEYRA, explain this”.\">",
    {
     "placeholder": "eye_paste_placeholder"
    }
@@ -2035,7 +2034,7 @@
    }
   ],
   [
-   "<p class=\"help\">Astha can read and explain a shared screen.",
+   "<p class=\"help\">LUNEYRA can read and explain a shared screen.",
    {
     "text": "eye_note"
    }

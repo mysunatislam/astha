@@ -1,7 +1,7 @@
 
 /* =====================================================================
-   15. Astha's eye on your screen
-       The heart is Astha's eye. With screen sharing (one permission dialog) Astha
+   15. LUNEYRA's eye on your screen
+       The heart is LUNEYRA's eye. With screen sharing (one permission dialog) LUNEYRA
        watches the whole screen, recognises the app you are in, finds buttons and
        text, guides you by voice, confirms when something worked, and opens apps
        or sites herself where the browser allows it.
@@ -16,7 +16,7 @@ const SCREEN_APPS = [
   { id: 'explorer', en: 'File Explorer', bn: 'ফাইল এক্সপ্লোরার', words: /file explorer|this pc|quick access|\bdownloads\b.*\bdocuments\b/i, prompts: ['the Windows File Explorer with folders'] },
   { id: 'word', en: 'Microsoft Word', bn: 'মাইক্রোসফট ওয়ার্ড', words: /microsoft word|\.docx|\bword\b.*\bhome\s+insert\b/i, prompts: ['a Microsoft Word document'] },
   { id: 'settings', en: 'Windows Settings', bn: 'উইন্ডোজ সেটিংস', words: /bluetooth & devices|network & internet|personalization|find a setting/i, prompts: ['the Windows Settings app'] },
-  { id: 'astha', en: 'Astha', bn: 'আস্থা', words: /astha vision|voice-first visual companion/i, prompts: [] },
+  { id: 'astha', en: 'LUNEYRA', bn: 'লুনেইরা', words: /luneyra(?: vision)?|লুনেইরা|astha vision|voice-first visual companion/i, prompts: [] },
   { id: 'google', en: 'Google search', bn: 'গুগল সার্চ', words: /search google or type a url|google search|i'm feeling lucky/i, url: 'https://www.google.com', prompts: ['a web browser showing the Google search page', 'an empty browser new tab'] },
   { id: 'desktop', en: 'the desktop', bn: 'ডেস্কটপ', words: /recycle bin/i, prompts: ['the Windows desktop with icons and wallpaper and a taskbar'] },
 ];

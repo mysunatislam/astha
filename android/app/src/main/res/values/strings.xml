@@ -1,13 +1,13 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">Astha</string>
-    <string name="title_activity_main">Astha</string>
+    <string name="app_name">LUNEYRA</string>
+    <string name="title_activity_main">LUNEYRA</string>
     <string name="package_name" translatable="false">com.astha.companion</string>
     <string name="custom_url_scheme" translatable="false">com.astha.companion</string>
-    <string name="astha_messages_label">Astha messages</string>
+    <string name="astha_messages_label">LUNEYRA messages</string>
     <string name="astha_messages_running">Reading new messages aloud. Listens only right after a message.</string>
     <string name="astha_messages_turn_off">Turn off</string>
-    <string name="astha_accessibility_label">Astha screen reading</string>
-    <string name="astha_accessibility_summary">Reads other apps aloud when you ask Astha.</string>
-    <string name="astha_accessibility_description">When you ask, Astha reads aloud the text shown by the app in front, and can go back or to the home screen. It does not watch your activity in the background, does not read password fields, and cannot tap, type or send anything. You can turn it off here or inside Astha at any time.</string>
+    <string name="astha_accessibility_label">LUNEYRA screen reading</string>
+    <string name="astha_accessibility_summary">Reads other apps aloud when you ask LUNEYRA.</string>
+    <string name="astha_accessibility_description">When you ask, LUNEYRA reads aloud the text shown by the app in front, and can go back or to the home screen. It does not watch your activity in the background, does not read password fields, and cannot tap, type or send anything. You can turn it off here or inside LUNEYRA at any time.</string>
 </resources>

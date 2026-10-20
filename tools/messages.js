@@ -1,4 +1,4 @@
-// Personal agent for messages, in the Android app: ASTHA announces a new message, and
+// Personal agent for messages, in the Android app: LUNEYRA announces a new message, and
 // sends the reply its user dictates or accepts. It never sends without a spoken yes, never
 // stores or logs what a message says, and only shows the words to the online assistant
 // when the user asks it to suggest a reply. In a browser none of this exists.
@@ -47,26 +47,26 @@ const AsthaMessages = (() => {
       await bridge.setBackground(on, speechLang());
       if (!stillWanted()) return;
       backgroundLang = on ? speechLang() : null;
-      if (on) say('Astha will read new messages aloud even when the phone is locked. A notification shows while this is on, and she listens only right after reading a message.',
-        'ফোন লক থাকলেও আস্থা নতুন বার্তা পড়ে শোনাবে। এটি চালু থাকলে একটি নোটিফিকেশন দেখা যাবে, আর সে শুধু বার্তা পড়ার ঠিক পরেই শোনে।');
-      else say('Astha will only read messages while she is open.', 'আস্থা শুধু খোলা থাকলেই বার্তা পড়বে।');
+      if (on) say('LUNEYRA will read new messages aloud even when the phone is locked. A notification shows while this is on, and she listens only right after reading a message.',
+        'ফোন লক থাকলেও লুনেইরা নতুন বার্তা পড়ে শোনাবে। এটি চালু থাকলে একটি নোটিফিকেশন দেখা যাবে, আর সে শুধু বার্তা পড়ার ঠিক পরেই শোনে।');
+      else say('LUNEYRA will only read messages while she is open.', 'লুনেইরা শুধু খোলা থাকলেই বার্তা পড়বে।');
     } catch (error) {
       if (!stillWanted()) return;
       if (error?.code === 'cancelled') { await refresh(); return; }
       if (error?.code === 'notifications_permission' || error?.code === 'notifications_disabled') {
-        say('Locked-phone message help is off. Allow Astha notifications in Android Settings so the running assistant and Turn off control are visible, then try again.',
-          'লক করা ফোনে বার্তা সহায়তা বন্ধ আছে। চলমান সহায়ক ও বন্ধ করার নিয়ন্ত্রণ দেখতে অ্যান্ড্রয়েড সেটিংসে আস্থার নোটিফিকেশন চালু করে আবার চেষ্টা করুন।');
+        say('Locked-phone message help is off. Allow LUNEYRA notifications in Android Settings so the running assistant and Turn off control are visible, then try again.',
+          'লক করা ফোনে বার্তা সহায়তা বন্ধ আছে। চলমান সহায়ক ও বন্ধ করার নিয়ন্ত্রণ দেখতে অ্যান্ড্রয়েড সেটিংসে লুনেইরার নোটিফিকেশন চালু করে আবার চেষ্টা করুন।');
       } else if (error?.code === 'service_disabled') {
-        say('Locked-phone message help is off. Allow Astha notification access in Android Settings, then try again.',
-          'লক করা ফোনে বার্তা সহায়তা বন্ধ আছে। অ্যান্ড্রয়েড সেটিংসে আস্থাকে নোটিফিকেশন অ্যাক্সেস দিয়ে আবার চেষ্টা করুন।');
+        say('Locked-phone message help is off. Allow LUNEYRA notification access in Android Settings, then try again.',
+          'লক করা ফোনে বার্তা সহায়তা বন্ধ আছে। অ্যান্ড্রয়েড সেটিংসে লুনেইরাকে নোটিফিকেশন অ্যাক্সেস দিয়ে আবার চেষ্টা করুন।');
       } else if (error?.code === 'permission') {
-        say('Locked-phone message help is off. Allow microphone access so Astha can hear your reply, then try again.',
-          'লক করা ফোনে বার্তা সহায়তা বন্ধ আছে। আপনার উত্তর শুনতে আস্থাকে মাইক্রোফোন ব্যবহারের অনুমতি দিয়ে আবার চেষ্টা করুন।');
+        say('Locked-phone message help is off. Allow microphone access so LUNEYRA can hear your reply, then try again.',
+          'লক করা ফোনে বার্তা সহায়তা বন্ধ আছে। আপনার উত্তর শুনতে লুনেইরাকে মাইক্রোফোন ব্যবহারের অনুমতি দিয়ে আবার চেষ্টা করুন।');
       } else if (error?.code === 'consent_required') {
         say('Turn on message help before enabling locked-phone messages.', 'লক করা ফোনে বার্তা চালু করার আগে বার্তা সহায়তা চালু করুন।');
       } else {
-        say('Android did not start locked-phone message help. Keep Astha open and try again. Message help while Astha is open is still available.',
-          'অ্যান্ড্রয়েড লক করা ফোনে বার্তা সহায়তা চালু করেনি। আস্থা খোলা রেখে আবার চেষ্টা করুন। আস্থা খোলা অবস্থায় বার্তা সহায়তা ব্যবহার করতে পারবেন।');
+        say('Android did not start locked-phone message help. Keep LUNEYRA open and try again. Message help while LUNEYRA is open is still available.',
+          'অ্যান্ড্রয়েড লক করা ফোনে বার্তা সহায়তা চালু করেনি। লুনেইরা খোলা রেখে আবার চেষ্টা করুন। লুনেইরা খোলা অবস্থায় বার্তা সহায়তা ব্যবহার করতে পারবেন।');
       }
     }
     if (stillWanted()) await refresh();
@@ -88,14 +88,14 @@ const AsthaMessages = (() => {
       await bridge.setConsent(false); waiting = []; forget(); backgroundLang = null;
       if (!stillWanted()) return;
       await refresh(); if (!stillWanted()) return;
-      say('Astha will no longer read or answer your messages.', 'আস্থা আর আপনার বার্তা পড়বে বা উত্তর দেবে না।');
+      say('LUNEYRA will no longer read or answer your messages.', 'লুনেইরা আর আপনার বার্তা পড়বে বা উত্তর দেবে না।');
       return;
     }
     if (!stillWanted()) return;
     await bridge.setConsent(true);
     if (!stillWanted()) return;
-    say('Android will now open its notification access settings. Turn on Astha there. Android will show its own warning first.',
-      'এখন অ্যান্ড্রয়েডের নোটিফিকেশন অ্যাক্সেস সেটিংস খুলবে। সেখানে আস্থা চালু করুন। অ্যান্ড্রয়েড আগে নিজের সতর্কবার্তা দেখাবে।');
+    say('Android will now open its notification access settings. Turn on LUNEYRA there. Android will show its own warning first.',
+      'এখন অ্যান্ড্রয়েডের নোটিফিকেশন অ্যাক্সেস সেটিংস খুলবে। সেখানে লুনেইরা চালু করুন। অ্যান্ড্রয়েড আগে নিজের সতর্কবার্তা দেখাবে।');
     await refresh();
     try { await bridge.openSettings(); } catch { /* the status line already says it is waiting */ }
   }
@@ -164,7 +164,7 @@ const AsthaMessages = (() => {
   // Returns true when the request belongs to a message being answered.
   function route(query) {
     if (!native() || status !== 'on' || document.hidden) return false;
-    const said = clean(query, 600).normalize('NFC').replace(/^(?:hey\s+)?astha[,!\s]*|^আস্থা[,।\s]*/i, '');
+    const said = clean(query, 600).normalize('NFC').replace(/^(?:hey\s+|হেই\s+|হে\s+)?(?:luneyra|luneira|লুনেইরা|লুনেয়রা|astha|আস্থা)[,!।\s]*/i, '');
     const q = said.toLowerCase().replace(/[.!?।\s]+$/, '');
     if (stage && !alive()) { forget(); return false; }
     if (stage === 'confirm') {

@@ -27,7 +27,7 @@ const actual = [
   section(moduleSource, 'const REFINE =', '\n// Track whether'),
   fn(moduleSource, 'refineWorld'),
   section(moduleSource, 'const liveRefineCache =', '\n// ---- Voice choice'),
-  section(moduleSource, 'const MIRROR_SET =', '\n// ---- Astha\'s heart'),
+  section(moduleSource, 'const MIRROR_SET =', '\nconst heart ='),
   fn(moduleSource, 'howDoILook'), fn(perceive, 'describeScene'), fn(perceive, 'answerHowFar'), fn(perceive, 'currentMeasuredDistance'), fn(offline, 'stopAllSpeech'),
 ].join('\n');
 const deferred = () => { let resolve, reject; const promise = new Promise((yes, no) => { resolve = yes; reject = no; }); return { promise, resolve, reject }; };
